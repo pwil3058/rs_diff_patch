@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 crypto-hash = "0.3"
 serde = { version = "1.0.197", features = ["derive"] }
+rayon = "1.10.0"
