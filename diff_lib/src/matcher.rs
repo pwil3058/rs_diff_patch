@@ -55,6 +55,30 @@ impl Match {
         self.2 -= arg;
     }
 
+    pub fn starts_trimmed(&self, arg: usize) -> Self {
+        if self.2 > arg {
+            Self(self.0 + self.2 - arg, self.1 + self.2 - arg, arg)
+        } else {
+            *self
+        }
+    }
+
+    pub fn ends_trimmed(&self, arg: usize) -> Self {
+        if self.2 > arg {
+            Self(self.0, self.1, arg)
+        } else {
+            *self
+        }
+    }
+
+    pub fn split(&self, arg: usize) -> Option<(Self, Self)> {
+        if self.2 > arg * 2 {
+            Some((self.ends_trimmed(arg), self.starts_trimmed(arg)))
+        } else {
+            None
+        }
+    }
+
     pub fn incr_size(&mut self, arg: usize) {
         self.2 += arg;
     }
@@ -70,51 +94,6 @@ pub enum OpCode {
     Delete(CRange),
     Insert(CRange),
     Replace(CRange, CRange),
-}
-
-impl OpCode {
-    pub fn starts_trimmed(&self, context: usize) -> Self {
-        match self {
-            OpCode::Equal(match_) => {
-                if match_.len() > context {
-                    OpCode::Equal(Match(
-                        match_.end_1() - context,
-                        match_.end_2() - context,
-                        context,
-                    ))
-                } else {
-                    *self
-                }
-            }
-            _ => panic!("must be Equal to be trimmed"),
-        }
-    }
-
-    pub fn ends_trimmed(&self, context: usize) -> Self {
-        match self {
-            OpCode::Equal(match_) => {
-                if match_.len() > context {
-                    OpCode::Equal(Match(match_.start_1(), match_.start_2(), context))
-                } else {
-                    *self
-                }
-            }
-            _ => panic!("must be Equal to be trimmed"),
-        }
-    }
-
-    pub fn split(&self, context: usize) -> Option<(Self, Self)> {
-        match self {
-            OpCode::Equal(match_) => {
-                if match_.len() > context * 2 {
-                    Some((self.ends_trimmed(context), self.starts_trimmed(context)))
-                } else {
-                    None
-                }
-            }
-            _ => panic!("must be Equal to be split"),
-        }
-    }
 }
 
 #[derive(Debug, Default)]
@@ -266,11 +245,11 @@ impl Matcher {
         matching_blocks
     }
 
-    pub fn generate_op_codes(&self) -> Vec<OpCode> {
+    fn generate_op_codes(&self) -> Vec<OpCode> {
         let mut op_codes = vec![];
         let mut i = 0usize;
         let mut j = 0usize;
-        for match_ in self.matching_blocks().iter() {
+        for match_ in self.matching_blocks() {
             if i < match_.start_1() && j < match_.start_2() {
                 op_codes.push(OpCode::Replace(
                     CRange(i, match_.start_1()),
@@ -281,7 +260,7 @@ impl Matcher {
             } else if j < match_.start_2() {
                 op_codes.push(OpCode::Insert(CRange(j, match_.start_2())));
             }
-            op_codes.push(OpCode::Equal(*match_));
+            op_codes.push(OpCode::Equal(match_));
             i = match_.end_1();
             j = match_.end_2();
         }
@@ -297,5 +276,98 @@ impl Matcher {
         }
 
         op_codes
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Snippet(pub usize, pub Vec<String>);
+
+pub trait ExtractSnippet<'a>: DiffInputFile<'a> {
+    fn extract_snippet(&'a self, range_bounds: impl RangeBounds<usize>) -> Snippet {
+        let range = self.c_range(range_bounds);
+        let start = range.start();
+        let lines = self.lines(range).map(|s| s.to_string()).collect();
+        Snippet(start, lines)
+    }
+}
+
+impl<'a> ExtractSnippet<'a> for LazyLines {}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IOpCode {
+    Context(Snippet),
+    Delete(Snippet),
+    Insert(Snippet),
+    Replace(Snippet, Snippet),
+}
+
+impl Matcher {
+    /// Return an iterator over the Independent OpCodes describing changes
+    ///
+    /// Example:
+    /// ```
+    /// use diff_lib::crange::CRange;
+    /// use diff_lib::lines::LazyLines;
+    /// use diff_lib::matcher::{Match, Matcher, IOpCode, Snippet};
+    /// use IOpCode::*;
+    ///
+    /// let lines_1 = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
+    /// let lines_2 = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
+    /// let matcher = Matcher::new(lines_1, lines_2);
+    /// let independent_op_codes = matcher.independent_op_codes(2);
+    /// eprintln!("IOC: {independent_op_codes:?}");
+    /// let expected = vec![
+    ///     Context(Snippet(0, vec!["A\n".to_string()])),
+    ///     Delete(Snippet(1, vec!["B\n".to_string()])),
+    ///     Context(Snippet(2, vec!["C\n".to_string(), "D\n".to_string()])),
+    ///     Replace(Snippet(4, vec!["E\n".to_string(), "F\n".to_string()]), Snippet(3, vec!["Ef\n".to_string(), "Fg\n".to_string()])),
+    ///     Context(Snippet(6, vec!["G\n".to_string(), "H\n".to_string()])),
+    ///     Context(Snippet(9, vec!["J\n".to_string(), "K\n".to_string()])),
+    ///     Delete(Snippet(10, vec!["H\n".to_string()])),
+    ///     Context(Snippet(11, vec!["L\n".to_string(), "M\n".to_string()]))
+    /// ];
+    /// assert_eq!(independent_op_codes.len(), expected.len());
+    /// for (expected, got) in expected.iter().zip(independent_op_codes.iter()) {
+    ///     assert_eq!(expected, got);
+    /// }
+    /// ```
+    pub fn independent_op_codes(&self, context: usize) -> Vec<IOpCode> {
+        let mut list = Vec::new();
+        let last = self.op_codes.len() - 1;
+
+        for (i, op_code) in self.op_codes.iter().enumerate() {
+            use OpCode::*;
+            match op_code {
+                Equal(match_) => {
+                    if i == 0 {
+                        let range = match_.starts_trimmed(context).range_1();
+                        list.push(IOpCode::Context(self.lines_1.extract_snippet(range)));
+                    } else if i == last {
+                        let range = match_.ends_trimmed(context).range_1();
+                        list.push(IOpCode::Context(self.lines_1.extract_snippet(range)));
+                    } else if let Some((head, tail)) = match_.split(context) {
+                        list.push(IOpCode::Context(
+                            self.lines_1.extract_snippet(head.range_1()),
+                        ));
+                        list.push(IOpCode::Context(
+                            self.lines_1.extract_snippet(tail.range_1()),
+                        ));
+                    } else {
+                        list.push(IOpCode::Context(
+                            self.lines_1.extract_snippet(match_.range_1()),
+                        ));
+                    }
+                }
+                Delete(range) => list.push(IOpCode::Delete(self.lines_1.extract_snippet(*range))),
+                Insert(range) => list.push(IOpCode::Delete(self.lines_2.extract_snippet(*range))),
+                Replace(range_1, range_2) => {
+                    let snippet_1 = self.lines_1.extract_snippet(*range_1);
+                    let snippet_2 = self.lines_2.extract_snippet(*range_2);
+                    list.push(IOpCode::Replace(snippet_1, snippet_2));
+                }
+            }
+        }
+
+        list
     }
 }
