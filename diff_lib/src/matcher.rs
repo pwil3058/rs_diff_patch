@@ -297,7 +297,7 @@ impl<'a> ExtractSnippet<'a> for LazyLines {}
 pub enum IOpCode {
     Context(Snippet),
     Delete(Snippet),
-    Insert(Snippet),
+    Insert(Vec<String>),
     Replace(Snippet, Snippet),
 }
 
@@ -323,7 +323,7 @@ impl Matcher {
     ///     Replace(Snippet(4, vec!["E\n".to_string(), "F\n".to_string()]), Snippet(3, vec!["Ef\n".to_string(), "Fg\n".to_string()])),
     ///     Context(Snippet(6, vec!["G\n".to_string(), "H\n".to_string()])),
     ///     Context(Snippet(9, vec!["J\n".to_string(), "K\n".to_string()])),
-    ///     Insert(Snippet(10, vec!["H\n".to_string()])),
+    ///     Insert(vec!["H\n".to_string()]),
     ///     Context(Snippet(11, vec!["L\n".to_string(), "M\n".to_string()]))
     /// ];
     /// assert_eq!(independent_op_codes.len(), expected.len());
@@ -359,7 +359,10 @@ impl Matcher {
                     }
                 }
                 Delete(range) => list.push(IOpCode::Delete(self.lines_1.extract_snippet(*range))),
-                Insert(range) => list.push(IOpCode::Insert(self.lines_2.extract_snippet(*range))),
+                Insert(range) => {
+                    let snippet = self.lines_2.extract_snippet(*range);
+                    list.push(IOpCode::Insert(snippet.1));
+                }
                 Replace(range_1, range_2) => {
                     let snippet_1 = self.lines_1.extract_snippet(*range_1);
                     let snippet_2 = self.lines_2.extract_snippet(*range_2);
