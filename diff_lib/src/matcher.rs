@@ -93,7 +93,7 @@ impl Match {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum OpCode {
     Equal(Match),
-    Delete(CRange),
+    Delete(CRange, usize),
     Insert(usize, CRange),
     Replace(CRange, CRange),
 }
@@ -129,7 +129,7 @@ impl Matcher {
     /// let lines_2 = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
     /// let matcher = Matcher::new(lines_1, lines_2);
     /// assert_eq!(
-    ///     vec![Equal(Match(0,0,1)), Delete(CRange(1, 2)), Equal(Match(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)), Equal(Match(6, 5, 5)), Insert(11, CRange(10, 11)), Equal(Match(11, 11, 2))],
+    ///     vec![Equal(Match(0,0,1)), Delete(CRange(1, 2), 1), Equal(Match(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)), Equal(Match(6, 5, 5)), Insert(11, CRange(10, 11)), Equal(Match(11, 11, 2))],
     ///     matcher.op_codes().cloned().collect::<Vec<OpCode>>()
     /// );
     /// ```
@@ -258,7 +258,7 @@ impl Matcher {
                     CRange(j, match_.start_2()),
                 ));
             } else if i < match_.start_1() {
-                op_codes.push(OpCode::Delete(CRange(i, match_.start_1())));
+                op_codes.push(OpCode::Delete(CRange(i, match_.start_1()), j));
             } else if j < match_.start_2() {
                 op_codes.push(OpCode::Insert(i, CRange(j, match_.start_2())));
             }
@@ -272,7 +272,7 @@ impl Matcher {
                 CRange(j, self.lines_2.len()),
             ));
         } else if i < self.lines_1.len() {
-            op_codes.push(OpCode::Delete(CRange(i, self.lines_1.len())));
+            op_codes.push(OpCode::Delete(CRange(i, self.lines_1.len()), j));
         } else if j < self.lines_2.len() {
             op_codes.push(OpCode::Insert(i, CRange(j, self.lines_2.len())));
         }
@@ -360,7 +360,9 @@ impl Matcher {
                         ));
                     }
                 }
-                Delete(range) => list.push(IOpCode::Delete(self.lines_1.extract_snippet(*range))),
+                Delete(range, _) => {
+                    list.push(IOpCode::Delete(self.lines_1.extract_snippet(*range)))
+                }
                 Insert(start, range) => {
                     let snippet = self.lines_2.extract_snippet(*range);
                     list.push(IOpCode::Insert(*start, snippet));
@@ -455,7 +457,7 @@ impl Matcher {
     /// let lines_2 = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
     /// let matcher = Matcher::new(lines_1, lines_2);
     /// let expected = vec![
-    ///     OpCodeChunk(vec![Equal(Match(0, 0, 1)), Delete(CRange(1, 2)), Equal(Match(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)), Equal(Match(6, 5, 2))]),
+    ///     OpCodeChunk(vec![Equal(Match(0, 0, 1)), Delete(CRange(1, 2), 1), Equal(Match(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)), Equal(Match(6, 5, 2))]),
     ///     OpCodeChunk(vec![Equal(Match(9, 8, 2)), Insert(11, CRange(10, 11)), Equal(Match(11, 11, 2))]),
     /// ];
     /// for (expected, got) in expected.iter().zip(matcher.op_code_chunks(2)) {
@@ -468,6 +470,28 @@ impl Matcher {
             tail: self.op_codes.len() - 1,
             stash: None,
             context,
+        }
+    }
+}
+
+struct UnifiedDiffChunks<'a> {
+    iter: OpCodeChunks<'a>,
+}
+
+impl<'a> Iterator for UnifiedDiffChunks<'a> {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let chunk = self.iter.next()?;
+        let mut udc = String::new();
+        None
+    }
+}
+
+impl Matcher {
+    pub fn unified_diff_chunks(&self, context: usize) -> UnifiedDiffChunks {
+        UnifiedDiffChunks {
+            iter: self.op_code_chunks(context),
         }
     }
 }
