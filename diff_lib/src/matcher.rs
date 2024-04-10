@@ -4,7 +4,9 @@ use crate::crange::{CRange, Len};
 use crate::lines::{DiffInputFile, LazyLines, LineIndices};
 
 use std::collections::HashMap;
-use std::ops::RangeBounds;
+use std::iter::Enumerate;
+use std::ops::{Deref, DerefMut, RangeBounds};
+use std::slice::Iter;
 
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -372,5 +374,100 @@ impl Matcher {
         }
 
         list
+    }
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct OpCodeChunk(pub Vec<OpCode>);
+
+impl Deref for OpCodeChunk {
+    type Target = Vec<OpCode>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for OpCodeChunk {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+pub struct OpCodeChunks<'a> {
+    iter: Enumerate<Iter<'a, OpCode>>,
+    tail: usize,
+    context: usize,
+    stash: Option<OpCode>,
+}
+
+impl<'a> Iterator for OpCodeChunks<'a> {
+    type Item = OpCodeChunk;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        use OpCode::Equal;
+        let mut chunk = OpCodeChunk::default();
+        if let Some(stashed) = self.stash {
+            chunk.push(stashed);
+            self.stash = None;
+        }
+        while let Some((i, op_code)) = self.iter.next() {
+            match op_code {
+                Equal(range) => {
+                    if i == 0 || chunk.is_empty() {
+                        // Trim starts
+                        chunk.push(Equal(range.starts_trimmed(self.context)));
+                    } else if i == self.tail {
+                        // Trim size
+                        chunk.push(Equal(range.ends_trimmed(self.context)));
+                        return Some(chunk);
+                    } else if let Some((head, tail)) = range.split(self.context) {
+                        self.stash = Some(Equal(tail));
+                        chunk.push(Equal(head));
+                        return Some(chunk);
+                    } else {
+                        chunk.push(*op_code)
+                    }
+                }
+                _ => {
+                    chunk.push(*op_code);
+                    if i == self.tail {
+                        return Some(chunk);
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+impl Matcher {
+    /// Return an iterator over OpCodeChunks generated with the given `context` size.
+    ///
+    /// Example:
+    /// ```
+    /// use diff_lib::crange::CRange;
+    /// use diff_lib::lines::LazyLines;
+    /// use diff_lib::matcher::{Match, Matcher, OpCode, Snippet, OpCodeChunk};
+    /// use OpCode::*;
+    ///
+    /// let lines_1 = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
+    /// let lines_2 = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
+    /// let matcher = Matcher::new(lines_1, lines_2);
+    /// let expected = vec![
+    ///     OpCodeChunk(vec![Equal(Match(0, 0, 1)), Delete(CRange(1, 2)), Equal(Match(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)), Equal(Match(6, 5, 2))]),
+    ///     OpCodeChunk(vec![Equal(Match(9, 8, 2)), Insert(CRange(10, 11)), Equal(Match(11, 11, 2))]),
+    /// ];
+    /// for (expected, got) in expected.iter().zip(matcher.op_code_chunks(2)) {
+    ///     assert_eq!(*expected, got);
+    /// }
+    /// ```
+    pub fn op_code_chunks(&self, context: usize) -> OpCodeChunks {
+        OpCodeChunks {
+            iter: self.op_codes.iter().enumerate(),
+            tail: self.op_codes.len() - 1,
+            stash: None,
+            context,
+        }
     }
 }
