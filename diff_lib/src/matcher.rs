@@ -94,7 +94,7 @@ impl Match {
 pub enum OpCode {
     Equal(Match),
     Delete(CRange),
-    Insert(CRange),
+    Insert(usize, CRange),
     Replace(CRange, CRange),
 }
 
@@ -129,7 +129,7 @@ impl Matcher {
     /// let lines_2 = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
     /// let matcher = Matcher::new(lines_1, lines_2);
     /// assert_eq!(
-    ///     vec![Equal(Match(0,0,1)), Delete(CRange(1, 2)), Equal(Match(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)), Equal(Match(6, 5, 5)), Insert(CRange(10, 11)), Equal(Match(11, 11, 2))],
+    ///     vec![Equal(Match(0,0,1)), Delete(CRange(1, 2)), Equal(Match(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)), Equal(Match(6, 5, 5)), Insert(11, CRange(10, 11)), Equal(Match(11, 11, 2))],
     ///     matcher.op_codes().cloned().collect::<Vec<OpCode>>()
     /// );
     /// ```
@@ -260,7 +260,7 @@ impl Matcher {
             } else if i < match_.start_1() {
                 op_codes.push(OpCode::Delete(CRange(i, match_.start_1())));
             } else if j < match_.start_2() {
-                op_codes.push(OpCode::Insert(CRange(j, match_.start_2())));
+                op_codes.push(OpCode::Insert(i, CRange(j, match_.start_2())));
             }
             op_codes.push(OpCode::Equal(match_));
             i = match_.end_1();
@@ -274,7 +274,7 @@ impl Matcher {
         } else if i < self.lines_1.len() {
             op_codes.push(OpCode::Delete(CRange(i, self.lines_1.len())));
         } else if j < self.lines_2.len() {
-            op_codes.push(OpCode::Insert(CRange(j, self.lines_2.len())));
+            op_codes.push(OpCode::Insert(i, CRange(j, self.lines_2.len())));
         }
 
         op_codes
@@ -299,7 +299,7 @@ impl<'a> ExtractSnippet<'a> for LazyLines {}
 pub enum IOpCode {
     Context(Snippet),
     Delete(Snippet),
-    Insert(Vec<String>),
+    Insert(usize, Vec<String>),
     Replace(Snippet, Snippet),
 }
 
@@ -325,7 +325,7 @@ impl Matcher {
     ///     Replace(Snippet(4, vec!["E\n".to_string(), "F\n".to_string()]), Snippet(3, vec!["Ef\n".to_string(), "Fg\n".to_string()])),
     ///     Context(Snippet(6, vec!["G\n".to_string(), "H\n".to_string()])),
     ///     Context(Snippet(9, vec!["J\n".to_string(), "K\n".to_string()])),
-    ///     Insert(vec!["H\n".to_string()]),
+    ///     Insert(11, vec!["H\n".to_string()]),
     ///     Context(Snippet(11, vec!["L\n".to_string(), "M\n".to_string()]))
     /// ];
     /// assert_eq!(independent_op_codes.len(), expected.len());
@@ -361,9 +361,9 @@ impl Matcher {
                     }
                 }
                 Delete(range) => list.push(IOpCode::Delete(self.lines_1.extract_snippet(*range))),
-                Insert(range) => {
+                Insert(start, range) => {
                     let snippet = self.lines_2.extract_snippet(*range);
-                    list.push(IOpCode::Insert(snippet.1));
+                    list.push(IOpCode::Insert(*start, snippet.1));
                 }
                 Replace(range_1, range_2) => {
                     let snippet_1 = self.lines_1.extract_snippet(*range_1);
@@ -456,7 +456,7 @@ impl Matcher {
     /// let matcher = Matcher::new(lines_1, lines_2);
     /// let expected = vec![
     ///     OpCodeChunk(vec![Equal(Match(0, 0, 1)), Delete(CRange(1, 2)), Equal(Match(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)), Equal(Match(6, 5, 2))]),
-    ///     OpCodeChunk(vec![Equal(Match(9, 8, 2)), Insert(CRange(10, 11)), Equal(Match(11, 11, 2))]),
+    ///     OpCodeChunk(vec![Equal(Match(9, 8, 2)), Insert(11, CRange(10, 11)), Equal(Match(11, 11, 2))]),
     /// ];
     /// for (expected, got) in expected.iter().zip(matcher.op_code_chunks(2)) {
     ///     assert_eq!(*expected, got);
