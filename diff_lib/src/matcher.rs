@@ -317,7 +317,6 @@ impl Matcher {
     /// let lines_2 = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
     /// let matcher = Matcher::new(lines_1, lines_2);
     /// let independent_op_codes = matcher.independent_op_codes(2);
-    /// eprintln!("IOC: {independent_op_codes:?}");
     /// let expected = vec![
     ///     Context(Snippet(0, vec!["A\n".to_string()])),
     ///     Delete(Snippet(1, vec!["B\n".to_string()])),
@@ -393,6 +392,45 @@ impl Deref for OpCodeChunk {
 impl DerefMut for OpCodeChunk {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl OpCodeChunk {
+    fn starts(&self) -> (usize, usize) {
+        if let Some(op_code) = self.0.first() {
+            match op_code {
+                OpCode::Delete(range, start_2) => (range.start(), *start_2),
+                OpCode::Equal(match_) => (match_.start_1(), match_.start_2()),
+                OpCode::Insert(start_1, range_2) => (*start_1, range_2.start()),
+                OpCode::Replace(range_1, range_2) => (range_1.start(), range_2.start()),
+            }
+        } else {
+            (0, 0)
+        }
+    }
+
+    fn lengths(&self) -> (usize, usize) {
+        let mut len_1 = 0usize;
+        let mut len_2 = 0usize;
+        for op_code in self.0.iter() {
+            match op_code {
+                OpCode::Delete(range, _) => {
+                    len_1 += range.len();
+                }
+                OpCode::Equal(match_) => {
+                    len_1 += match_.len();
+                    len_2 += match_.len();
+                }
+                OpCode::Insert(_, range) => {
+                    len_2 += range.len();
+                }
+                OpCode::Replace(range_1, range_2) => {
+                    len_1 += range_1.len();
+                    len_2 += range_2.len();
+                }
+            }
+        }
+        (len_1, len_2)
     }
 }
 
@@ -474,8 +512,10 @@ impl Matcher {
     }
 }
 
-struct UnifiedDiffChunks<'a> {
+pub struct UnifiedDiffChunks<'a> {
     iter: OpCodeChunks<'a>,
+    before: &'a LazyLines,
+    after: &'a LazyLines,
 }
 
 impl<'a> Iterator for UnifiedDiffChunks<'a> {
@@ -483,15 +523,66 @@ impl<'a> Iterator for UnifiedDiffChunks<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let chunk = self.iter.next()?;
-        let mut udc = String::new();
-        None
+        let (start_1, start_2) = chunk.starts();
+        let (len_1, len_2) = chunk.lengths();
+        let mut udc = format!("@@ -{},{} +{},{} @@\n", start_1, len_1, start_2, len_2);
+        for op_code in chunk.iter() {
+            match op_code {
+                OpCode::Delete(range, _) => {
+                    for line in self.before.lines(*range) {
+                        udc.push_str(&format!("-{line}"));
+                    }
+                }
+                OpCode::Equal(match_) => {
+                    for line in self.before.lines(match_.range_1()) {
+                        udc.push_str(&format!(" {line}"));
+                    }
+                }
+                OpCode::Insert(_, range) => {
+                    for line in self.after.lines(*range) {
+                        udc.push_str(&format!("+{line}"));
+                    }
+                }
+                OpCode::Replace(range_before, range_after) => {
+                    for line in self.before.lines(*range_before) {
+                        udc.push_str(&format!("-{line}"));
+                    }
+                    for line in self.after.lines(*range_after) {
+                        udc.push_str(&format!("+{line}"));
+                    }
+                }
+            }
+        }
+        Some(udc)
     }
 }
 
 impl Matcher {
+    /// Return an iterator over OpCodeChunks generated with the given `context` size.
+    ///
+    /// Example:
+    /// ```
+    /// use diff_lib::crange::CRange;
+    /// use diff_lib::lines::LazyLines;
+    /// use diff_lib::matcher::{Match, Matcher, OpCode, Snippet, OpCodeChunk};
+    /// use OpCode::*;
+    ///
+    /// let lines_1 = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
+    /// let lines_2 = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
+    /// let matcher = Matcher::new(lines_1, lines_2);
+    /// let expected = vec![
+    ///     "@@ -0,8 +0,7 @@\n A\n-B\n C\n D\n-E\n-F\n+Ef\n+Fg\n G\n H\n",
+    ///     "@@ -9,4 +8,5 @@\n J\n K\n+H\n L\n M\n"
+    /// ];
+    /// for (expected, got) in expected.iter().zip(matcher.unified_diff_chunks(2)) {
+    ///     assert_eq!(*expected, got);
+    /// }
+    /// ```
     pub fn unified_diff_chunks(&self, context: usize) -> UnifiedDiffChunks {
         UnifiedDiffChunks {
             iter: self.op_code_chunks(context),
+            before: &self.lines_1,
+            after: &self.lines_2,
         }
     }
 }
