@@ -36,14 +36,11 @@ impl LineIndices {
     }
 }
 
-pub trait DiffInputFile<'a>: Len {
-    fn lines(&'a self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &'a str>;
-    fn lines_reversed(
-        &'a self,
-        range_bounds: impl RangeBounds<usize>,
-    ) -> impl Iterator<Item = &'a str>;
+pub trait DiffInputFile: Len + Default {
+    fn lines(&self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &str>;
+    fn lines_reversed(&self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &str>;
 
-    fn get_line_indices(&'a self) -> LineIndices {
+    fn get_line_indices(&self) -> LineIndices {
         let mut line_indices = LineIndices::default();
         for (i, item) in self.lines(..).enumerate() {
             line_indices.add(item, i);
@@ -78,8 +75,8 @@ impl Len for LazyLines {
     }
 }
 
-impl<'a> DiffInputFile<'a> for LazyLines {
-    fn lines(&'a self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &'a str> {
+impl DiffInputFile for LazyLines {
+    fn lines(&self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &str> {
         let range = self.c_range(range_bounds);
         self.text
             .split_inclusive("\n")
@@ -87,10 +84,7 @@ impl<'a> DiffInputFile<'a> for LazyLines {
             .take(range.len())
     }
 
-    fn lines_reversed(
-        &'a self,
-        range_bounds: impl RangeBounds<usize>,
-    ) -> impl Iterator<Item = &'a str> {
+    fn lines_reversed(&self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &str> {
         let range = self.c_range(range_bounds);
         let iter = self.text.split_inclusive('\n').rev();
         iter.skip(self.length - range.end()).take(range.len())

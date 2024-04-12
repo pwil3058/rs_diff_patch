@@ -89,6 +89,118 @@ impl Match {
         self.2 -= arg;
     }
 }
+fn longest_match<'a, L: DiffInputFile>(
+    before: &L,
+    after: &L,
+    range_bounds_1: impl RangeBounds<usize>,
+    range_bounds_2: impl RangeBounds<usize>,
+    lines_2_indices: &LineIndices,
+) -> Option<Match> {
+    let range_1 = before.c_range(range_bounds_1);
+    let range_2 = after.c_range(range_bounds_2);
+
+    let mut best_match = Match::default();
+
+    let mut j_to_len = HashMap::<usize, usize>::new();
+    for (i, line) in before.lines(range_1).enumerate() {
+        let index = i + range_1.start();
+        let mut new_j_to_len = HashMap::<usize, usize>::new();
+        if let Some(indices) = lines_2_indices.get(line) {
+            for j in indices {
+                if j < &range_2.start() {
+                    continue;
+                }
+                if j >= &range_2.end() {
+                    break;
+                }
+
+                if j == &0 {
+                    new_j_to_len.insert(0, 1);
+                    if best_match.is_empty() {
+                        best_match = Match(index, 0, 1);
+                    }
+                } else {
+                    let k = match j_to_len.get(&(j - 1)) {
+                        Some(k) => *k + 1,
+                        None => 1,
+                    };
+                    new_j_to_len.insert(*j, k);
+                    if k > best_match.len() {
+                        best_match = Match(index + 1 - k, j + 1 - k, k);
+                    }
+                }
+            }
+        }
+        j_to_len = new_j_to_len;
+    }
+
+    if best_match.is_empty() {
+        None
+    } else {
+        let count = before
+            .lines_reversed(range_1.start()..best_match.start_1())
+            .zip(after.lines_reversed(range_2.start()..best_match.start_2()))
+            .take_while(|(a, b)| a == b)
+            .count();
+        best_match.decr_starts(count);
+
+        let count = before
+            .lines(best_match.end_1() + 1..range_1.end())
+            .zip(after.lines(best_match.end_2() + 1..range_2.end()))
+            .take_while(|(a, b)| a == b)
+            .count();
+        best_match.incr_size(count);
+
+        Some(best_match)
+    }
+}
+fn matching_blocks<'a, L: DiffInputFile>(before: &L, after: &L) -> Vec<Match> {
+    let after_line_indices = after.get_line_indices();
+    let mut lifo = vec![(CRange(0, before.len()), CRange(0, after.len()))];
+    let mut raw_matching_blocks = vec![];
+    while let Some((range_1, range_2)) = lifo.pop() {
+        if let Some(match_) = longest_match(
+            before,
+            after,
+            range_1.clone(),
+            range_2.clone(),
+            &after_line_indices,
+        ) {
+            if range_1.start() < match_.start_1() && range_2.start() < match_.start_2() {
+                lifo.push((
+                    CRange(range_1.start(), match_.start_1()),
+                    CRange(range_2.start(), match_.start_2()),
+                ))
+            };
+            if match_.end_1() < range_1.end() && match_.end_2() < range_2.end() {
+                lifo.push((
+                    CRange(match_.end_1(), range_1.end()),
+                    CRange(match_.end_2(), range_2.end()),
+                ))
+            }
+            raw_matching_blocks.push(match_);
+        }
+    }
+    raw_matching_blocks.par_sort();
+
+    let mut matching_blocks = vec![];
+    let mut i = 0usize;
+    while let Some(match_) = raw_matching_blocks.get(i) {
+        let mut new_block = *match_;
+        i += 1;
+        while let Some(match_) = raw_matching_blocks.get(i) {
+            if new_block.end_1() == match_.start_1() && new_block.end_2() == match_.start_2() {
+                new_block.incr_size(match_.len());
+                i += 1
+            } else {
+                break;
+            }
+        }
+        matching_blocks.push(new_block);
+    }
+
+    matching_blocks
+}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum OpCode {
@@ -98,21 +210,53 @@ pub enum OpCode {
     Replace(CRange, CRange),
 }
 
-#[derive(Debug, Default)]
-pub struct Matcher {
-    lines_1: LazyLines,
-    lines_2: LazyLines,
-    op_codes: Vec<OpCode>,
-    lines_2_indices: LineIndices,
+fn generate_op_codes<'a, L: DiffInputFile>(before: &L, after: &L) -> Vec<OpCode> {
+    let mut op_codes = vec![];
+    let mut i = 0usize;
+    let mut j = 0usize;
+    for match_ in matching_blocks(before, after) {
+        if i < match_.start_1() && j < match_.start_2() {
+            op_codes.push(OpCode::Replace(
+                CRange(i, match_.start_1()),
+                CRange(j, match_.start_2()),
+            ));
+        } else if i < match_.start_1() {
+            op_codes.push(OpCode::Delete(CRange(i, match_.start_1()), j));
+        } else if j < match_.start_2() {
+            op_codes.push(OpCode::Insert(i, CRange(j, match_.start_2())));
+        }
+        op_codes.push(OpCode::Equal(match_));
+        i = match_.end_1();
+        j = match_.end_2();
+    }
+    if i < before.len() && j < after.len() {
+        op_codes.push(OpCode::Replace(
+            CRange(i, before.len()),
+            CRange(j, after.len()),
+        ));
+    } else if i < before.len() {
+        op_codes.push(OpCode::Delete(CRange(i, before.len()), j));
+    } else if j < after.len() {
+        op_codes.push(OpCode::Insert(i, CRange(j, after.len())));
+    }
+
+    op_codes
 }
 
-impl Matcher {
-    pub fn new(lines_1: LazyLines, lines_2: LazyLines) -> Self {
-        let mut matcher = Matcher::default();
-        matcher.lines_1 = lines_1;
-        matcher.lines_2 = lines_2;
-        matcher.lines_2_indices = matcher.lines_2.get_line_indices();
-        matcher.op_codes = matcher.generate_op_codes();
+#[derive(Debug, Default)]
+pub struct Matcher<L: DiffInputFile> {
+    before: L,
+    after: L,
+    op_codes: Vec<OpCode>,
+}
+
+impl<L: DiffInputFile> Matcher<L> {
+    pub fn new(before: L, after: L) -> Self {
+        let op_codes = { generate_op_codes(&before, &after) };
+        let mut matcher = Matcher::<L>::default();
+        matcher.before = before;
+        matcher.after = after;
+        matcher.op_codes = op_codes;
         matcher
     }
 
@@ -136,156 +280,13 @@ impl Matcher {
     pub fn op_codes(&self) -> impl Iterator<Item = &OpCode> {
         self.op_codes.iter()
     }
-
-    fn longest_match(
-        &self,
-        range_bounds_1: impl RangeBounds<usize>,
-        range_bounds_2: impl RangeBounds<usize>,
-    ) -> Option<Match> {
-        let range_1 = self.lines_1.c_range(range_bounds_1);
-        let range_2 = self.lines_2.c_range(range_bounds_2);
-
-        let mut best_match = Match::default();
-
-        let mut j_to_len = HashMap::<usize, usize>::new();
-        for (i, line) in self.lines_1.lines(range_1).enumerate() {
-            let index = i + range_1.start();
-            let mut new_j_to_len = HashMap::<usize, usize>::new();
-            if let Some(indices) = self.lines_2_indices.get(line) {
-                for j in indices {
-                    if j < &range_2.start() {
-                        continue;
-                    }
-                    if j >= &range_2.end() {
-                        break;
-                    }
-
-                    if j == &0 {
-                        new_j_to_len.insert(0, 1);
-                        if best_match.is_empty() {
-                            best_match = Match(index, 0, 1);
-                        }
-                    } else {
-                        let k = match j_to_len.get(&(j - 1)) {
-                            Some(k) => *k + 1,
-                            None => 1,
-                        };
-                        new_j_to_len.insert(*j, k);
-                        if k > best_match.len() {
-                            best_match = Match(index + 1 - k, j + 1 - k, k);
-                        }
-                    }
-                }
-            }
-            j_to_len = new_j_to_len;
-        }
-
-        if best_match.is_empty() {
-            None
-        } else {
-            let count = self
-                .lines_1
-                .lines_reversed(range_1.start()..best_match.start_1())
-                .zip(
-                    self.lines_2
-                        .lines_reversed(range_2.start()..best_match.start_2()),
-                )
-                .take_while(|(a, b)| a == b)
-                .count();
-            best_match.decr_starts(count);
-
-            let count = self
-                .lines_1
-                .lines(best_match.end_1() + 1..range_1.end())
-                .zip(self.lines_2.lines(best_match.end_2() + 1..range_2.end()))
-                .take_while(|(a, b)| a == b)
-                .count();
-            best_match.incr_size(count);
-
-            Some(best_match)
-        }
-    }
-
-    fn matching_blocks(&self) -> Vec<Match> {
-        let mut lifo = vec![(CRange(0, self.lines_1.len()), CRange(0, self.lines_2.len()))];
-        let mut raw_matching_blocks = vec![];
-        while let Some((range_1, range_2)) = lifo.pop() {
-            if let Some(match_) = self.longest_match(range_1.clone(), range_2.clone()) {
-                if range_1.start() < match_.start_1() && range_2.start() < match_.start_2() {
-                    lifo.push((
-                        CRange(range_1.start(), match_.start_1()),
-                        CRange(range_2.start(), match_.start_2()),
-                    ))
-                };
-                if match_.end_1() < range_1.end() && match_.end_2() < range_2.end() {
-                    lifo.push((
-                        CRange(match_.end_1(), range_1.end()),
-                        CRange(match_.end_2(), range_2.end()),
-                    ))
-                }
-                raw_matching_blocks.push(match_);
-            }
-        }
-        raw_matching_blocks.par_sort();
-
-        let mut matching_blocks = vec![];
-        let mut i = 0usize;
-        while let Some(match_) = raw_matching_blocks.get(i) {
-            let mut new_block = *match_;
-            i += 1;
-            while let Some(match_) = raw_matching_blocks.get(i) {
-                if new_block.end_1() == match_.start_1() && new_block.end_2() == match_.start_2() {
-                    new_block.incr_size(match_.len());
-                    i += 1
-                } else {
-                    break;
-                }
-            }
-            matching_blocks.push(new_block);
-        }
-
-        matching_blocks
-    }
-
-    fn generate_op_codes(&self) -> Vec<OpCode> {
-        let mut op_codes = vec![];
-        let mut i = 0usize;
-        let mut j = 0usize;
-        for match_ in self.matching_blocks() {
-            if i < match_.start_1() && j < match_.start_2() {
-                op_codes.push(OpCode::Replace(
-                    CRange(i, match_.start_1()),
-                    CRange(j, match_.start_2()),
-                ));
-            } else if i < match_.start_1() {
-                op_codes.push(OpCode::Delete(CRange(i, match_.start_1()), j));
-            } else if j < match_.start_2() {
-                op_codes.push(OpCode::Insert(i, CRange(j, match_.start_2())));
-            }
-            op_codes.push(OpCode::Equal(match_));
-            i = match_.end_1();
-            j = match_.end_2();
-        }
-        if i < self.lines_1.len() && j < self.lines_2.len() {
-            op_codes.push(OpCode::Replace(
-                CRange(i, self.lines_1.len()),
-                CRange(j, self.lines_2.len()),
-            ));
-        } else if i < self.lines_1.len() {
-            op_codes.push(OpCode::Delete(CRange(i, self.lines_1.len()), j));
-        } else if j < self.lines_2.len() {
-            op_codes.push(OpCode::Insert(i, CRange(j, self.lines_2.len())));
-        }
-
-        op_codes
-    }
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Snippet(pub usize, pub Vec<String>);
 
-pub trait ExtractSnippet<'a>: DiffInputFile<'a> {
-    fn extract_snippet(&'a self, range_bounds: impl RangeBounds<usize>) -> Snippet {
+pub trait ExtractSnippet: DiffInputFile {
+    fn extract_snippet(&self, range_bounds: impl RangeBounds<usize>) -> Snippet {
         let range = self.c_range(range_bounds);
         let start = range.start();
         let lines = self.lines(range).map(|s| s.to_string()).collect();
@@ -293,7 +294,7 @@ pub trait ExtractSnippet<'a>: DiffInputFile<'a> {
     }
 }
 
-impl<'a> ExtractSnippet<'a> for LazyLines {}
+impl ExtractSnippet for LazyLines {}
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IOpCode {
@@ -303,7 +304,7 @@ pub enum IOpCode {
     Replace(Snippet, Snippet),
 }
 
-impl Matcher {
+impl<L: DiffInputFile + ExtractSnippet> Matcher<L> {
     /// Return an iterator over the Independent OpCodes describing changes
     ///
     /// Example:
@@ -342,33 +343,31 @@ impl Matcher {
                 Equal(match_) => {
                     if i == 0 {
                         let range = match_.starts_trimmed(context).range_1();
-                        list.push(IOpCode::Context(self.lines_1.extract_snippet(range)));
+                        list.push(IOpCode::Context(self.before.extract_snippet(range)));
                     } else if i == last {
                         let range = match_.ends_trimmed(context).range_1();
-                        list.push(IOpCode::Context(self.lines_1.extract_snippet(range)));
+                        list.push(IOpCode::Context(self.before.extract_snippet(range)));
                     } else if let Some((head, tail)) = match_.split(context) {
                         list.push(IOpCode::Context(
-                            self.lines_1.extract_snippet(head.range_1()),
+                            self.before.extract_snippet(head.range_1()),
                         ));
                         list.push(IOpCode::Context(
-                            self.lines_1.extract_snippet(tail.range_1()),
+                            self.before.extract_snippet(tail.range_1()),
                         ));
                     } else {
                         list.push(IOpCode::Context(
-                            self.lines_1.extract_snippet(match_.range_1()),
+                            self.before.extract_snippet(match_.range_1()),
                         ));
                     }
                 }
-                Delete(range, _) => {
-                    list.push(IOpCode::Delete(self.lines_1.extract_snippet(*range)))
-                }
+                Delete(range, _) => list.push(IOpCode::Delete(self.before.extract_snippet(*range))),
                 Insert(start, range) => {
-                    let snippet = self.lines_2.extract_snippet(*range);
+                    let snippet = self.after.extract_snippet(*range);
                     list.push(IOpCode::Insert(*start, snippet));
                 }
                 Replace(range_1, range_2) => {
-                    let snippet_1 = self.lines_1.extract_snippet(*range_1);
-                    let snippet_2 = self.lines_2.extract_snippet(*range_2);
+                    let snippet_1 = self.before.extract_snippet(*range_1);
+                    let snippet_2 = self.after.extract_snippet(*range_2);
                     list.push(IOpCode::Replace(snippet_1, snippet_2));
                 }
             }
@@ -481,7 +480,7 @@ impl<'a> Iterator for OpCodeChunks<'a> {
     }
 }
 
-impl Matcher {
+impl<L: DiffInputFile> Matcher<L> {
     /// Return an iterator over OpCodeChunks generated with the given `context` size.
     ///
     /// Example:
@@ -512,13 +511,13 @@ impl Matcher {
     }
 }
 
-pub struct UnifiedDiffChunks<'a> {
+pub struct UnifiedDiffChunks<'a, L: DiffInputFile> {
     iter: OpCodeChunks<'a>,
-    before: &'a LazyLines,
-    after: &'a LazyLines,
+    before: &'a L,
+    after: &'a L,
 }
 
-impl<'a> Iterator for UnifiedDiffChunks<'a> {
+impl<'a, L: DiffInputFile> Iterator for UnifiedDiffChunks<'a, L> {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -557,7 +556,7 @@ impl<'a> Iterator for UnifiedDiffChunks<'a> {
     }
 }
 
-impl Matcher {
+impl<L: DiffInputFile> Matcher<L> {
     /// Return an iterator over OpCodeChunks generated with the given `context` size.
     ///
     /// Example:
@@ -578,11 +577,11 @@ impl Matcher {
     ///     assert_eq!(*expected, got);
     /// }
     /// ```
-    pub fn unified_diff_chunks(&self, context: usize) -> UnifiedDiffChunks {
+    pub fn unified_diff_chunks<'a>(&'a self, context: usize) -> UnifiedDiffChunks<'a, L> {
         UnifiedDiffChunks {
             iter: self.op_code_chunks(context),
-            before: &self.lines_1,
-            after: &self.lines_2,
+            before: &self.before,
+            after: &self.after,
         }
     }
 }
