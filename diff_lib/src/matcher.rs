@@ -615,7 +615,7 @@ impl<L: DiffInputFile> Matcher<L> {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Chunk {
     pub context_lengths: (usize, usize),
     pub before: Snippet,
@@ -673,5 +673,43 @@ impl<'a, L: DiffInputFile> Iterator for Chunks<'a, L> {
             before,
             after,
         })
+    }
+}
+
+impl<L: DiffInputFile> Matcher<L> {
+    /// Return an iterator over OpCodeChunks generated with the given `context` size.
+    ///
+    /// Example:
+    /// ```
+    /// use diff_lib::crange::CRange;
+    /// use diff_lib::lines::LazyLines;
+    /// use diff_lib::matcher::{Match, Matcher, OpCode, Snippet, OpCodeChunk, Chunk};
+    /// use OpCode::*;
+    ///
+    /// let before_lines = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
+    /// let after_lines = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
+    /// let matcher = Matcher::new(before_lines, after_lines);
+    /// let expected = vec![
+    ///     Chunk {
+    ///         context_lengths: (1, 2),
+    ///         before: Snippet(0, vec!["A\n".to_string(), "B\n".to_string(), "C\n".to_string(), "D\n".to_string(), "E\n".to_string(), "F\n".to_string(), "G\n".to_string(), "H\n".to_string()]),
+    ///         after: Snippet(0, vec!["A\n".to_string(), "C\n".to_string(), "D\n".to_string(), "Ef\n".to_string(), "Fg\n".to_string(), "G\n".to_string(), "H\n".to_string()])
+    ///     },
+    ///     Chunk {
+    ///         context_lengths: (2, 2),
+    ///         before: Snippet(9, vec!["J\n".to_string(), "K\n".to_string(), "L\n".to_string(), "M\n".to_string()]),
+    ///         after: Snippet(8, vec!["J\n".to_string(), "K\n".to_string(), "H\n".to_string(), "L\n".to_string(), "M\n".to_string()])
+    ///     },
+    /// ];
+    /// for (expected, got) in expected.iter().zip(matcher.chunks(2)) {
+    ///     assert_eq!(*expected, got);
+    /// }
+    /// ```
+    pub fn chunks<'a>(&'a self, context: usize) -> Chunks<'a, L> {
+        Chunks {
+            iter: self.op_code_chunks(context),
+            before: &self.before,
+            after: &self.after,
+        }
     }
 }
