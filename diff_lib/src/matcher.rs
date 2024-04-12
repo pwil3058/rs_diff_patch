@@ -257,11 +257,11 @@ pub struct Matcher<L: DiffInputFile> {
 impl<L: DiffInputFile> Matcher<L> {
     pub fn new(before: L, after: L) -> Self {
         let op_codes = { generate_op_codes(&before, &after) };
-        let mut matcher = Matcher::<L>::default();
-        matcher.before = before;
-        matcher.after = after;
-        matcher.op_codes = op_codes;
-        matcher
+        Self {
+            before,
+            after,
+            op_codes,
+        }
     }
 
     /// Return an iterator over the OpCodes describing changes
@@ -437,6 +437,26 @@ impl OpCodeChunk {
         }
         (before_len, after_len)
     }
+
+    fn context_lengths(&self) -> (usize, usize) {
+        let start = if let Some(op_code) = self.first() {
+            match op_code {
+                OpCode::Equal(match_) => match_.len(),
+                _ => 0,
+            }
+        } else {
+            0
+        };
+        let end = if let Some(op_code) = self.last() {
+            match op_code {
+                OpCode::Equal(match_) => match_.len(),
+                _ => 0,
+            }
+        } else {
+            0
+        };
+        (start, end)
+    }
 }
 
 pub struct OpCodeChunks<'a> {
@@ -592,5 +612,66 @@ impl<L: DiffInputFile> Matcher<L> {
             before: &self.before,
             after: &self.after,
         }
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Chunk {
+    pub context_lengths: (usize, usize),
+    pub before: Snippet,
+    pub after: Snippet,
+}
+pub struct Chunks<'a, L: DiffInputFile> {
+    iter: OpCodeChunks<'a>,
+    before: &'a L,
+    after: &'a L,
+}
+
+impl<'a, L: DiffInputFile> Iterator for Chunks<'a, L> {
+    type Item = Chunk;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let oc_chunk = self.iter.next()?;
+        let (before_start, after_start) = oc_chunk.starts();
+        let context_lengths = oc_chunk.context_lengths();
+        let mut before_lines: Vec<String> = Vec::new();
+        let mut after_lines: Vec<String> = Vec::new();
+        for op_code in oc_chunk.iter() {
+            match op_code {
+                OpCode::Delete(range, _) => {
+                    for line in self.before.lines(*range) {
+                        before_lines.push(line.to_string())
+                    }
+                }
+                OpCode::Equal(match_) => {
+                    for line in self.before.lines(match_.before_range()) {
+                        before_lines.push(line.to_string());
+                        after_lines.push(line.to_string());
+                    }
+                }
+                OpCode::Insert(_, range) => {
+                    for line in self.after.lines(*range) {
+                        after_lines.push(line.to_string())
+                    }
+                }
+                OpCode::Replace(before_range, after_range) => {
+                    for line in self.before.lines(*before_range) {
+                        before_lines.push(line.to_string())
+                    }
+                    for line in self.after.lines(*after_range) {
+                        after_lines.push(line.to_string())
+                    }
+                }
+            }
+        }
+
+        let before = Snippet(before_start, before_lines);
+        let after = Snippet(after_start, after_lines);
+
+        Some(Chunk {
+            context_lengths,
+            before,
+            after,
+        })
     }
 }
