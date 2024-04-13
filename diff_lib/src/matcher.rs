@@ -1,7 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::crange::{CRange, Len};
-use crate::lines::{DiffInputFile, LazyLines, LineIndices};
+use crate::lines::{DiffInputLines, LazyLines, LineIndices};
 
 use std::collections::HashMap;
 use std::iter::Enumerate;
@@ -89,15 +89,15 @@ impl Match {
         self.2 -= arg;
     }
 }
-fn longest_match<'a, L: DiffInputFile>(
+fn longest_match<'a, L: DiffInputLines>(
     before: &L,
     after: &L,
     before_range_bounds: impl RangeBounds<usize>,
     after_range_bounds: impl RangeBounds<usize>,
     after_lines_indices: &LineIndices,
 ) -> Option<Match> {
-    let before_range = before.c_range(before_range_bounds);
-    let after_range = after.c_range(after_range_bounds);
+    let before_range = before.trimmed_range(before_range_bounds);
+    let after_range = after.trimmed_range(after_range_bounds);
 
     let mut best_match = Match::default();
 
@@ -154,7 +154,7 @@ fn longest_match<'a, L: DiffInputFile>(
         Some(best_match)
     }
 }
-fn matching_blocks<'a, L: DiffInputFile>(before: &L, after: &L) -> Vec<Match> {
+fn matching_blocks<'a, L: DiffInputLines>(before: &L, after: &L) -> Vec<Match> {
     let after_line_indices = after.get_line_indices();
     let mut lifo = vec![(CRange(0, before.len()), CRange(0, after.len()))];
     let mut raw_matching_blocks = vec![];
@@ -214,7 +214,7 @@ pub enum OpCode {
     Replace(CRange, CRange),
 }
 
-fn generate_op_codes<'a, L: DiffInputFile>(before: &L, after: &L) -> Vec<OpCode> {
+fn generate_op_codes<'a, L: DiffInputLines>(before: &L, after: &L) -> Vec<OpCode> {
     let mut op_codes = vec![];
     let mut i = 0usize;
     let mut j = 0usize;
@@ -248,13 +248,13 @@ fn generate_op_codes<'a, L: DiffInputFile>(before: &L, after: &L) -> Vec<OpCode>
 }
 
 #[derive(Debug, Default)]
-pub struct Matcher<L: DiffInputFile> {
+pub struct Matcher<L: DiffInputLines> {
     before: L,
     after: L,
     op_codes: Vec<OpCode>,
 }
 
-impl<L: DiffInputFile> Matcher<L> {
+impl<L: DiffInputLines> Matcher<L> {
     pub fn new(before: L, after: L) -> Self {
         let op_codes = { generate_op_codes(&before, &after) };
         Self {
@@ -289,9 +289,9 @@ impl<L: DiffInputFile> Matcher<L> {
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Snippet(pub usize, pub Vec<String>);
 
-pub trait ExtractSnippet: DiffInputFile {
+pub trait ExtractSnippet: DiffInputLines {
     fn extract_snippet(&self, range_bounds: impl RangeBounds<usize>) -> Snippet {
-        let range = self.c_range(range_bounds);
+        let range = self.trimmed_range(range_bounds);
         let start = range.start();
         let lines = self.lines(range).map(|s| s.to_string()).collect();
         Snippet(start, lines)
@@ -308,7 +308,7 @@ pub enum IOpCode {
     Replace(Snippet, Snippet),
 }
 
-impl<L: DiffInputFile + ExtractSnippet> Matcher<L> {
+impl<L: DiffInputLines + ExtractSnippet> Matcher<L> {
     /// Return an iterator over the Independent OpCodes describing changes
     ///
     /// Example:
@@ -506,7 +506,7 @@ impl<'a> Iterator for OpCodeChunks<'a> {
     }
 }
 
-impl<L: DiffInputFile> Matcher<L> {
+impl<L: DiffInputLines> Matcher<L> {
     /// Return an iterator over OpCodeChunks generated with the given `context` size.
     ///
     /// Example:
@@ -537,13 +537,13 @@ impl<L: DiffInputFile> Matcher<L> {
     }
 }
 
-pub struct UnifiedDiffChunks<'a, L: DiffInputFile> {
+pub struct UnifiedDiffChunks<'a, L: DiffInputLines> {
     iter: OpCodeChunks<'a>,
     before: &'a L,
     after: &'a L,
 }
 
-impl<'a, L: DiffInputFile> Iterator for UnifiedDiffChunks<'a, L> {
+impl<'a, L: DiffInputLines> Iterator for UnifiedDiffChunks<'a, L> {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -585,7 +585,7 @@ impl<'a, L: DiffInputFile> Iterator for UnifiedDiffChunks<'a, L> {
     }
 }
 
-impl<L: DiffInputFile> Matcher<L> {
+impl<L: DiffInputLines> Matcher<L> {
     /// Return an iterator over OpCodeChunks generated with the given `context` size.
     ///
     /// Example:
@@ -621,13 +621,13 @@ pub struct Chunk {
     pub before: Snippet,
     pub after: Snippet,
 }
-pub struct Chunks<'a, L: DiffInputFile> {
+pub struct Chunks<'a, L: DiffInputLines> {
     iter: OpCodeChunks<'a>,
     before: &'a L,
     after: &'a L,
 }
 
-impl<'a, L: DiffInputFile> Iterator for Chunks<'a, L> {
+impl<'a, L: DiffInputLines> Iterator for Chunks<'a, L> {
     type Item = Chunk;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -676,7 +676,7 @@ impl<'a, L: DiffInputFile> Iterator for Chunks<'a, L> {
     }
 }
 
-impl<L: DiffInputFile> Matcher<L> {
+impl<L: DiffInputLines> Matcher<L> {
     /// Return an iterator over OpCodeChunks generated with the given `context` size.
     ///
     /// Example:
