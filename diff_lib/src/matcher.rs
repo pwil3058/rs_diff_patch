@@ -286,104 +286,6 @@ impl<L: DiffInputLines> Matcher<L> {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Snippet {
-    pub start: usize,
-    pub lines: Vec<String>,
-}
-
-pub trait ExtractSnippet: DiffInputLines {
-    fn extract_snippet(&self, range_bounds: impl RangeBounds<usize>) -> Snippet {
-        let range = self.trimmed_range(range_bounds);
-        let start = range.start();
-        let lines = self.lines(range).map(|s| s.to_string()).collect();
-        Snippet { start, lines }
-    }
-}
-
-impl ExtractSnippet for LazyLines {}
-
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum IOpCode {
-    Context(Snippet),
-    Delete(Snippet),
-    Insert(usize, Snippet),
-    Replace(Snippet, Snippet),
-}
-
-impl<L: DiffInputLines + ExtractSnippet> Matcher<L> {
-    /// Return an iterator over the Independent OpCodes describing changes
-    ///
-    /// Example:
-    /// ```
-    /// use diff_lib::crange::CRange;
-    /// use diff_lib::lines::LazyLines;
-    /// use diff_lib::matcher::{Match, Matcher, IOpCode, Snippet};
-    /// use IOpCode::*;
-    ///
-    /// let before_lines = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
-    /// let after_lines = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
-    /// let matcher = Matcher::new(before_lines, after_lines);
-    /// let independent_op_codes = matcher.independent_op_codes(2);
-    /// let expected = vec![
-    ///     Context(Snippet{start: 0, lines: vec!["A\n".to_string()]}),
-    ///     Delete(Snippet{start: 1, lines: vec!["B\n".to_string()]}),
-    ///     Context(Snippet{start: 2, lines: vec!["C\n".to_string(), "D\n".to_string()]}),
-    ///     Replace(Snippet{start: 4, lines: vec!["E\n".to_string(), "F\n".to_string()]}, Snippet{start: 3, lines: vec!["Ef\n".to_string(), "Fg\n".to_string()]}),
-    ///     Context(Snippet{start: 6, lines: vec!["G\n".to_string(), "H\n".to_string()]}),
-    ///     Context(Snippet{start: 9, lines: vec!["J\n".to_string(), "K\n".to_string()]}),
-    ///     Insert(11, Snippet{start: 10, lines: vec!["H\n".to_string()]}),
-    ///     Context(Snippet{start: 11, lines: vec!["L\n".to_string(), "M\n".to_string()]})
-    /// ];
-    /// assert_eq!(independent_op_codes.len(), expected.len());
-    /// for (expected, got) in expected.iter().zip(independent_op_codes.iter()) {
-    ///     assert_eq!(expected, got);
-    /// }
-    /// ```
-    pub fn independent_op_codes(&self, context: usize) -> Vec<IOpCode> {
-        let mut list = Vec::new();
-        let last = self.op_codes.len() - 1;
-
-        for (i, op_code) in self.op_codes.iter().enumerate() {
-            use OpCode::*;
-            match op_code {
-                Equal(match_) => {
-                    if i == 0 {
-                        let range = match_.starts_trimmed(context).before_range();
-                        list.push(IOpCode::Context(self.before.extract_snippet(range)));
-                    } else if i == last {
-                        let range = match_.ends_trimmed(context).before_range();
-                        list.push(IOpCode::Context(self.before.extract_snippet(range)));
-                    } else if let Some((head, tail)) = match_.split(context) {
-                        list.push(IOpCode::Context(
-                            self.before.extract_snippet(head.before_range()),
-                        ));
-                        list.push(IOpCode::Context(
-                            self.before.extract_snippet(tail.before_range()),
-                        ));
-                    } else {
-                        list.push(IOpCode::Context(
-                            self.before.extract_snippet(match_.before_range()),
-                        ));
-                    }
-                }
-                Delete(range, _) => list.push(IOpCode::Delete(self.before.extract_snippet(*range))),
-                Insert(start, range) => {
-                    let snippet = self.after.extract_snippet(*range);
-                    list.push(IOpCode::Insert(*start, snippet));
-                }
-                Replace(before_range, after_range) => {
-                    let before_snippet = self.before.extract_snippet(*before_range);
-                    let after_snippet = self.after.extract_snippet(*after_range);
-                    list.push(IOpCode::Replace(before_snippet, after_snippet));
-                }
-            }
-        }
-
-        list
-    }
-}
-
 #[derive(Debug, Default, PartialEq)]
 pub struct OpCodeChunk(pub Vec<OpCode>);
 
@@ -516,7 +418,7 @@ impl<L: DiffInputLines> Matcher<L> {
     /// ```
     /// use diff_lib::crange::CRange;
     /// use diff_lib::lines::LazyLines;
-    /// use diff_lib::matcher::{Match, Matcher, OpCode, Snippet, OpCodeChunk};
+    /// use diff_lib::matcher::{Match, Matcher, OpCode, OpCodeChunk};
     /// use OpCode::*;
     ///
     /// let before_lines = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
@@ -595,7 +497,7 @@ impl<L: DiffInputLines> Matcher<L> {
     /// ```
     /// use diff_lib::crange::CRange;
     /// use diff_lib::lines::LazyLines;
-    /// use diff_lib::matcher::{Match, Matcher, OpCode, Snippet, OpCodeChunk};
+    /// use diff_lib::matcher::{Match, Matcher, OpCode, OpCodeChunk};
     /// use OpCode::*;
     ///
     /// let before_lines = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
@@ -617,6 +519,23 @@ impl<L: DiffInputLines> Matcher<L> {
         }
     }
 }
+
+#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Snippet {
+    pub start: usize,
+    pub lines: Vec<String>,
+}
+
+pub trait ExtractSnippet: DiffInputLines {
+    fn extract_snippet(&self, range_bounds: impl RangeBounds<usize>) -> Snippet {
+        let range = self.trimmed_range(range_bounds);
+        let start = range.start();
+        let lines = self.lines(range).map(|s| s.to_string()).collect();
+        Snippet { start, lines }
+    }
+}
+
+impl ExtractSnippet for LazyLines {}
 
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Chunk {
