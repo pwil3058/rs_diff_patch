@@ -442,6 +442,16 @@ impl<L: DiffInputLines> Matcher<L> {
     }
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct UnifiedDiffChunk(pub Vec<String>);
+
+impl Deref for UnifiedDiffChunk {
+    type Target = Vec<String>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 pub struct UnifiedDiffChunks<'a, L: DiffInputLines> {
     iter: OpCodeChunks<'a>,
     before: &'a L,
@@ -449,44 +459,44 @@ pub struct UnifiedDiffChunks<'a, L: DiffInputLines> {
 }
 
 impl<'a, L: DiffInputLines> Iterator for UnifiedDiffChunks<'a, L> {
-    type Item = String;
+    type Item = UnifiedDiffChunk;
 
     fn next(&mut self) -> Option<Self::Item> {
         let chunk = self.iter.next()?;
         let (before_start, after_start) = chunk.starts();
         let (before_len, after_len) = chunk.lengths();
-        let mut udc = format!(
+        let mut udc = vec![format!(
             "@@ -{},{} +{},{} @@\n",
             before_start, before_len, after_start, after_len
-        );
+        )];
         for op_code in chunk.iter() {
             match op_code {
                 OpCode::Delete(range, _) => {
                     for line in self.before.lines(*range) {
-                        udc.push_str(&format!("-{line}"));
+                        udc.push(format!("-{line}"));
                     }
                 }
                 OpCode::Equal(match_) => {
                     for line in self.before.lines(match_.before_range()) {
-                        udc.push_str(&format!(" {line}"));
+                        udc.push(format!(" {line}"));
                     }
                 }
                 OpCode::Insert(_, range) => {
                     for line in self.after.lines(*range) {
-                        udc.push_str(&format!("+{line}"));
+                        udc.push(format!("+{line}"));
                     }
                 }
                 OpCode::Replace(range_before, range_after) => {
                     for line in self.before.lines(*range_before) {
-                        udc.push_str(&format!("-{line}"));
+                        udc.push(format!("-{line}"));
                     }
                     for line in self.after.lines(*range_after) {
-                        udc.push_str(&format!("+{line}"));
+                        udc.push(format!("+{line}"));
                     }
                 }
             }
         }
-        Some(udc)
+        Some(UnifiedDiffChunk(udc))
     }
 }
 
@@ -497,15 +507,34 @@ impl<L: DiffInputLines> Matcher<L> {
     /// ```
     /// use diff_lib::crange::CRange;
     /// use diff_lib::lines::LazyLines;
-    /// use diff_lib::matcher::{Match, Matcher, OpCode, OpCodeChunk};
+    /// use diff_lib::matcher::{Match, Matcher, OpCode, OpCodeChunk, UnifiedDiffChunk};
     /// use OpCode::*;
     ///
     /// let before_lines = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
     /// let after_lines = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
     /// let matcher = Matcher::new(before_lines, after_lines);
     /// let expected = vec![
-    ///     "@@ -0,8 +0,7 @@\n A\n-B\n C\n D\n-E\n-F\n+Ef\n+Fg\n G\n H\n",
-    ///     "@@ -9,4 +8,5 @@\n J\n K\n+H\n L\n M\n"
+    ///     UnifiedDiffChunk(vec![
+    ///         "@@ -0,8 +0,7 @@\n".to_string(),
+    ///         " A\n".to_string(),     
+    ///         "-B\n".to_string(),
+    ///         " C\n".to_string(),
+    ///         " D\n".to_string(),
+    ///         "-E\n".to_string(),
+    ///         "-F\n".to_string(),
+    ///         "+Ef\n".to_string(),
+    ///         "+Fg\n".to_string(),
+    ///         " G\n".to_string(),
+    ///         " H\n".to_string()
+    ///     ]),
+    ///     UnifiedDiffChunk(vec![
+    ///         "@@ -9,4 +8,5 @@\n".to_string(),
+    ///         " J\n".to_string(),
+    ///         " K\n".to_string(),
+    ///         "+H\n".to_string(),
+    ///         " L\n".to_string(),
+    ///         " M\n".to_string(),
+    ///     ])
     /// ];
     /// for (expected, got) in expected.iter().zip(matcher.unified_diff_chunks(2)) {
     ///     assert_eq!(*expected, got);
