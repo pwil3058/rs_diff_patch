@@ -287,14 +287,17 @@ impl<L: DiffInputLines> Matcher<L> {
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Snippet(pub usize, pub Vec<String>);
+pub struct Snippet {
+    pub start: usize,
+    pub lines: Vec<String>,
+}
 
 pub trait ExtractSnippet: DiffInputLines {
     fn extract_snippet(&self, range_bounds: impl RangeBounds<usize>) -> Snippet {
         let range = self.trimmed_range(range_bounds);
         let start = range.start();
         let lines = self.lines(range).map(|s| s.to_string()).collect();
-        Snippet(start, lines)
+        Snippet { start, lines }
     }
 }
 
@@ -323,14 +326,14 @@ impl<L: DiffInputLines + ExtractSnippet> Matcher<L> {
     /// let matcher = Matcher::new(before_lines, after_lines);
     /// let independent_op_codes = matcher.independent_op_codes(2);
     /// let expected = vec![
-    ///     Context(Snippet(0, vec!["A\n".to_string()])),
-    ///     Delete(Snippet(1, vec!["B\n".to_string()])),
-    ///     Context(Snippet(2, vec!["C\n".to_string(), "D\n".to_string()])),
-    ///     Replace(Snippet(4, vec!["E\n".to_string(), "F\n".to_string()]), Snippet(3, vec!["Ef\n".to_string(), "Fg\n".to_string()])),
-    ///     Context(Snippet(6, vec!["G\n".to_string(), "H\n".to_string()])),
-    ///     Context(Snippet(9, vec!["J\n".to_string(), "K\n".to_string()])),
-    ///     Insert(11, Snippet(10, vec!["H\n".to_string()])),
-    ///     Context(Snippet(11, vec!["L\n".to_string(), "M\n".to_string()]))
+    ///     Context(Snippet{start: 0, lines: vec!["A\n".to_string()]}),
+    ///     Delete(Snippet{start: 1, lines: vec!["B\n".to_string()]}),
+    ///     Context(Snippet{start: 2, lines: vec!["C\n".to_string(), "D\n".to_string()]}),
+    ///     Replace(Snippet{start: 4, lines: vec!["E\n".to_string(), "F\n".to_string()]}, Snippet{start: 3, lines: vec!["Ef\n".to_string(), "Fg\n".to_string()]}),
+    ///     Context(Snippet{start: 6, lines: vec!["G\n".to_string(), "H\n".to_string()]}),
+    ///     Context(Snippet{start: 9, lines: vec!["J\n".to_string(), "K\n".to_string()]}),
+    ///     Insert(11, Snippet{start: 10, lines: vec!["H\n".to_string()]}),
+    ///     Context(Snippet{start: 11, lines: vec!["L\n".to_string(), "M\n".to_string()]})
     /// ];
     /// assert_eq!(independent_op_codes.len(), expected.len());
     /// for (expected, got) in expected.iter().zip(independent_op_codes.iter()) {
@@ -634,7 +637,7 @@ pub trait MatchesAt: BasicLines {
 
 impl Chunk {
     pub fn applies(&self, patchee: impl MatchesAt) -> bool {
-        patchee.matches_at(&self.before.1[..], self.before.0)
+        patchee.matches_at(&self.before.lines[..], self.before.start)
     }
 }
 
@@ -682,8 +685,14 @@ impl<'a, L: DiffInputLines> Iterator for Chunks<'a, L> {
             }
         }
 
-        let before = Snippet(before_start, before_lines);
-        let after = Snippet(after_start, after_lines);
+        let before = Snippet {
+            start: before_start,
+            lines: before_lines,
+        };
+        let after = Snippet {
+            start: after_start,
+            lines: after_lines,
+        };
 
         Some(Chunk {
             context_lengths,
@@ -709,13 +718,13 @@ impl<L: DiffInputLines> Matcher<L> {
     /// let expected = vec![
     ///     Chunk {
     ///         context_lengths: (1, 2),
-    ///         before: Snippet(0, vec!["A\n".to_string(), "B\n".to_string(), "C\n".to_string(), "D\n".to_string(), "E\n".to_string(), "F\n".to_string(), "G\n".to_string(), "H\n".to_string()]),
-    ///         after: Snippet(0, vec!["A\n".to_string(), "C\n".to_string(), "D\n".to_string(), "Ef\n".to_string(), "Fg\n".to_string(), "G\n".to_string(), "H\n".to_string()])
+    ///         before: Snippet{start: 0, lines: vec!["A\n".to_string(), "B\n".to_string(), "C\n".to_string(), "D\n".to_string(), "E\n".to_string(), "F\n".to_string(), "G\n".to_string(), "H\n".to_string()]},
+    ///         after: Snippet{start: 0, lines:vec!["A\n".to_string(), "C\n".to_string(), "D\n".to_string(), "Ef\n".to_string(), "Fg\n".to_string(), "G\n".to_string(), "H\n".to_string()]}
     ///     },
     ///     Chunk {
     ///         context_lengths: (2, 2),
-    ///         before: Snippet(9, vec!["J\n".to_string(), "K\n".to_string(), "L\n".to_string(), "M\n".to_string()]),
-    ///         after: Snippet(8, vec!["J\n".to_string(), "K\n".to_string(), "H\n".to_string(), "L\n".to_string(), "M\n".to_string()])
+    ///         before: Snippet{start: 9, lines: vec!["J\n".to_string(), "K\n".to_string(), "L\n".to_string(), "M\n".to_string()]},
+    ///         after: Snippet{start: 8, lines: vec!["J\n".to_string(), "K\n".to_string(), "H\n".to_string(), "L\n".to_string(), "M\n".to_string()]}
     ///     },
     /// ];
     /// for (expected, got) in expected.iter().zip(matcher.chunks(2)) {
