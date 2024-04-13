@@ -1,7 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::crange::{CRange, Len};
-use crate::lines::{DiffInputLines, LazyLines, LineIndices};
+use crate::lines::{BasicLines, DiffInputLines, LazyLines, LineIndices};
 
 use std::collections::HashMap;
 use std::iter::Enumerate;
@@ -621,6 +621,23 @@ pub struct Chunk {
     pub before: Snippet,
     pub after: Snippet,
 }
+
+pub trait MatchesAt: BasicLines {
+    fn matches_at(&self, lines: &[String], at: usize) -> bool {
+        if at < self.len() && self.len() - at >= lines.len() {
+            lines.iter().zip(self.lines(at..)).all(|(b, a)| a == *b)
+        } else {
+            false
+        }
+    }
+}
+
+impl Chunk {
+    pub fn applies(&self, patchee: impl MatchesAt) -> bool {
+        patchee.matches_at(&self.before.1[..], self.before.0)
+    }
+}
+
 pub struct Chunks<'a, L: DiffInputLines> {
     iter: OpCodeChunks<'a>,
     before: &'a L,
