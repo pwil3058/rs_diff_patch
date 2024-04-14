@@ -601,7 +601,7 @@ impl DiffChunk {
     pub fn applies(&self, lines: &impl MatchesAt, offset: isize, reverse: bool) -> Option<Applies> {
         let before = if reverse { &self.after } else { &self.before };
         let start = before.start as isize + offset;
-        if !start.is_negative() && lines.matches_at(&before.lines[..], start as usize) {
+        if !start.is_negative() && lines.matches_at(&before.lines, start as usize) {
             Some(Applies::Cleanly)
         } else {
             let max_reduction = self.context_lengths.0.max(self.context_lengths.1);
@@ -620,6 +620,46 @@ impl DiffChunk {
             }
             None
         }
+    }
+
+    pub fn find_compromise(
+        &self,
+        lines: &impl MatchesAt,
+        not_before: usize,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<(isize, Applies)> {
+        let before = if reverse { &self.after } else { &self.before };
+        let not_after =
+            self.context_lengths.0 + self.context_lengths.1 + lines.len() - before.len();
+        let mut backward_done = false;
+        let mut forward_done = false;
+        for i in 1isize.. {
+            if !backward_done {
+                let adjusted_offset = offset - i;
+                if before.start as isize + adjusted_offset < not_before as isize {
+                    backward_done = true;
+                } else {
+                    if let Some(applies) = self.applies(lines, adjusted_offset, reverse) {
+                        return Some((-i, applies));
+                    }
+                }
+            }
+            if !forward_done {
+                let adjusted_offset = offset + i;
+                if before.start as isize + adjusted_offset < not_after as isize {
+                    if let Some(applies) = self.applies(lines, adjusted_offset, reverse) {
+                        return Some((i, applies));
+                    }
+                } else {
+                    forward_done = true
+                }
+            }
+            if forward_done && backward_done {
+                break;
+            }
+        }
+        None
     }
 }
 
