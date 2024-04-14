@@ -11,14 +11,35 @@ fn diff_chunk_applies() {
 
     for diff_chunk in diff_chunks.iter() {
         assert_eq!(
-            diff_chunk.applies(&LazyLines::from(before_lines)),
+            diff_chunk.applies(&LazyLines::from(before_lines), false),
             Some(Applies::Cleanly)
         );
-        assert_eq!(diff_chunk.applies(&LazyLines::from(after_lines)), None);
+        assert_eq!(
+            diff_chunk.applies(&LazyLines::from(before_lines), true),
+            None
+        );
+        assert_eq!(
+            diff_chunk.applies(&LazyLines::from(after_lines), false),
+            None
+        );
+        assert_eq!(
+            diff_chunk.applies(&LazyLines::from(after_lines), true),
+            Some(Applies::Cleanly)
+        );
     }
     let diff_chunk = diff_chunks.first().unwrap();
     assert_eq!(
-        diff_chunk.applies(&LazyLines::from("B\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n")),
+        diff_chunk.applies(
+            &LazyLines::from("B\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n"),
+            false
+        ),
+        Some(Applies::WithReductions((1, 1)))
+    );
+    assert_eq!(
+        diff_chunk.applies(
+            &LazyLines::from("B\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n"),
+            true
+        ),
         Some(Applies::WithReductions((1, 1)))
     );
 }
