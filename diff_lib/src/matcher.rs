@@ -555,6 +555,12 @@ pub struct Snippet {
     pub lines: Vec<String>,
 }
 
+impl Len for Snippet {
+    fn len(&self) -> usize {
+        self.lines.len()
+    }
+}
+
 pub trait ExtractSnippet: DiffInputLines {
     fn extract_snippet(&self, range_bounds: impl RangeBounds<usize>) -> Snippet {
         let range = self.trimmed_range(range_bounds);
@@ -567,7 +573,7 @@ pub trait ExtractSnippet: DiffInputLines {
 impl ExtractSnippet for LazyLines {}
 
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct Chunk {
+pub struct DiffChunk {
     pub context_lengths: (usize, usize),
     pub before: Snippet,
     pub after: Snippet,
@@ -583,20 +589,43 @@ pub trait MatchesAt: BasicLines {
     }
 }
 
-impl Chunk {
-    pub fn applies(&self, patchee: impl MatchesAt) -> bool {
-        patchee.matches_at(&self.before.lines[..], self.before.start)
+impl MatchesAt for LazyLines {}
+
+#[derive(Debug, PartialEq)]
+pub enum Applies {
+    Cleanly,
+    WithReductions((usize, usize)),
+}
+
+impl DiffChunk {
+    pub fn applies(&self, lines: &impl MatchesAt) -> Option<Applies> {
+        if lines.matches_at(&self.before.lines[..], self.before.start) {
+            Some(Applies::Cleanly)
+        } else {
+            let max_reduction = self.context_lengths.0.max(self.context_lengths.1);
+            for redn in 1..max_reduction {
+                let start_redn = redn.min(self.context_lengths.0);
+                let end_redn = redn.min(self.context_lengths.1);
+                if lines.matches_at(
+                    &self.before.lines[start_redn..self.before.len() - end_redn],
+                    self.before.start + start_redn,
+                ) {
+                    return Some(Applies::WithReductions((start_redn, end_redn)));
+                }
+            }
+            None
+        }
     }
 }
 
-pub struct Chunks<'a, L: DiffInputLines> {
+pub struct DiffChunks<'a, L: DiffInputLines> {
     iter: OpCodeChunks<'a>,
     before: &'a L,
     after: &'a L,
 }
 
-impl<'a, L: DiffInputLines> Iterator for Chunks<'a, L> {
-    type Item = Chunk;
+impl<'a, L: DiffInputLines> Iterator for DiffChunks<'a, L> {
+    type Item = DiffChunk;
 
     fn next(&mut self) -> Option<Self::Item> {
         let oc_chunk = self.iter.next()?;
@@ -642,7 +671,7 @@ impl<'a, L: DiffInputLines> Iterator for Chunks<'a, L> {
             lines: after_lines,
         };
 
-        Some(Chunk {
+        Some(DiffChunk {
             context_lengths,
             before,
             after,
@@ -657,33 +686,36 @@ impl<L: DiffInputLines> Matcher<L> {
     /// ```
     /// use diff_lib::crange::CRange;
     /// use diff_lib::lines::LazyLines;
-    /// use diff_lib::matcher::{Match, Matcher, OpCode, Snippet, OpCodeChunk, Chunk};
+    /// use diff_lib::matcher::{Match, Matcher, OpCode, Snippet, OpCodeChunk, DiffChunk};
     /// use OpCode::*;
     ///
     /// let before_lines = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
     /// let after_lines = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
     /// let matcher = Matcher::new(before_lines, after_lines);
     /// let expected = vec![
-    ///     Chunk {
+    ///     DiffChunk {
     ///         context_lengths: (1, 2),
     ///         before: Snippet{start: 0, lines: vec!["A\n".to_string(), "B\n".to_string(), "C\n".to_string(), "D\n".to_string(), "E\n".to_string(), "F\n".to_string(), "G\n".to_string(), "H\n".to_string()]},
     ///         after: Snippet{start: 0, lines:vec!["A\n".to_string(), "C\n".to_string(), "D\n".to_string(), "Ef\n".to_string(), "Fg\n".to_string(), "G\n".to_string(), "H\n".to_string()]}
     ///     },
-    ///     Chunk {
+    ///     DiffChunk {
     ///         context_lengths: (2, 2),
     ///         before: Snippet{start: 9, lines: vec!["J\n".to_string(), "K\n".to_string(), "L\n".to_string(), "M\n".to_string()]},
     ///         after: Snippet{start: 8, lines: vec!["J\n".to_string(), "K\n".to_string(), "H\n".to_string(), "L\n".to_string(), "M\n".to_string()]}
     ///     },
     /// ];
-    /// for (expected, got) in expected.iter().zip(matcher.chunks(2)) {
+    /// for (expected, got) in expected.iter().zip(matcher.diff_chunks(2)) {
     ///     assert_eq!(*expected, got);
     /// }
     /// ```
-    pub fn chunks<'a>(&'a self, context: usize) -> Chunks<'a, L> {
-        Chunks {
+    pub fn diff_chunks<'a>(&'a self, context: usize) -> DiffChunks<'a, L> {
+        DiffChunks {
             iter: self.op_code_chunks(context),
             before: &self.before,
             after: &self.after,
         }
     }
 }
+
+#[cfg(test)]
+mod matcher_tests;
