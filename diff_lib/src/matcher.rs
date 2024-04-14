@@ -598,19 +598,23 @@ pub enum Applies {
 }
 
 impl DiffChunk {
-    pub fn applies(&self, lines: &impl MatchesAt, reverse: bool) -> Option<Applies> {
+    pub fn applies(&self, lines: &impl MatchesAt, offset: isize, reverse: bool) -> Option<Applies> {
         let before = if reverse { &self.after } else { &self.before };
-        if lines.matches_at(&before.lines[..], before.start) {
+        let start = before.start as isize + offset;
+        if !start.is_negative() && lines.matches_at(&before.lines[..], start as usize) {
             Some(Applies::Cleanly)
         } else {
             let max_reduction = self.context_lengths.0.max(self.context_lengths.1);
             for redn in 1..max_reduction {
                 let start_redn = redn.min(self.context_lengths.0);
                 let end_redn = redn.min(self.context_lengths.1);
-                if lines.matches_at(
-                    &before.lines[start_redn..before.len() - end_redn],
-                    before.start + start_redn,
-                ) {
+                let adj_start = start + start_redn as isize;
+                if !adj_start.is_negative()
+                    && lines.matches_at(
+                        &before.lines[start_redn..before.len() - end_redn],
+                        adj_start as usize,
+                    )
+                {
                     return Some(Applies::WithReductions((start_redn, end_redn)));
                 }
             }
