@@ -4,6 +4,7 @@ use crate::crange::{CRange, Len};
 use crate::lines::{BasicLines, DiffInputLines, LazyLines, LineIndices};
 
 use std::collections::HashMap;
+use std::io;
 use std::iter::Enumerate;
 use std::ops::{Deref, DerefMut, RangeBounds};
 use std::slice::Iter;
@@ -773,6 +774,55 @@ impl<L: DiffInputLines> Matcher<L> {
             before: &self.before,
             after: &self.after,
         }
+    }
+}
+
+pub trait ApplyInto<'a>: Serialize + Deserialize<'a> {
+    fn chunks(&self) -> impl Iterator<Item = &DiffChunk>;
+    fn get(&self, index: usize) -> Option<&DiffChunk>;
+
+    fn apply<W>(&self, target: &impl MatchesAt, _into: &mut W, reverse: bool) -> io::Result<()>
+    where
+        W: io::Write,
+    {
+        let next_unused_index = 0usize;
+        let offset = 0isize;
+        for (i, chunk) in self.chunks().enumerate() {
+            let chunk_num = i + 1; // for human consumption
+            if next_unused_index > target.len() {
+                log::error!("Unexpected end of input processing hunk #{chunk_num}");
+                break;
+            }
+            if let Some(applies) = chunk.applies(target, offset, reverse) {
+                match applies {
+                    Applies::Cleanly => (),
+                    Applies::WithReductions(_) => (),
+                }
+            } else if let Some((_offset_adj, applies)) =
+                chunk.find_compromise(target, next_unused_index, self.get(i), offset, reverse)
+            {
+                match applies {
+                    Applies::Cleanly => (),
+                    Applies::WithReductions(_) => (),
+                }
+            } else if let Some(applies) = chunk.applies(target, offset, !reverse) {
+                // Checking if its already applied
+                match applies {
+                    Applies::Cleanly => (),
+                    Applies::WithReductions(_) => (),
+                }
+            } else if let Some((_offset_adj, applies)) =
+                chunk.find_compromise(target, next_unused_index, self.get(i), offset, !reverse)
+            {
+                match applies {
+                    Applies::Cleanly => (),
+                    Applies::WithReductions(_) => (),
+                }
+            } else {
+                log::error!("Chunk #{chunk_num} could NOT be applied!");
+            }
+        }
+        Ok(())
     }
 }
 
