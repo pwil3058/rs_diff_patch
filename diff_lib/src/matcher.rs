@@ -626,12 +626,26 @@ impl DiffChunk {
         &self,
         lines: &impl MatchesAt,
         not_before: usize,
+        next_chunk: Option<&DiffChunk>,
         offset: isize,
         reverse: bool,
     ) -> Option<(isize, Applies)> {
         let before = if reverse { &self.after } else { &self.before };
-        let not_after =
-            self.context_lengths.0 + self.context_lengths.1 + lines.len() - before.len();
+        let not_after = if let Some(next_chunk) = next_chunk {
+            let next_chunk_before = if reverse {
+                &next_chunk.after
+            } else {
+                &next_chunk.before
+            };
+            next_chunk_before
+                .start
+                .checked_add_signed(offset)
+                .expect("overflow")
+        } else {
+            lines.len()
+        } + self.context_lengths.0
+            + self.context_lengths.1
+            - before.len();
         let mut backward_done = false;
         let mut forward_done = false;
         for i in 1isize.. {
