@@ -92,3 +92,31 @@ fn find_compromise() {
         Some((3, Applies::Cleanly))
     );
 }
+
+#[test]
+fn find_compromise_edges() {
+    let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
+    let after_lines =
+        "A\nX\nB\nC\nD\nE\nF\nG\nH\nI\nX\nY\nZ\n\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nX\nY\nZ\nT\n";
+    let matcher = Matcher::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let diff_chunks: Vec<DiffChunk> = matcher.diff_chunks(2).collect();
+
+    assert_eq!(
+        diff_chunks.first().unwrap().find_compromise(
+            &LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n"),
+            0,
+            3,
+            false
+        ),
+        Some((-3, Applies::Cleanly))
+    );
+    assert_eq!(
+        diff_chunks.last().unwrap().find_compromise(
+            &LazyLines::from("B\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\n"),
+            8,
+            -3,
+            false
+        ),
+        Some((2, Applies::WithReductions((1, 1))))
+    );
+}
