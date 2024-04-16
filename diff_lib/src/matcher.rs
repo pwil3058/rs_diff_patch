@@ -5,6 +5,7 @@ use crate::lines::{BasicLines, DiffInputLines, LazyLines, LineIndices};
 
 use std::collections::HashMap;
 use std::io;
+use std::io::Write;
 use std::iter::Enumerate;
 use std::ops::{Deref, DerefMut, RangeBounds};
 use std::slice::Iter;
@@ -556,9 +557,25 @@ pub struct Snippet {
     pub lines: Vec<String>,
 }
 
-impl Len for Snippet {
-    fn len(&self) -> usize {
-        self.lines.len()
+impl Snippet {
+    pub fn length(&self, reductions: Option<(usize, usize)>) -> usize {
+        if let Some((start_reduction, end_reduction)) = reductions {
+            self.lines.len() - start_reduction - end_reduction
+        } else {
+            self.lines.len()
+        }
+    }
+
+    pub fn start(&self, offset: isize) -> usize {
+        self.start.checked_add_signed(offset).expect("underflow")
+    }
+
+    pub fn lines(&self, reductions: Option<(usize, usize)>) -> impl Iterator<Item = &String> {
+        if let Some((start_reduction, end_reduction)) = reductions {
+            self.lines[start_reduction..self.lines.len() - end_reduction].iter()
+        } else {
+            self.lines.iter()
+        }
     }
 }
 
@@ -592,15 +609,31 @@ pub trait MatchesAt: BasicLines {
 
 impl MatchesAt for LazyLines {}
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Applies {
     Cleanly,
     WithReductions((usize, usize)),
 }
 
 impl DiffChunk {
+    pub fn after(&self, reverse: bool) -> &Snippet {
+        if reverse {
+            &self.before
+        } else {
+            &self.after
+        }
+    }
+
+    pub fn before(&self, reverse: bool) -> &Snippet {
+        if reverse {
+            &self.after
+        } else {
+            &self.before
+        }
+    }
+
     pub fn applies(&self, lines: &impl MatchesAt, offset: isize, reverse: bool) -> Option<Applies> {
-        let before = if reverse { &self.after } else { &self.before };
+        let before = self.before(reverse);
         let start = before.start as isize + offset;
         if !start.is_negative() && lines.matches_at(&before.lines, start as usize) {
             Some(Applies::Cleanly)
@@ -612,7 +645,7 @@ impl DiffChunk {
                 let adj_start = start + start_redn as isize;
                 if !adj_start.is_negative()
                     && lines.matches_at(
-                        &before.lines[start_redn..before.len() - end_redn],
+                        &before.lines[start_redn..before.length(None) - end_redn],
                         adj_start as usize,
                     )
                 {
@@ -623,7 +656,7 @@ impl DiffChunk {
         }
     }
 
-    pub fn find_compromise(
+    pub fn applies_nearby(
         &self,
         lines: &impl MatchesAt,
         not_before: usize,
@@ -631,7 +664,7 @@ impl DiffChunk {
         offset: isize,
         reverse: bool,
     ) -> Option<(isize, Applies)> {
-        let before = if reverse { &self.after } else { &self.before };
+        let before = self.before(reverse);
         let not_after = if let Some(next_chunk) = next_chunk {
             let next_chunk_before = if reverse {
                 &next_chunk.after
@@ -642,11 +675,10 @@ impl DiffChunk {
                 .start
                 .checked_add_signed(offset)
                 .expect("overflow")
+                - before.length(Some(self.context_lengths))
         } else {
-            lines.len()
-        } + self.context_lengths.0
-            + self.context_lengths.1
-            - before.len();
+            lines.len() - before.length(Some(self.context_lengths))
+        };
         let mut backward_done = false;
         let mut forward_done = false;
         for i in 1isize.. {
@@ -777,42 +809,113 @@ impl<L: DiffInputLines> Matcher<L> {
     }
 }
 
+struct ProgressData<'a, L>
+where
+    L: BasicLines,
+{
+    lines: &'a L,
+    consumed: usize,
+    offset: isize,
+}
+
+impl DiffChunk {
+    pub fn apply_into<'a, L, W>(
+        &self,
+        pd: &mut ProgressData<'a, L>,
+        into: &mut W,
+        applies: Applies,
+        reverse: bool,
+    ) -> io::Result<()>
+    where
+        L: BasicLines,
+        W: io::Write,
+    {
+        match applies {
+            Applies::Cleanly => {
+                let end = self.before(reverse).start(pd.offset);
+                for line in pd.lines.lines(pd.consumed..end) {
+                    into.write_all(line.as_bytes())?;
+                }
+                for line in self.after(reverse).lines(None) {
+                    into.write_all(line.as_bytes())?;
+                }
+                pd.consumed = end + self.before.length(None);
+            }
+            Applies::WithReductions(reductions) => {
+                let end = self.before(reverse).start(pd.offset) + reductions.0;
+                for line in pd.lines.lines(pd.consumed..end) {
+                    into.write_all(line.as_bytes())?;
+                }
+                for line in self.after(reverse).lines(Some(reductions)) {
+                    into.write_all(line.as_bytes())?;
+                }
+                pd.consumed = end + self.before.length(Some(reductions));
+            }
+        }
+        Ok(())
+    }
+}
+
 pub trait ApplyInto<'a>: Serialize + Deserialize<'a> {
     fn chunks(&self) -> impl Iterator<Item = &DiffChunk>;
     fn get(&self, index: usize) -> Option<&DiffChunk>;
 
-    fn apply<W>(&self, target: &impl MatchesAt, _into: &mut W, reverse: bool) -> io::Result<()>
+    fn apply_into<W>(&self, target: &impl MatchesAt, into: &mut W, reverse: bool) -> io::Result<()>
     where
         W: io::Write,
     {
-        let next_unused_index = 0usize;
-        let offset = 0isize;
+        let mut pd = ProgressData {
+            lines: target,
+            consumed: 0,
+            offset: 0,
+        };
+        // let mut consumed_already = 0usize;
+        // let offset = 0isize;
         for (i, chunk) in self.chunks().enumerate() {
             let chunk_num = i + 1; // for human consumption
-            if next_unused_index > target.len() {
+            if pd.consumed > target.len() {
                 log::error!("Unexpected end of input processing hunk #{chunk_num}");
-                break;
             }
-            if let Some(applies) = chunk.applies(target, offset, reverse) {
+            if let Some(applies) = chunk.applies(target, pd.offset, reverse) {
                 match applies {
-                    Applies::Cleanly => (),
-                    Applies::WithReductions(_) => (),
+                    Applies::Cleanly => {
+                        let end = chunk.before(reverse).start(pd.offset);
+                        for line in pd.lines.lines(pd.consumed..end) {
+                            into.write_all(line.as_bytes())?;
+                        }
+                        for line in chunk.after(reverse).lines(None) {
+                            into.write_all(line.as_bytes())?;
+                        }
+                        pd.consumed = end + chunk.before.length(None);
+                    }
+                    Applies::WithReductions(reductions) => {
+                        let end = chunk.before(reverse).start(pd.offset) + reductions.0;
+                        for line in target.lines(pd.consumed..end) {
+                            into.write_all(line.as_bytes())?;
+                        }
+                        for line in chunk.after(reverse).lines(Some(reductions)) {
+                            into.write_all(line.as_bytes())?;
+                        }
+                        pd.consumed = end + chunk.before.length(Some(reductions));
+                    }
                 }
-            } else if let Some((_offset_adj, applies)) =
-                chunk.find_compromise(target, next_unused_index, self.get(i), offset, reverse)
+            } else if let Some((offset_adj, applies)) =
+                chunk.applies_nearby(target, pd.consumed, self.get(i), pd.offset, reverse)
             {
+                pd.offset += offset_adj;
+                chunk.apply_into(&mut pd, into, applies, reverse);
                 match applies {
                     Applies::Cleanly => (),
                     Applies::WithReductions(_) => (),
                 }
-            } else if let Some(applies) = chunk.applies(target, offset, !reverse) {
+            } else if let Some(applies) = chunk.applies(target, pd.offset, !reverse) {
                 // Checking if its already applied
                 match applies {
                     Applies::Cleanly => (),
                     Applies::WithReductions(_) => (),
                 }
             } else if let Some((_offset_adj, applies)) =
-                chunk.find_compromise(target, next_unused_index, self.get(i), offset, !reverse)
+                chunk.applies_nearby(target, pd.consumed, self.get(i), pd.offset, !reverse)
             {
                 match applies {
                     Applies::Cleanly => (),

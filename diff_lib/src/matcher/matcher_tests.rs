@@ -78,7 +78,7 @@ fn find_compromise() {
     let diff_chunks: Vec<DiffChunk> = matcher.diff_chunks(2).collect();
 
     assert_eq!(
-        diff_chunks.first().unwrap().find_compromise(
+        diff_chunks.first().unwrap().applies_nearby(
             &LazyLines::from(before_lines),
             2,
             None,
@@ -88,7 +88,7 @@ fn find_compromise() {
         Some((-3, Applies::Cleanly))
     );
     assert_eq!(
-        diff_chunks.first().unwrap().find_compromise(
+        diff_chunks.first().unwrap().applies_nearby(
             &LazyLines::from(before_lines),
             2,
             None,
@@ -109,7 +109,7 @@ fn find_compromise_edges() {
     assert_eq!(diff_chunks.len(), 3);
 
     assert_eq!(
-        diff_chunks.first().unwrap().find_compromise(
+        diff_chunks.first().unwrap().applies_nearby(
             &LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n"),
             0,
             diff_chunks.get(1),
@@ -119,7 +119,7 @@ fn find_compromise_edges() {
         Some((-3, Applies::Cleanly))
     );
     assert_eq!(
-        diff_chunks.last().unwrap().find_compromise(
+        diff_chunks.last().unwrap().applies_nearby(
             &LazyLines::from("B\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\n"),
             8,
             None,
