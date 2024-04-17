@@ -5,7 +5,6 @@ use crate::lines::{BasicLines, DiffInputLines, LazyLines, LineIndices};
 
 use std::collections::HashMap;
 use std::io;
-use std::io::Write;
 use std::iter::Enumerate;
 use std::ops::{Deref, DerefMut, RangeBounds};
 use std::slice::Iter;
@@ -566,8 +565,12 @@ impl Snippet {
         }
     }
 
-    pub fn start(&self, offset: isize) -> usize {
-        self.start.checked_add_signed(offset).expect("underflow")
+    pub fn start(&self, offset: isize, reductions: Option<(usize, usize)>) -> usize {
+        if let Some(reductions) = reductions {
+            reductions.0 + self.start.checked_add_signed(offset).expect("underflow")
+        } else {
+            self.start.checked_add_signed(offset).expect("underflow")
+        }
     }
 
     pub fn lines(&self, reductions: Option<(usize, usize)>) -> impl Iterator<Item = &String> {
@@ -809,7 +812,7 @@ impl<L: DiffInputLines> Matcher<L> {
     }
 }
 
-struct ProgressData<'a, L>
+pub struct ProgressData<'a, L>
 where
     L: BasicLines,
 {
@@ -823,35 +826,41 @@ impl DiffChunk {
         &self,
         pd: &mut ProgressData<'a, L>,
         into: &mut W,
-        applies: Applies,
+        reductions: Option<(usize, usize)>,
         reverse: bool,
     ) -> io::Result<()>
     where
         L: BasicLines,
         W: io::Write,
     {
-        match applies {
-            Applies::Cleanly => {
-                let end = self.before(reverse).start(pd.offset);
-                for line in pd.lines.lines(pd.consumed..end) {
-                    into.write_all(line.as_bytes())?;
-                }
-                for line in self.after(reverse).lines(None) {
-                    into.write_all(line.as_bytes())?;
-                }
-                pd.consumed = end + self.before.length(None);
-            }
-            Applies::WithReductions(reductions) => {
-                let end = self.before(reverse).start(pd.offset) + reductions.0;
-                for line in pd.lines.lines(pd.consumed..end) {
-                    into.write_all(line.as_bytes())?;
-                }
-                for line in self.after(reverse).lines(Some(reductions)) {
-                    into.write_all(line.as_bytes())?;
-                }
-                pd.consumed = end + self.before.length(Some(reductions));
-            }
+        let end = self.before(reverse).start(pd.offset, reductions);
+        for line in pd.lines.lines(pd.consumed..end) {
+            into.write_all(line.as_bytes())?;
         }
+        for line in self.after(reverse).lines(reductions) {
+            into.write_all(line.as_bytes())?;
+        }
+        pd.consumed = end + self.before.length(reductions);
+        Ok(())
+    }
+
+    pub fn already_applied_into<'a, L, W>(
+        &self,
+        pd: &mut ProgressData<'a, L>,
+        into: &mut W,
+        reductions: Option<(usize, usize)>,
+        reverse: bool,
+    ) -> io::Result<()>
+    where
+        L: BasicLines,
+        W: io::Write,
+    {
+        let after = self.after(reverse);
+        let end = after.start(pd.offset, reductions) + after.length(reductions);
+        for line in pd.lines.lines(pd.consumed..end) {
+            into.write_all(line.as_bytes())?;
+        }
+        pd.consumed = end;
         Ok(())
     }
 }
@@ -869,59 +878,75 @@ pub trait ApplyInto<'a>: Serialize + Deserialize<'a> {
             consumed: 0,
             offset: 0,
         };
-        // let mut consumed_already = 0usize;
-        // let offset = 0isize;
         for (i, chunk) in self.chunks().enumerate() {
             let chunk_num = i + 1; // for human consumption
             if pd.consumed > target.len() {
-                log::error!("Unexpected end of input processing hunk #{chunk_num}");
+                log::error!("Unexpected end of input processing hunk #{chunk_num}.");
             }
             if let Some(applies) = chunk.applies(target, pd.offset, reverse) {
                 match applies {
                     Applies::Cleanly => {
-                        let end = chunk.before(reverse).start(pd.offset);
-                        for line in pd.lines.lines(pd.consumed..end) {
-                            into.write_all(line.as_bytes())?;
-                        }
-                        for line in chunk.after(reverse).lines(None) {
-                            into.write_all(line.as_bytes())?;
-                        }
-                        pd.consumed = end + chunk.before.length(None);
+                        chunk.apply_into(&mut pd, into, None, reverse)?;
+                        log::info!("Chunk #{chunk_num} applies cleanly.");
                     }
                     Applies::WithReductions(reductions) => {
-                        let end = chunk.before(reverse).start(pd.offset) + reductions.0;
-                        for line in target.lines(pd.consumed..end) {
-                            into.write_all(line.as_bytes())?;
-                        }
-                        for line in chunk.after(reverse).lines(Some(reductions)) {
-                            into.write_all(line.as_bytes())?;
-                        }
-                        pd.consumed = end + chunk.before.length(Some(reductions));
+                        chunk.apply_into(&mut pd, into, Some(reductions), reverse)?;
+                        log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions.");
                     }
                 }
             } else if let Some((offset_adj, applies)) =
                 chunk.applies_nearby(target, pd.consumed, self.get(i), pd.offset, reverse)
             {
                 pd.offset += offset_adj;
-                chunk.apply_into(&mut pd, into, applies, reverse);
                 match applies {
-                    Applies::Cleanly => (),
-                    Applies::WithReductions(_) => (),
+                    Applies::Cleanly => {
+                        chunk.apply_into(&mut pd, into, None, reverse)?;
+                        log::warn!("Chunk #{chunk_num} applies with offset {offset_adj}.");
+                    }
+                    Applies::WithReductions(reductions) => {
+                        chunk.apply_into(&mut pd, into, Some(reductions), reverse)?;
+                        log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions and offset {offset_adj}.");
+                    }
                 }
             } else if let Some(applies) = chunk.applies(target, pd.offset, !reverse) {
-                // Checking if its already applied
+                // It's already applied
                 match applies {
-                    Applies::Cleanly => (),
-                    Applies::WithReductions(_) => (),
+                    Applies::Cleanly => {
+                        chunk.already_applied_into(&mut pd, into, None, reverse)?;
+                        log::warn!("Chunk #{chunk_num} already applied")
+                    }
+                    Applies::WithReductions(reductions) => {
+                        chunk.already_applied_into(&mut pd, into, Some(reductions), reverse)?;
+                        log::warn!(
+                            "Chunk #{chunk_num} already applied with {reductions:?} reductions."
+                        );
+                    }
                 }
-            } else if let Some((_offset_adj, applies)) =
+            } else if let Some((offset_adj, applies)) =
                 chunk.applies_nearby(target, pd.consumed, self.get(i), pd.offset, !reverse)
             {
+                // It's already applied
+                pd.offset += offset_adj;
                 match applies {
-                    Applies::Cleanly => (),
-                    Applies::WithReductions(_) => (),
+                    Applies::Cleanly => {
+                        chunk.already_applied_into(&mut pd, into, None, reverse)?;
+                        log::warn!("Chunk #{chunk_num} already applied with offset {offset_adj}")
+                    }
+                    Applies::WithReductions(reductions) => {
+                        chunk.already_applied_into(&mut pd, into, Some(reductions), reverse)?;
+                        log::warn!("Chunk #{chunk_num} already applied with {reductions:?} reductions and offset {offset_adj}.")
+                    }
                 }
             } else {
+                into.write_all(b"<<<<<<<\n")?;
+                for line in chunk.before(reverse).lines(None) {
+                    into.write_all(line.as_bytes())?;
+                }
+                into.write_all(b"=======\n")?;
+                for line in chunk.after(reverse).lines(None) {
+                    into.write_all(line.as_bytes())?;
+                }
+                into.write_all(b">>>>>>>\n")?;
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }
         }
