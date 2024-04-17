@@ -950,6 +950,9 @@ pub trait ApplyInto<'a>: Serialize + Deserialize<'a> {
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }
         }
+        for line in pd.lines.lines(pd.consumed..) {
+            into.write_all(line.as_bytes())?;
+        }
         Ok(())
     }
 }
