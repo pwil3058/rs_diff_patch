@@ -90,6 +90,7 @@ impl Match {
         self.2 -= arg;
     }
 }
+
 fn longest_match<'a, L: DiffInputLines>(
     before: &L,
     after: &L,
@@ -155,6 +156,7 @@ fn longest_match<'a, L: DiffInputLines>(
         Some(best_match)
     }
 }
+
 fn matching_blocks<'a, L: DiffInputLines>(before: &L, after: &L) -> Vec<Match> {
     let after_line_indices = after.get_line_indices();
     let mut lifo = vec![(CRange(0, before.len()), CRange(0, after.len()))];
@@ -320,28 +322,36 @@ impl OpCodeChunk {
         }
     }
 
-    fn lengths(&self) -> (usize, usize) {
-        let mut before_len = 0usize;
-        let mut after_len = 0usize;
-        for op_code in self.0.iter() {
+    fn ends(&self) -> (usize, usize) {
+        if let Some(op_code) = self.0.last() {
             match op_code {
-                OpCode::Delete(range, _) => {
-                    before_len += range.len();
-                }
-                OpCode::Equal(match_) => {
-                    before_len += match_.len();
-                    after_len += match_.len();
-                }
-                OpCode::Insert(_, range) => {
-                    after_len += range.len();
-                }
+                OpCode::Delete(range, after_start) => (range.end(), *after_start),
+                OpCode::Equal(match_) => (match_.before_end(), match_.after_end()),
+                OpCode::Insert(before_start, after_range) => (*before_start, after_range.end()),
                 OpCode::Replace(before_range, after_range) => {
-                    before_len += before_range.len();
-                    after_len += after_range.len();
+                    (before_range.end(), after_range.end())
                 }
             }
+        } else {
+            (0, 0)
         }
-        (before_len, after_len)
+    }
+
+    fn ranges(&self) -> (CRange, CRange) {
+        let (before_start, after_start) = self.starts();
+        let (before_end, after_end) = self.ends();
+
+        (
+            CRange(before_start, before_end),
+            CRange(after_start, after_end),
+        )
+    }
+
+    fn lengths(&self) -> (usize, usize) {
+        let (before_start, after_start) = self.starts();
+        let (before_end, after_end) = self.ends();
+
+        (before_end - before_start, after_end - after_start)
     }
 
     fn context_lengths(&self) -> (usize, usize) {
@@ -724,46 +734,23 @@ impl<'a, L: DiffInputLines> Iterator for DiffChunks<'a, L> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let oc_chunk = self.iter.next()?;
-        let (before_start, after_start) = oc_chunk.starts();
+        let (before_range, after_range) = oc_chunk.ranges();
         let context_lengths = oc_chunk.context_lengths();
-        let mut before_lines: Vec<String> = Vec::new();
-        let mut after_lines: Vec<String> = Vec::new();
-        for op_code in oc_chunk.iter() {
-            match op_code {
-                OpCode::Delete(range, _) => {
-                    for line in self.before.lines(*range) {
-                        before_lines.push(line.to_string())
-                    }
-                }
-                OpCode::Equal(match_) => {
-                    for line in self.before.lines(match_.before_range()) {
-                        before_lines.push(line.to_string());
-                        after_lines.push(line.to_string());
-                    }
-                }
-                OpCode::Insert(_, range) => {
-                    for line in self.after.lines(*range) {
-                        after_lines.push(line.to_string())
-                    }
-                }
-                OpCode::Replace(before_range, after_range) => {
-                    for line in self.before.lines(*before_range) {
-                        before_lines.push(line.to_string())
-                    }
-                    for line in self.after.lines(*after_range) {
-                        after_lines.push(line.to_string())
-                    }
-                }
-            }
-        }
-
         let before = Snippet {
-            start: before_start,
-            lines: before_lines,
+            start: before_range.start(),
+            lines: self
+                .before
+                .lines(before_range)
+                .map(|l| l.to_string())
+                .collect(),
         };
         let after = Snippet {
-            start: after_start,
-            lines: after_lines,
+            start: after_range.start(),
+            lines: self
+                .after
+                .lines(after_range)
+                .map(|l| l.to_string())
+                .collect(),
         };
 
         Some(DiffChunk {
