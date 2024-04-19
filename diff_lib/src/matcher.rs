@@ -401,24 +401,25 @@ impl<'a> Iterator for OpCodeChunks<'a> {
                     } else if i == self.tail {
                         // Trim size
                         chunk.push(Equal(range.ends_trimmed(self.context)));
-                        return Some(chunk);
+                        break;
                     } else if let Some((head, tail)) = range.split(self.context) {
                         self.stash = Some(Equal(tail));
                         chunk.push(Equal(head));
-                        return Some(chunk);
+                        break;
                     } else {
                         chunk.push(*op_code)
                     }
                 }
                 _ => {
                     chunk.push(*op_code);
-                    if i == self.tail {
-                        return Some(chunk);
-                    }
                 }
             }
         }
-        None
+        if chunk.is_empty() {
+            None
+        } else {
+            Some(chunk)
+        }
     }
 }
 
