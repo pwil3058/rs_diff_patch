@@ -592,7 +592,7 @@ impl Snippet {
     }
 }
 
-pub trait ExtractSnippet: DiffInputLines {
+pub trait ExtractSnippet: BasicLines {
     fn extract_snippet(&self, range_bounds: impl RangeBounds<usize>) -> Snippet {
         let range = CRange::from(range_bounds);
         let start = range.start();
