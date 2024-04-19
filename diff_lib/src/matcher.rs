@@ -98,8 +98,8 @@ fn longest_match<'a, L: DiffInputLines>(
     after_range_bounds: impl RangeBounds<usize>,
     after_lines_indices: &LineIndices,
 ) -> Option<Match> {
-    let before_range = before.trimmed_range(before_range_bounds);
-    let after_range = after.trimmed_range(after_range_bounds);
+    let before_range = CRange::from(before_range_bounds);
+    let after_range = CRange::from(after_range_bounds);
 
     let mut best_match = Match::default();
 
@@ -594,7 +594,7 @@ impl Snippet {
 
 pub trait ExtractSnippet: DiffInputLines {
     fn extract_snippet(&self, range_bounds: impl RangeBounds<usize>) -> Snippet {
-        let range = self.trimmed_range(range_bounds);
+        let range = CRange::from(range_bounds);
         let start = range.start();
         let lines = self.lines(range).map(|s| s.to_string()).collect();
         Snippet { start, lines }

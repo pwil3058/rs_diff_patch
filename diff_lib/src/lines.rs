@@ -41,26 +41,7 @@ pub trait BasicLines: Len + Default {
     fn lines_reversed(&self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &str>;
 }
 
-pub trait TrimmedRange: Len {
-    fn trimmed_range(&self, bounds: impl RangeBounds<usize>) -> CRange {
-        let start = match bounds.start_bound() {
-            Bound::Included(i) => *i,
-            Bound::Excluded(i) => *i + 1,
-            _ => 0,
-        }
-        .min(self.len());
-        let end = match bounds.end_bound() {
-            Bound::Included(i) => *i + 1,
-            Bound::Excluded(i) => *i,
-            _ => usize::MAX,
-        }
-        .min(self.len());
-
-        CRange(start, end)
-    }
-}
-
-pub trait DiffInputLines: BasicLines + TrimmedRange {
+pub trait DiffInputLines: BasicLines {
     fn get_line_indices(&self) -> LineIndices {
         let mut line_indices = LineIndices::default();
         for (i, item) in self.lines(..).enumerate() {
@@ -84,7 +65,7 @@ impl Len for LazyLines {
 
 impl BasicLines for LazyLines {
     fn lines(&self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &str> {
-        let range = self.trimmed_range(range_bounds);
+        let range = CRange::from(range_bounds);
         self.text
             .split_inclusive("\n")
             .skip(range.start())
@@ -92,13 +73,13 @@ impl BasicLines for LazyLines {
     }
 
     fn lines_reversed(&self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &str> {
-        let range = self.trimmed_range(range_bounds);
+        let range = CRange::from(range_bounds);
         let iter = self.text.split_inclusive('\n').rev();
-        iter.skip(self.length - range.end()).take(range.len())
+        iter.skip(self.length - range.end().min(self.length))
+            .take(range.end().min(self.length) - range.start())
     }
 }
 
-impl TrimmedRange for LazyLines {}
 impl DiffInputLines for LazyLines {}
 
 impl From<String> for LazyLines {
