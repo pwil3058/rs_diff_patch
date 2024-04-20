@@ -2,15 +2,18 @@
 
 use rayon::prelude::ParallelSliceMut;
 use std::collections::HashMap;
-use std::ops::RangeBounds;
+use std::iter::Enumerate;
+use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut, RangeBounds};
+use std::slice::Iter;
 
 use crate::crange::{CRange, Len};
-use crate::lcs::LongestCommonSubsequence;
+use crate::lcs::CommonSubsequence;
 use crate::lines::BasicLines;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Modification {
-    NoChange(LongestCommonSubsequence),
+    NoChange(CommonSubsequence),
     Delete(CRange, usize),
     Insert(usize, CRange),
     Replace(CRange, CRange),
@@ -57,11 +60,11 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         &self,
         antemod_range_bounds: impl RangeBounds<usize>,
         postmod_range_bounds: impl RangeBounds<usize>,
-    ) -> Option<LongestCommonSubsequence> {
+    ) -> Option<CommonSubsequence> {
         let antemod_range = CRange::from(antemod_range_bounds);
         let postmod_range = CRange::from(postmod_range_bounds);
 
-        let mut best_lcs = LongestCommonSubsequence::default();
+        let mut best_lcs = CommonSubsequence::default();
 
         let mut j_to_len = HashMap::<usize, usize>::new();
         for (i, line) in self.antemod.lines(antemod_range).enumerate() {
@@ -79,7 +82,7 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
                     if j == &0 {
                         new_j_to_len.insert(0, 1);
                         if best_lcs.is_empty() {
-                            best_lcs = LongestCommonSubsequence(index, 0, 1);
+                            best_lcs = CommonSubsequence(index, 0, 1);
                         }
                     } else {
                         let k = match j_to_len.get(&(j - 1)) {
@@ -88,7 +91,7 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
                         };
                         new_j_to_len.insert(*j, k);
                         if k > best_lcs.len() {
-                            best_lcs = LongestCommonSubsequence(index + 1 - k, j + 1 - k, k);
+                            best_lcs = CommonSubsequence(index + 1 - k, j + 1 - k, k);
                         }
                     }
                 }
@@ -125,7 +128,7 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         }
     }
 
-    fn longest_common_subsequences(&self) -> Vec<LongestCommonSubsequence> {
+    fn longest_common_subsequences(&self) -> Vec<CommonSubsequence> {
         let mut lifo = vec![(CRange(0, self.antemod.len()), CRange(0, self.postmod.len()))];
         let mut raw_lcses = vec![];
         while let Some((antemod_range, postmod_range)) = lifo.pop() {
@@ -180,7 +183,7 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     /// ```
     /// use diff_lib::crange::CRange;
     /// use diff_lib::lines::LazyLines;
-    /// use diff_lib::lcs::LongestCommonSubsequence;
+    /// use diff_lib::lcs::CommonSubsequence;
     /// use diff_lib::modifications::ModGenerator;
     /// use diff_lib::modifications::Modification::*;
     ///
@@ -189,10 +192,10 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     /// let modlist = ModGenerator::new(&ante_lines, &post_lines).generate();
     /// assert_eq!(
     ///     vec![
-    ///         NoChange(LongestCommonSubsequence(0,0,1)), Delete(CRange(1, 2), 1),     ///
-    ///         NoChange(LongestCommonSubsequence(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)),
-    ///         NoChange(LongestCommonSubsequence(6, 5, 5)), Insert(11, CRange(10, 11)),
-    ///         NoChange(LongestCommonSubsequence(11, 11, 2))
+    ///         NoChange(CommonSubsequence(0,0,1)), Delete(CRange(1, 2), 1),     ///
+    ///         NoChange(CommonSubsequence(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)),
+    ///         NoChange(CommonSubsequence(6, 5, 5)), Insert(11, CRange(10, 11)),
+    ///         NoChange(CommonSubsequence(11, 11, 2))
     ///     ],
     ///     modlist
     /// );
@@ -244,20 +247,181 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     }
 }
 
-// #[derive(Debug, Default)]
-// pub struct Mods<A: BasicLines, P: BasicLines> {
-//     antemod: A,
-//     postmod: P,
-//     mods: Vec<Mod>,
-// }
-//
-// impl<A: BasicLines, P: BasicLines> Mods<A, P> {
-//     pub fn new(antemod: A, postmod: P) -> Self {
-//         let mods = ModGenerator::new(&antemod, &postmod).generate();
-//         Self {
-//             antemod,
-//             postmod,
-//             mods,
-//         }
-//     }
-// }
+#[derive(Debug, Default)]
+pub struct Modifications<A: BasicLines, P: BasicLines> {
+    antemod: A,
+    postmod: P,
+    mods: Vec<Modification>,
+}
+
+impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
+    pub fn new(antemod: A, postmod: P) -> Self {
+        let mods = ModGenerator::new(&antemod, &postmod).generate();
+        Self {
+            antemod,
+            postmod,
+            mods,
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ModificationChunk(Vec<Modification>);
+
+impl Deref for ModificationChunk {
+    type Target = Vec<Modification>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ModificationChunk {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl ModificationChunk {
+    fn starts(&self) -> (usize, usize) {
+        use Modification::*;
+        if let Some(modn) = self.0.first() {
+            match modn {
+                Delete(range, postmod_start) => (range.start(), *postmod_start),
+                NoChange(match_) => (match_.antemod_start(), match_.postmod_start()),
+                Insert(antemod_start, postmod_range) => (*antemod_start, postmod_range.start()),
+                Replace(antemod_range, postmod_range) => {
+                    (antemod_range.start(), postmod_range.start())
+                }
+            }
+        } else {
+            (0, 0)
+        }
+    }
+
+    fn ends(&self) -> (usize, usize) {
+        use Modification::*;
+        if let Some(op_code) = self.0.last() {
+            match op_code {
+                Delete(range, postmod_start) => (range.end(), *postmod_start),
+                NoChange(match_) => (match_.antemod_end(), match_.postmod_end()),
+                Insert(antemod_start, postmod_range) => (*antemod_start, postmod_range.end()),
+                Replace(antemod_range, postmod_range) => (antemod_range.end(), postmod_range.end()),
+            }
+        } else {
+            (0, 0)
+        }
+    }
+
+    pub fn ranges(&self) -> (CRange, CRange) {
+        let (antemod_start, postmod_start) = self.starts();
+        let (antemod_end, postmod_end) = self.ends();
+
+        (
+            CRange(antemod_start, antemod_end),
+            CRange(postmod_start, postmod_end),
+        )
+    }
+
+    pub fn context_lengths(&self) -> (usize, usize) {
+        use Modification::NoChange;
+        let start = if let Some(modn) = self.first() {
+            match modn {
+                NoChange(match_) => match_.len(),
+                _ => 0,
+            }
+        } else {
+            0
+        };
+        let end = if let Some(op_code) = self.last() {
+            match op_code {
+                NoChange(match_) => match_.len(),
+                _ => 0,
+            }
+        } else {
+            0
+        };
+        (start, end)
+    }
+}
+
+pub struct ModificationChunkIter<'a> {
+    iter: Enumerate<Iter<'a, Modification>>,
+    tail: usize,
+    context: usize,
+    stash: Option<Modification>,
+}
+
+impl<'a> Iterator for ModificationChunkIter<'a> {
+    type Item = ModificationChunk;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        use Modification::NoChange;
+        let mut chunk = ModificationChunk::default();
+        if let Some(stashed) = self.stash {
+            chunk.push(stashed);
+            self.stash = None;
+        }
+        while let Some((i, modn)) = self.iter.next() {
+            match modn {
+                NoChange(range) => {
+                    if i == 0 || chunk.is_empty() {
+                        // Trim starts
+                        chunk.push(NoChange(range.starts_trimmed(self.context)));
+                    } else if i == self.tail {
+                        // Trim size
+                        chunk.push(NoChange(range.ends_trimmed(self.context)));
+                        break;
+                    } else if let Some((head, tail)) = range.split(self.context) {
+                        self.stash = Some(NoChange(tail));
+                        chunk.push(NoChange(head));
+                        break;
+                    } else {
+                        chunk.push(*modn)
+                    }
+                }
+                _ => {
+                    chunk.push(*modn);
+                }
+            }
+        }
+        if chunk.is_empty() {
+            None
+        } else {
+            Some(chunk)
+        }
+    }
+}
+
+impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
+    pub fn modification_chunks<'a>(&'a self, context: usize) -> ModificationChunkIter<'a> {
+        ModificationChunkIter {
+            iter: self.mods.iter().enumerate(),
+            context,
+            stash: None,
+            tail: self.mods.len() - 1,
+        }
+    }
+}
+
+pub struct ChunkIter<'a, A, P, I>
+where
+    A: BasicLines,
+    P: BasicLines,
+{
+    pub antemod: &'a A,
+    pub postmod: &'a P,
+    pub iter: ModificationChunkIter<'a>,
+    phantom_data: PhantomData<&'a I>,
+}
+
+impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
+    pub fn chunks<'a, I>(&'a self, context: usize) -> ChunkIter<'a, A, P, I> {
+        ChunkIter {
+            antemod: &self.antemod,
+            postmod: &self.postmod,
+            iter: self.modification_chunks(context),
+            phantom_data: PhantomData::default(),
+        }
+    }
+}

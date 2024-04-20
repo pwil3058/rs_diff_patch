@@ -2,6 +2,7 @@
 
 use crate::crange::{CRange, Len};
 use crate::lines::{BasicLines, DiffInputLines, LazyLines, LineIndices};
+use crate::snippet::*;
 
 use std::collections::HashMap;
 use std::io;
@@ -561,49 +562,6 @@ impl<L: DiffInputLines> Matcher<L> {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Snippet {
-    pub start: usize,
-    pub lines: Vec<String>,
-}
-
-impl Snippet {
-    pub fn length(&self, reductions: Option<(usize, usize)>) -> usize {
-        if let Some((start_reduction, end_reduction)) = reductions {
-            self.lines.len() - start_reduction - end_reduction
-        } else {
-            self.lines.len()
-        }
-    }
-
-    pub fn start(&self, offset: isize, reductions: Option<(usize, usize)>) -> usize {
-        if let Some(reductions) = reductions {
-            reductions.0 + self.start.checked_add_signed(offset).expect("underflow")
-        } else {
-            self.start.checked_add_signed(offset).expect("underflow")
-        }
-    }
-
-    pub fn lines(&self, reductions: Option<(usize, usize)>) -> impl Iterator<Item = &String> {
-        if let Some((start_reduction, end_reduction)) = reductions {
-            self.lines[start_reduction..self.lines.len() - end_reduction].iter()
-        } else {
-            self.lines.iter()
-        }
-    }
-}
-
-pub trait ExtractSnippet: BasicLines {
-    fn extract_snippet(&self, range_bounds: impl RangeBounds<usize>) -> Snippet {
-        let range = CRange::from(range_bounds);
-        let start = range.start();
-        let lines = self.lines(range).map(|s| s.to_string()).collect();
-        Snippet { start, lines }
-    }
-}
-
-impl ExtractSnippet for LazyLines {}
-
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct DiffChunk {
     pub context_lengths: (usize, usize),
@@ -769,7 +727,8 @@ impl<L: DiffInputLines> Matcher<L> {
     /// ```
     /// use diff_lib::crange::CRange;
     /// use diff_lib::lines::LazyLines;
-    /// use diff_lib::matcher::{Match, Matcher, OpCode, Snippet, OpCodeChunk, DiffChunk};
+    /// use diff_lib::matcher::{Match, Matcher, OpCode, OpCodeChunk, DiffChunk};
+    /// use diff_lib::snippet::Snippet;
     /// use OpCode::*;
     ///
     /// let before_lines = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");

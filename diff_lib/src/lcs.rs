@@ -4,15 +4,15 @@ use crate::crange::{CRange, Len};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, Copy, PartialOrd, PartialEq, Ord, Eq, Serialize, Deserialize)]
-pub struct LongestCommonSubsequence(pub usize, pub usize, pub usize);
+pub struct CommonSubsequence(pub usize, pub usize, pub usize);
 
-impl Len for LongestCommonSubsequence {
+impl Len for CommonSubsequence {
     fn len(&self) -> usize {
         self.2
     }
 }
 
-impl LongestCommonSubsequence {
+impl CommonSubsequence {
     pub fn antemod_range(&self) -> CRange {
         CRange(self.0, self.0 + self.2)
     }
