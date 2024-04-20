@@ -9,7 +9,7 @@ use crate::lcs::LongestCommonSubsequence;
 use crate::lines::BasicLines;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Mod {
+pub enum Modification {
     NoChange(LongestCommonSubsequence),
     Delete(CRange, usize),
     Insert(usize, CRange),
@@ -174,44 +174,67 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         lcses
     }
 
-    pub fn generate(&self) -> Vec<Mod> {
+    /// Return an iterator over the Mods describing changes
+    ///
+    /// Example:
+    /// ```
+    /// use diff_lib::crange::CRange;
+    /// use diff_lib::lines::LazyLines;
+    /// use diff_lib::lcs::LongestCommonSubsequence;
+    /// use diff_lib::modifications::ModGenerator;
+    /// use diff_lib::modifications::Modification::*;
+    ///
+    /// let ante_lines = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
+    /// let post_lines = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
+    /// let modlist = ModGenerator::new(&ante_lines, &post_lines).generate();
+    /// assert_eq!(
+    ///     vec![
+    ///         NoChange(LongestCommonSubsequence(0,0,1)), Delete(CRange(1, 2), 1),     ///
+    ///         NoChange(LongestCommonSubsequence(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)),
+    ///         NoChange(LongestCommonSubsequence(6, 5, 5)), Insert(11, CRange(10, 11)),
+    ///         NoChange(LongestCommonSubsequence(11, 11, 2))
+    ///     ],
+    ///     modlist
+    /// );
+    /// ```
+    pub fn generate(&self) -> Vec<Modification> {
         let mut op_codes = vec![];
         let mut i = 0usize;
         let mut j = 0usize;
 
         for lcs in self.longest_common_subsequences() {
             if i < lcs.antemod_start() && j < lcs.postmod_start() {
-                op_codes.push(Mod::Replace(
+                op_codes.push(Modification::Replace(
                     CRange(i, lcs.antemod_start()),
                     CRange(j, lcs.postmod_start()),
                 ));
             } else if i < lcs.antemod_start() {
-                op_codes.push(Mod::Delete(
+                op_codes.push(Modification::Delete(
                     CRange(i, lcs.antemod_start()),
                     lcs.postmod_start(),
                 ));
             } else if j < lcs.postmod_start() {
-                op_codes.push(Mod::Insert(
+                op_codes.push(Modification::Insert(
                     lcs.antemod_start(),
                     CRange(j, lcs.postmod_start()),
                 ));
             }
-            op_codes.push(Mod::NoChange(lcs));
+            op_codes.push(Modification::NoChange(lcs));
             i = lcs.antemod_end();
             j = lcs.postmod_end();
         }
         if i < self.antemod.len() && j < self.postmod.len() {
-            op_codes.push(Mod::Replace(
+            op_codes.push(Modification::Replace(
                 CRange(i, self.antemod.len()),
                 CRange(j, self.postmod.len()),
             ));
         } else if i < self.antemod.len() {
-            op_codes.push(Mod::Delete(
+            op_codes.push(Modification::Delete(
                 CRange(i, self.antemod.len()),
                 self.postmod.len(),
             ));
         } else if j < self.postmod.len() {
-            op_codes.push(Mod::Insert(
+            op_codes.push(Modification::Insert(
                 self.antemod.len(),
                 CRange(j, self.postmod.len()),
             ));
