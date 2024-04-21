@@ -2,7 +2,7 @@
 
 use rayon::prelude::ParallelSliceMut;
 use std::collections::HashMap;
-use std::iter::Enumerate;
+use std::iter::{Enumerate, Peekable};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, RangeBounds};
 use std::slice::Iter;
@@ -265,8 +265,8 @@ impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct ModificationChunk(Vec<Modification>);
+#[derive(Debug, Default, PartialEq)]
+pub struct ModificationChunk(pub Vec<Modification>);
 
 impl Deref for ModificationChunk {
     type Target = Vec<Modification>;
@@ -346,10 +346,10 @@ impl ModificationChunk {
 }
 
 pub struct ModificationChunkIter<'a> {
-    iter: Enumerate<Iter<'a, Modification>>,
+    iter: Peekable<Iter<'a, Modification>>,
     tail: usize,
     context: usize,
-    stash: Option<Modification>,
+    stash: Option<CommonSubsequence>,
 }
 
 impl<'a> Iterator for ModificationChunkIter<'a> {
@@ -359,21 +359,21 @@ impl<'a> Iterator for ModificationChunkIter<'a> {
         use Modification::NoChange;
         let mut chunk = ModificationChunk::default();
         if let Some(stashed) = self.stash {
-            chunk.push(stashed);
+            chunk.push(NoChange(stashed));
             self.stash = None;
         }
-        while let Some((i, modn)) = self.iter.next() {
+        while let Some(modn) = self.iter.next() {
             match modn {
-                NoChange(range) => {
-                    if i == 0 || chunk.is_empty() {
+                NoChange(common_sequence) => {
+                    if chunk.is_empty() {
                         // Trim starts
-                        chunk.push(NoChange(range.starts_trimmed(self.context)));
-                    } else if i == self.tail {
+                        chunk.push(NoChange(common_sequence.starts_trimmed(self.context)));
+                    } else if self.iter.peek().is_none() {
                         // Trim size
-                        chunk.push(NoChange(range.ends_trimmed(self.context)));
+                        chunk.push(NoChange(common_sequence.ends_trimmed(self.context)));
                         break;
-                    } else if let Some((head, tail)) = range.split(self.context) {
-                        self.stash = Some(NoChange(tail));
+                    } else if let Some((head, tail)) = common_sequence.split(self.context) {
+                        self.stash = Some(tail);
                         chunk.push(NoChange(head));
                         break;
                     } else {
@@ -394,9 +394,42 @@ impl<'a> Iterator for ModificationChunkIter<'a> {
 }
 
 impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
+    /// Return an iterator over ModificationChunks generated with the given `context` size.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// use diff_lib::lcs::CommonSubsequence;
+    /// use diff_lib::lines::LazyLines;
+    /// use diff_lib::modifications::{ModificationChunk, Modifications,Modification};
+    /// use diff_lib::crange::CRange;
+    /// use Modification::*;
+    ///
+    /// let before = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
+    /// let after = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
+    /// let modifications = Modifications::new(LazyLines::from(before), LazyLines::from(after));
+    /// let modn_chunks: Vec<_> = modifications.modification_chunks(2).collect();
+    /// assert_eq!(
+    ///     modn_chunks,
+    ///     vec![
+    ///         ModificationChunk(vec![
+    ///             NoChange(CommonSubsequence(0, 0, 1)),
+    ///             Delete(CRange(1, 2), 1),
+    ///             NoChange(CommonSubsequence(2, 1, 2)),
+    ///             Replace(CRange(4, 6), CRange(3, 5)),
+    ///             NoChange(CommonSubsequence(6, 5, 2))
+    ///         ]),
+    ///         ModificationChunk(vec![
+    ///             NoChange(CommonSubsequence(9, 8, 2)),
+    ///             Insert(11, CRange(10, 11)),
+    ///             NoChange(CommonSubsequence(11, 11, 2))
+    ///         ]),
+    ///     ]
+    /// );
+    /// ```
     pub fn modification_chunks<'a>(&'a self, context: usize) -> ModificationChunkIter<'a> {
         ModificationChunkIter {
-            iter: self.mods.iter().enumerate(),
+            iter: self.mods.iter().peekable(),
             context,
             stash: None,
             tail: self.mods.len() - 1,
