@@ -2,7 +2,7 @@
 
 use rayon::prelude::ParallelSliceMut;
 use std::collections::HashMap;
-use std::iter::{Enumerate, Peekable};
+use std::iter::Peekable;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, RangeBounds};
 use std::slice::Iter;
@@ -347,7 +347,6 @@ impl ModificationChunk {
 
 pub struct ModificationChunkIter<'a> {
     iter: Peekable<Iter<'a, Modification>>,
-    tail: usize,
     context: usize,
     stash: Option<CommonSubsequence>,
 }
@@ -432,7 +431,6 @@ impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
             iter: self.mods.iter().peekable(),
             context,
             stash: None,
-            tail: self.mods.len() - 1,
         }
     }
 }
