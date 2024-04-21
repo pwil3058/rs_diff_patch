@@ -5,7 +5,7 @@ use std::ops::RangeBounds;
 
 use crypto_hash;
 
-use crate::crange::*;
+use crate::range::*;
 
 pub trait MapKey {
     fn map_key(&self) -> Vec<u8>;
@@ -65,7 +65,7 @@ impl Len for LazyLines {
 
 impl BasicLines for LazyLines {
     fn lines(&self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &str> {
-        let range = CRange::from(range_bounds);
+        let range = Range::from(range_bounds);
         self.text
             .split_inclusive("\n")
             .skip(range.start())
@@ -73,7 +73,7 @@ impl BasicLines for LazyLines {
     }
 
     fn lines_reversed(&self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &str> {
-        let range = CRange::from(range_bounds);
+        let range = Range::from(range_bounds);
         let iter = self.text.split_inclusive('\n').rev();
         iter.skip(self.length - range.end().min(self.length))
             .take(range.end().min(self.length) - range.start())

@@ -1,6 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::crange::{CRange, Len};
+use crate::range::{Len, Range};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, Copy, PartialOrd, PartialEq, Ord, Eq, Serialize, Deserialize)]
@@ -13,12 +13,12 @@ impl Len for CommonSubsequence {
 }
 
 impl CommonSubsequence {
-    pub fn antemod_range(&self) -> CRange {
-        CRange(self.0, self.0 + self.2)
+    pub fn antemod_range(&self) -> Range {
+        Range(self.0, self.0 + self.2)
     }
 
-    pub fn postmod_range(&self) -> CRange {
-        CRange(self.1, self.1 + self.2)
+    pub fn postmod_range(&self) -> Range {
+        Range(self.1, self.1 + self.2)
     }
 
     pub fn antemod_start(&self) -> usize {

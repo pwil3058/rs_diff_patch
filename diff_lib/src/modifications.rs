@@ -7,16 +7,16 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, RangeBounds};
 use std::slice::Iter;
 
-use crate::crange::{CRange, Len};
 use crate::lcs::CommonSubsequence;
 use crate::lines::BasicLines;
+use crate::range::{Len, Range};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Modification {
     NoChange(CommonSubsequence),
-    Delete(CRange, usize),
-    Insert(usize, CRange),
-    Replace(CRange, CRange),
+    Delete(Range, usize),
+    Insert(usize, Range),
+    Replace(Range, Range),
 }
 
 pub trait MapKey {
@@ -61,8 +61,8 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         antemod_range_bounds: impl RangeBounds<usize>,
         postmod_range_bounds: impl RangeBounds<usize>,
     ) -> Option<CommonSubsequence> {
-        let antemod_range = CRange::from(antemod_range_bounds);
-        let postmod_range = CRange::from(postmod_range_bounds);
+        let antemod_range = Range::from(antemod_range_bounds);
+        let postmod_range = Range::from(postmod_range_bounds);
 
         let mut best_lcs = CommonSubsequence::default();
 
@@ -129,7 +129,7 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     }
 
     fn longest_common_subsequences(&self) -> Vec<CommonSubsequence> {
-        let mut lifo = vec![(CRange(0, self.antemod.len()), CRange(0, self.postmod.len()))];
+        let mut lifo = vec![(Range(0, self.antemod.len()), Range(0, self.postmod.len()))];
         let mut raw_lcses = vec![];
         while let Some((antemod_range, postmod_range)) = lifo.pop() {
             if let Some(lcs) =
@@ -139,16 +139,16 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
                     && postmod_range.start() < lcs.postmod_start()
                 {
                     lifo.push((
-                        CRange(antemod_range.start(), lcs.antemod_start()),
-                        CRange(postmod_range.start(), lcs.postmod_start()),
+                        Range(antemod_range.start(), lcs.antemod_start()),
+                        Range(postmod_range.start(), lcs.postmod_start()),
                     ))
                 };
                 if lcs.antemod_end() < antemod_range.end()
                     && lcs.postmod_end() < postmod_range.end()
                 {
                     lifo.push((
-                        CRange(lcs.antemod_end(), antemod_range.end()),
-                        CRange(lcs.postmod_end(), postmod_range.end()),
+                        Range(lcs.antemod_end(), antemod_range.end()),
+                        Range(lcs.postmod_end(), postmod_range.end()),
                     ))
                 }
                 raw_lcses.push(lcs);
@@ -181,7 +181,7 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     ///
     /// Example:
     /// ```
-    /// use diff_lib::crange::CRange;
+    /// use diff_lib::range::Range;
     /// use diff_lib::lines::LazyLines;
     /// use diff_lib::lcs::CommonSubsequence;
     /// use diff_lib::modifications::ModGenerator;
@@ -192,9 +192,9 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     /// let modlist = ModGenerator::new(&ante_lines, &post_lines).generate();
     /// assert_eq!(
     ///     vec![
-    ///         NoChange(CommonSubsequence(0,0,1)), Delete(CRange(1, 2), 1),     ///
-    ///         NoChange(CommonSubsequence(2, 1, 2)), Replace(CRange(4, 6), CRange(3, 5)),
-    ///         NoChange(CommonSubsequence(6, 5, 5)), Insert(11, CRange(10, 11)),
+    ///         NoChange(CommonSubsequence(0,0,1)), Delete(Range(1, 2), 1),     ///
+    ///         NoChange(CommonSubsequence(2, 1, 2)), Replace(Range(4, 6), Range(3, 5)),
+    ///         NoChange(CommonSubsequence(6, 5, 5)), Insert(11, Range(10, 11)),
     ///         NoChange(CommonSubsequence(11, 11, 2))
     ///     ],
     ///     modlist
@@ -208,18 +208,18 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         for lcs in self.longest_common_subsequences() {
             if i < lcs.antemod_start() && j < lcs.postmod_start() {
                 op_codes.push(Modification::Replace(
-                    CRange(i, lcs.antemod_start()),
-                    CRange(j, lcs.postmod_start()),
+                    Range(i, lcs.antemod_start()),
+                    Range(j, lcs.postmod_start()),
                 ));
             } else if i < lcs.antemod_start() {
                 op_codes.push(Modification::Delete(
-                    CRange(i, lcs.antemod_start()),
+                    Range(i, lcs.antemod_start()),
                     lcs.postmod_start(),
                 ));
             } else if j < lcs.postmod_start() {
                 op_codes.push(Modification::Insert(
                     lcs.antemod_start(),
-                    CRange(j, lcs.postmod_start()),
+                    Range(j, lcs.postmod_start()),
                 ));
             }
             op_codes.push(Modification::NoChange(lcs));
@@ -228,18 +228,18 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         }
         if i < self.antemod.len() && j < self.postmod.len() {
             op_codes.push(Modification::Replace(
-                CRange(i, self.antemod.len()),
-                CRange(j, self.postmod.len()),
+                Range(i, self.antemod.len()),
+                Range(j, self.postmod.len()),
             ));
         } else if i < self.antemod.len() {
             op_codes.push(Modification::Delete(
-                CRange(i, self.antemod.len()),
+                Range(i, self.antemod.len()),
                 self.postmod.len(),
             ));
         } else if j < self.postmod.len() {
             op_codes.push(Modification::Insert(
                 self.antemod.len(),
-                CRange(j, self.postmod.len()),
+                Range(j, self.postmod.len()),
             ));
         }
 
@@ -313,13 +313,13 @@ impl ModificationChunk {
         }
     }
 
-    pub fn ranges(&self) -> (CRange, CRange) {
+    pub fn ranges(&self) -> (Range, Range) {
         let (antemod_start, postmod_start) = self.starts();
         let (antemod_end, postmod_end) = self.ends();
 
         (
-            CRange(antemod_start, antemod_end),
-            CRange(postmod_start, postmod_end),
+            Range(antemod_start, antemod_end),
+            Range(postmod_start, postmod_end),
         )
     }
 
@@ -401,7 +401,7 @@ impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
     /// use diff_lib::lcs::CommonSubsequence;
     /// use diff_lib::lines::LazyLines;
     /// use diff_lib::modifications::{ModificationChunk, Modifications,Modification};
-    /// use diff_lib::crange::CRange;
+    /// use diff_lib::range::Range;
     /// use Modification::*;
     ///
     /// let before = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
@@ -413,14 +413,14 @@ impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
     ///     vec![
     ///         ModificationChunk(vec![
     ///             NoChange(CommonSubsequence(0, 0, 1)),
-    ///             Delete(CRange(1, 2), 1),
+    ///             Delete(Range(1, 2), 1),
     ///             NoChange(CommonSubsequence(2, 1, 2)),
-    ///             Replace(CRange(4, 6), CRange(3, 5)),
+    ///             Replace(Range(4, 6), Range(3, 5)),
     ///             NoChange(CommonSubsequence(6, 5, 2))
     ///         ]),
     ///         ModificationChunk(vec![
     ///             NoChange(CommonSubsequence(9, 8, 2)),
-    ///             Insert(11, CRange(10, 11)),
+    ///             Insert(11, Range(10, 11)),
     ///             NoChange(CommonSubsequence(11, 11, 2))
     ///         ]),
     ///     ]

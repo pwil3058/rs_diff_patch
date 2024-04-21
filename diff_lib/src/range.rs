@@ -13,9 +13,9 @@ pub trait Len {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialOrd, PartialEq, Serialize, Deserialize)]
-pub struct CRange(pub usize, pub usize);
+pub struct Range(pub usize, pub usize);
 
-impl Len for CRange {
+impl Len for Range {
     fn len(&self) -> usize {
         if self.1 > self.0 {
             self.1 - self.0
@@ -25,7 +25,7 @@ impl Len for CRange {
     }
 }
 
-impl CRange {
+impl Range {
     pub fn start(&self) -> usize {
         self.0
     }
@@ -46,11 +46,11 @@ impl CRange {
             _ => usize::MAX,
         };
 
-        CRange(start, end)
+        Range(start, end)
     }
 }
 
-impl RangeBounds<usize> for CRange {
+impl RangeBounds<usize> for Range {
     fn start_bound(&self) -> Bound<&usize> {
         Bound::Included(&self.0)
     }
@@ -65,12 +65,12 @@ mod crange_tests {
 
     #[test]
     fn crange() {
-        let crange = CRange(3, 5);
+        let crange = Range(3, 5);
         assert_eq!(crange.start(), 3);
         assert_eq!(crange.end(), 5);
         assert_eq!(crange.len(), 2);
-        assert_eq!(CRange::from(..), CRange(0, usize::MAX));
-        assert_eq!(CRange::from(1..6), CRange(1, 6));
+        assert_eq!(Range::from(..), Range(0, usize::MAX));
+        assert_eq!(Range::from(1..6), Range(1, 6));
     }
     use super::*;
 }
