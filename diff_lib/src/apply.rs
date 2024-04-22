@@ -1,6 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::lines::BasicLines;
+use crate::lines::{BasicLines, LazyLines};
 use serde::{Deserialize, Serialize};
 use std::io;
 
@@ -28,6 +28,8 @@ pub trait MatchesAt: BasicLines {
         }
     }
 }
+
+impl MatchesAt for LazyLines {}
 
 pub trait ApplyChunkInto {
     fn antemodn_lines(

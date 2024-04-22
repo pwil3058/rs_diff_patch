@@ -207,3 +207,6 @@ impl ApplyChunkInto for DiffChunk {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;
