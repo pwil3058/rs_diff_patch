@@ -28,6 +28,8 @@ impl<'a, A: BasicLines, P: BasicLines> Iterator for ChunkIter<'a, A, P, DiffChun
                 .lines(antemodn_range)
                 .map(|l| l.to_string())
                 .collect(),
+            has_final_eol: self.antemod.has_final_eol()
+                || antemodn_range.end() < self.antemod.len(),
         };
         let postmodn = Snippet {
             start: postmodn_range.start(),
@@ -36,6 +38,8 @@ impl<'a, A: BasicLines, P: BasicLines> Iterator for ChunkIter<'a, A, P, DiffChun
                 .lines(postmodn_range)
                 .map(|l| l.to_string())
                 .collect(),
+            has_final_eol: self.postmod.has_final_eol()
+                || postmodn_range.end() < self.postmod.len(),
         };
 
         Some(DiffChunk {
@@ -174,20 +178,17 @@ impl ApplyChunkInto for DiffChunk {
         reverse: bool,
     ) -> std::io::Result<()>
     where
-        L: BasicLines,
+        L: MatchesAt,
         W: Write,
     {
         let eol = pd.lines.eol();
         let antemodn = self.antemodn(reverse);
         let end = antemodn.start(pd.offset, reductions);
-        for line in pd.lines.lines(pd.consumed..end) {
-            into.write_all(line.as_bytes())?;
-            into.write_all(eol.as_bytes())?;
-        }
-        for line in self.postmodn(reverse).lines(reductions) {
-            into.write_all(line.as_bytes())?;
-            into.write_all(eol.as_bytes())?;
-        }
+        let text = pd.lines.lines_as_text(pd.consumed..end, true);
+        into.write_all(text.as_bytes())?;
+
+        let post_text = self.postmodn(reverse).lines_as_text(reductions, eol, true);
+        into.write_all(post_text.as_bytes())?;
         pd.consumed = end + antemodn.length(reductions);
         Ok(())
     }
@@ -200,16 +201,13 @@ impl ApplyChunkInto for DiffChunk {
         reverse: bool,
     ) -> std::io::Result<()>
     where
-        L: BasicLines,
+        L: MatchesAt,
         W: Write,
     {
-        let eol = pd.lines.eol();
         let postmodn = self.postmodn(reverse);
         let end = postmodn.start(pd.offset, reductions) + postmodn.length(reductions);
-        for line in pd.lines.lines(pd.consumed..end) {
-            into.write_all(line.as_bytes())?;
-            into.write_all(eol.as_bytes())?;
-        }
+        let text = pd.lines.lines_as_text(pd.consumed..end, true);
+        into.write_all(text.as_bytes())?;
         pd.consumed = end;
         Ok(())
     }

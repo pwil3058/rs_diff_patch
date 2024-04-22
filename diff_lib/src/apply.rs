@@ -3,6 +3,8 @@
 use crate::lines::{BasicLines, LazyLines};
 use serde::{Deserialize, Serialize};
 use std::io;
+use std::io::Write;
+use std::ops::RangeBounds;
 
 pub struct ProgressData<'a, L>
 where
@@ -26,6 +28,21 @@ pub trait MatchesAt: BasicLines {
         } else {
             false
         }
+    }
+
+    fn lines_as_text(
+        &self,
+        range_bounds: impl RangeBounds<usize>,
+        final_eol_requited: bool,
+    ) -> String {
+        let mut text = self
+            .lines(range_bounds)
+            .collect::<Vec<_>>()
+            .join(self.eol());
+        if !text.is_empty() && (self.has_final_eol() || final_eol_requited) {
+            text.push_str(self.eol());
+        };
+        text
     }
 }
 
@@ -59,7 +76,7 @@ pub trait ApplyChunkInto {
         reverse: bool,
     ) -> io::Result<()>
     where
-        L: BasicLines,
+        L: MatchesAt,
         W: io::Write;
     fn already_applied_into<'a, L, W>(
         &self,
@@ -69,7 +86,7 @@ pub trait ApplyChunkInto {
         reverse: bool,
     ) -> io::Result<()>
     where
-        L: BasicLines,
+        L: MatchesAt,
         W: io::Write;
 }
 
@@ -87,6 +104,7 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
             consumed: 0,
             offset: 0,
         };
+        let eol = target.eol().as_bytes();
         let mut iter = self.chunks().peekable();
         let mut chunk_num = 0;
         while let Some(chunk) = iter.next() {
@@ -169,11 +187,7 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }
         }
-        let eol = target.eol();
-        for line in pd.lines.lines(pd.consumed..) {
-            into.write_all(line.as_bytes())?;
-            into.write_all(eol.as_bytes())?;
-        }
+        into.write_all(pd.lines.lines_as_text(pd.consumed.., true).as_bytes())?;
         Ok(())
     }
 }

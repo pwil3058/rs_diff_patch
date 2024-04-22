@@ -9,6 +9,7 @@ use std::ops::RangeBounds;
 pub struct Snippet {
     pub start: usize,
     pub lines: Vec<String>,
+    pub has_final_eol: bool,
 }
 
 impl Snippet {
@@ -35,14 +36,37 @@ impl Snippet {
             self.lines.iter()
         }
     }
+
+    pub fn lines_as_text(
+        &self,
+        reductions: Option<(usize, usize)>,
+        eol: &str,
+        final_eol_required: bool,
+    ) -> String {
+        let mut text = if let Some((start_reduction, end_reduction)) = reductions {
+            self.lines[start_reduction..self.lines.len() - end_reduction].join(eol)
+        } else {
+            self.lines.join(eol)
+        };
+        if !text.is_empty() && (final_eol_required || self.has_final_eol) {
+            text.push_str(eol);
+        };
+
+        text
+    }
 }
 
 pub trait ExtractSnippet: BasicLines {
     fn extract_snippet(&self, range_bounds: impl RangeBounds<usize>) -> Snippet {
         let range = Range::from(range_bounds);
         let start = range.start();
+        let has_final_eol = self.has_final_eol() || range.end() < self.len();
         let lines = self.lines(range).map(|s| s.to_string()).collect();
-        Snippet { start, lines }
+        Snippet {
+            start,
+            lines,
+            has_final_eol,
+        }
     }
 }
 

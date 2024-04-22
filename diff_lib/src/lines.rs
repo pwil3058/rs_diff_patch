@@ -43,7 +43,7 @@ impl BasicLines for LazyLines {
         self.has_final_eol
     }
 
-    fn eol(&self) -> &str {
+    fn eol(&self) -> &'static str {
         self.eol
     }
 

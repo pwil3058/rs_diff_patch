@@ -51,8 +51,8 @@ fn clean_patch() {
 }
 
 #[test]
-fn clean_patch_not_in_middle() {
-    let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
+fn clean_patch_in_middle() {
+    let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications =
         Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
@@ -63,4 +63,91 @@ fn clean_patch_not_in_middle() {
         .apply_into(&LazyLines::from(before_lines), &mut patched, false)
         .unwrap();
     assert_eq!(patched.0, after_lines);
+}
+
+#[test]
+fn already_applied() {
+    let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
+    let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
+    let modifications =
+        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let patch = WrappedDiffChunks(diff_chunks);
+    let mut patched = WrappedString::default();
+    patch
+        .apply_into(&LazyLines::from(after_lines), &mut patched, false)
+        .unwrap();
+    assert_eq!(patched.0, after_lines);
+}
+
+#[test]
+fn clean_patch_reverse() {
+    let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
+    let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
+    let modifications =
+        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let patch = WrappedDiffChunks(diff_chunks);
+    let mut patched = WrappedString::default();
+    patch
+        .apply_into(&LazyLines::from(after_lines), &mut patched, true)
+        .unwrap();
+    assert_eq!(patched.0, before_lines);
+}
+
+#[test]
+fn displaced() {
+    let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
+    let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
+    let modifications =
+        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let patch = WrappedDiffChunks(diff_chunks);
+    let mut patched = WrappedString::default();
+    patch
+        .apply_into(
+            &LazyLines::from("x\ny\nz\n".to_owned() + before_lines),
+            &mut patched,
+            false,
+        )
+        .unwrap();
+    assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
+}
+
+#[test]
+fn displaced_no_final_eol_1() {
+    let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz";
+    let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
+    let modifications =
+        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let patch = WrappedDiffChunks(diff_chunks);
+    let mut patched = WrappedString::default();
+    patch
+        .apply_into(
+            &LazyLines::from("x\ny\nz\n".to_owned() + before_lines),
+            &mut patched,
+            false,
+        )
+        .unwrap();
+    assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
+}
+
+#[test]
+fn displaced_no_final_eol_2() {
+    let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
+    let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz";
+    let modifications =
+        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let patch = WrappedDiffChunks(diff_chunks);
+    let mut patched = WrappedString::default();
+    patch
+        .apply_into(
+            &LazyLines::from("x\ny\nz\n".to_owned() + before_lines),
+            &mut patched,
+            false,
+        )
+        .unwrap();
+    assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
 }
