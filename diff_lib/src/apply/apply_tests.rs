@@ -49,3 +49,18 @@ fn clean_patch() {
         .unwrap();
     assert_eq!(patched.0, after_lines);
 }
+
+#[test]
+fn clean_patch_not_in_middle() {
+    let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
+    let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
+    let modifications =
+        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let patch = WrappedDiffChunks(diff_chunks);
+    let mut patched = WrappedString::default();
+    patch
+        .apply_into(&LazyLines::from(before_lines), &mut patched, false)
+        .unwrap();
+    assert_eq!(patched.0, after_lines);
+}

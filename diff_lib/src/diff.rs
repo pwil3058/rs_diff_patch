@@ -178,17 +178,17 @@ impl ApplyChunkInto for DiffChunk {
         W: Write,
     {
         let eol = pd.lines.eol();
-        let postmodn = self.postmodn(reverse);
-        let end = postmodn.start(pd.offset, reductions);
-        for line in pd.lines.lines(pd.consumed + 1..end + 1) {
+        let antemodn = self.antemodn(reverse);
+        let end = antemodn.start(pd.offset, reductions);
+        for line in pd.lines.lines(pd.consumed..end) {
             into.write_all(line.as_bytes())?;
             into.write_all(eol.as_bytes())?;
         }
-        for line in postmodn.lines(reductions) {
+        for line in self.postmodn(reverse).lines(reductions) {
             into.write_all(line.as_bytes())?;
             into.write_all(eol.as_bytes())?;
         }
-        pd.consumed = end + postmodn.length(reductions);
+        pd.consumed = end + antemodn.length(reductions);
         Ok(())
     }
 

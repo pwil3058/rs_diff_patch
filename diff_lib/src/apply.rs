@@ -169,8 +169,10 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }
         }
+        let eol = target.eol();
         for line in pd.lines.lines(pd.consumed..) {
             into.write_all(line.as_bytes())?;
+            into.write_all(eol.as_bytes())?;
         }
         Ok(())
     }
