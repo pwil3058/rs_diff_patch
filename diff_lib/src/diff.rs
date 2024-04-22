@@ -4,8 +4,10 @@ use crate::apply::{Applies, ApplyChunkInto, MatchesAt, ProgressData};
 use crate::lines::BasicLines;
 use crate::modifications::ChunkIter;
 use crate::snippet::Snippet;
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DiffChunk {
     context_lengths: (usize, usize),
     antemodn: Snippet,
@@ -175,15 +177,18 @@ impl ApplyChunkInto for DiffChunk {
         L: BasicLines,
         W: Write,
     {
-        let antemodn = self.antemodn(reverse);
-        let end = antemodn.start(pd.offset, reductions);
-        for line in pd.lines.lines(pd.consumed..end) {
+        let eol = pd.lines.eol();
+        let postmodn = self.postmodn(reverse);
+        let end = postmodn.start(pd.offset, reductions);
+        for line in pd.lines.lines(pd.consumed + 1..end + 1) {
             into.write_all(line.as_bytes())?;
+            into.write_all(eol.as_bytes())?;
         }
-        for line in antemodn.lines(reductions) {
+        for line in postmodn.lines(reductions) {
             into.write_all(line.as_bytes())?;
+            into.write_all(eol.as_bytes())?;
         }
-        pd.consumed = end + antemodn.length(reductions);
+        pd.consumed = end + postmodn.length(reductions);
         Ok(())
     }
 
@@ -198,10 +203,12 @@ impl ApplyChunkInto for DiffChunk {
         L: BasicLines,
         W: Write,
     {
+        let eol = pd.lines.eol();
         let postmodn = self.postmodn(reverse);
         let end = postmodn.start(pd.offset, reductions) + postmodn.length(reductions);
         for line in pd.lines.lines(pd.consumed..end) {
             into.write_all(line.as_bytes())?;
+            into.write_all(eol.as_bytes())?;
         }
         pd.consumed = end;
         Ok(())

@@ -175,3 +175,6 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod apply_tests;
