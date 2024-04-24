@@ -9,25 +9,24 @@ use crate::modifications::Modifications;
 fn diff_chunk_applies() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
     let after_lines = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
-    let modifications =
-        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
 
     for diff_chunk in diff_chunks.iter() {
         assert_eq!(
-            diff_chunk.applies(&LazyLines::from(before_lines), 0, false),
+            diff_chunk.applies(&Lines::from(before_lines), 0, false),
             Some(Applies::Cleanly)
         );
         assert_eq!(
-            diff_chunk.applies(&LazyLines::from(before_lines), 0, true),
+            diff_chunk.applies(&Lines::from(before_lines), 0, true),
             None
         );
         assert_eq!(
-            diff_chunk.applies(&LazyLines::from(after_lines), 0, false),
+            diff_chunk.applies(&Lines::from(after_lines), 0, false),
             None
         );
         assert_eq!(
-            diff_chunk.applies(&LazyLines::from(after_lines), 0, true),
+            diff_chunk.applies(&Lines::from(after_lines), 0, true),
             Some(Applies::Cleanly)
         );
     }
@@ -35,7 +34,7 @@ fn diff_chunk_applies() {
     for (i, diff_chunk) in diff_chunks.iter().enumerate() {
         assert_eq!(
             diff_chunk.applies(
-                &LazyLines::from("a\na\na\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n"),
+                &Lines::from("a\na\na\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n"),
                 3,
                 false
             ),
@@ -43,7 +42,7 @@ fn diff_chunk_applies() {
         );
         assert_eq!(
             diff_chunk.applies(
-                &LazyLines::from("B\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n"),
+                &Lines::from("B\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n"),
                 -1,
                 false
             ),
@@ -58,7 +57,7 @@ fn diff_chunk_applies() {
     let diff_chunk = diff_chunks.first().unwrap();
     assert_eq!(
         diff_chunk.applies(
-            &LazyLines::from("B\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n"),
+            &Lines::from("B\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n"),
             0,
             false
         ),
@@ -66,7 +65,7 @@ fn diff_chunk_applies() {
     );
     assert_eq!(
         diff_chunk.applies(
-            &LazyLines::from("B\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n"),
+            &Lines::from("B\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n"),
             0,
             true
         ),
@@ -78,28 +77,21 @@ fn diff_chunk_applies() {
 fn find_compromise() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
     let after_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nX\nY\nZ\n\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
-    let modifications =
-        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
 
     assert_eq!(
-        diff_chunks.first().unwrap().applies_nearby(
-            &LazyLines::from(before_lines),
-            2,
-            None,
-            3,
-            false
-        ),
+        diff_chunks
+            .first()
+            .unwrap()
+            .applies_nearby(&Lines::from(before_lines), 2, None, 3, false),
         Some((-3, Applies::Cleanly))
     );
     assert_eq!(
-        diff_chunks.first().unwrap().applies_nearby(
-            &LazyLines::from(before_lines),
-            2,
-            None,
-            -3,
-            false
-        ),
+        diff_chunks
+            .first()
+            .unwrap()
+            .applies_nearby(&Lines::from(before_lines), 2, None, -3, false),
         Some((3, Applies::Cleanly))
     );
 }
@@ -109,14 +101,13 @@ fn find_compromise_edges() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
     let after_lines =
         "A\nX\nB\nC\nD\nE\nF\nG\nH\nI\nX\nY\nZ\n\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nX\nY\nZ\nT\n";
-    let modifications =
-        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     assert_eq!(diff_chunks.len(), 3);
 
     assert_eq!(
         diff_chunks.first().unwrap().applies_nearby(
-            &LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n"),
+            &Lines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n"),
             0,
             diff_chunks.get(1),
             3,
@@ -126,7 +117,7 @@ fn find_compromise_edges() {
     );
     assert_eq!(
         diff_chunks.last().unwrap().applies_nearby(
-            &LazyLines::from("B\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\n"),
+            &Lines::from("B\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\n"),
             8,
             None,
             -3,

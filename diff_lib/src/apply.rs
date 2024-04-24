@@ -1,9 +1,8 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::lines::{BasicLines, LazyLines};
+use crate::lines::{BasicLines, Lines};
 use serde::{Deserialize, Serialize};
 use std::io;
-use std::io::Write;
 use std::ops::RangeBounds;
 
 pub struct ProgressData<'a, L>
@@ -24,29 +23,18 @@ pub enum Applies {
 pub trait MatchesAt: BasicLines {
     fn matches_at(&self, lines: &[String], at: usize) -> bool {
         if at < self.len() && self.len() - at >= lines.len() {
-            lines.iter().zip(self.lines(at..)).all(|(b, a)| a == *b)
+            lines.iter().zip(self.lines(at..)).all(|(b, a)| a == b)
         } else {
             false
         }
     }
 
-    fn lines_as_text(
-        &self,
-        range_bounds: impl RangeBounds<usize>,
-        final_eol_requited: bool,
-    ) -> String {
-        let mut text = self
-            .lines(range_bounds)
-            .collect::<Vec<_>>()
-            .join(self.eol());
-        if !text.is_empty() && (self.has_final_eol() || final_eol_requited) {
-            text.push_str(self.eol());
-        };
-        text
+    fn lines_as_text(&self, range_bounds: impl RangeBounds<usize>) -> String {
+        self.lines(range_bounds).collect::<Vec<_>>().join("")
     }
 }
 
-impl MatchesAt for LazyLines {}
+impl MatchesAt for Lines {}
 
 pub trait ApplyChunkInto {
     fn antemodn_lines(
@@ -104,7 +92,6 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
             consumed: 0,
             offset: 0,
         };
-        let eol = target.eol().as_bytes();
         let mut iter = self.chunks().peekable();
         let mut chunk_num = 0;
         while let Some(chunk) = iter.next() {
@@ -187,7 +174,7 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }
         }
-        into.write_all(pd.lines.lines_as_text(pd.consumed.., true).as_bytes())?;
+        into.write_all(pd.lines.lines_as_text(pd.consumed..).as_bytes())?;
         Ok(())
     }
 }

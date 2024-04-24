@@ -2,7 +2,7 @@
 
 use crate::apply::ApplyInto;
 use crate::diff::DiffChunk;
-use crate::lines::LazyLines;
+use crate::lines::Lines;
 use crate::modifications::Modifications;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -39,13 +39,12 @@ impl Write for WrappedString {
 fn clean_patch() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
     let after_lines = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
-    let modifications =
-        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
     patch
-        .apply_into(&LazyLines::from(before_lines), &mut patched, false)
+        .apply_into(&Lines::from(before_lines), &mut patched, false)
         .unwrap();
     assert_eq!(patched.0, after_lines);
 }
@@ -54,13 +53,12 @@ fn clean_patch() {
 fn clean_patch_in_middle() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
-    let modifications =
-        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
     patch
-        .apply_into(&LazyLines::from(before_lines), &mut patched, false)
+        .apply_into(&Lines::from(before_lines), &mut patched, false)
         .unwrap();
     assert_eq!(patched.0, after_lines);
 }
@@ -69,13 +67,12 @@ fn clean_patch_in_middle() {
 fn already_applied() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
-    let modifications =
-        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
     patch
-        .apply_into(&LazyLines::from(after_lines), &mut patched, false)
+        .apply_into(&Lines::from(after_lines), &mut patched, false)
         .unwrap();
     assert_eq!(patched.0, after_lines);
 }
@@ -84,13 +81,12 @@ fn already_applied() {
 fn clean_patch_reverse() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
-    let modifications =
-        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
     patch
-        .apply_into(&LazyLines::from(after_lines), &mut patched, true)
+        .apply_into(&Lines::from(after_lines), &mut patched, true)
         .unwrap();
     assert_eq!(patched.0, before_lines);
 }
@@ -99,14 +95,13 @@ fn clean_patch_reverse() {
 fn displaced() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
-    let modifications =
-        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
     patch
         .apply_into(
-            &LazyLines::from("x\ny\nz\n".to_owned() + before_lines),
+            &Lines::from("x\ny\nz\n".to_owned() + before_lines),
             &mut patched,
             false,
         )
@@ -118,14 +113,13 @@ fn displaced() {
 fn displaced_no_final_eol_1() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
-    let modifications =
-        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
     patch
         .apply_into(
-            &LazyLines::from("x\ny\nz\n".to_owned() + before_lines),
+            &Lines::from("x\ny\nz\n".to_owned() + before_lines),
             &mut patched,
             false,
         )
@@ -136,15 +130,32 @@ fn displaced_no_final_eol_1() {
 #[test]
 fn displaced_no_final_eol_2() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
-    let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz";
-    let modifications =
-        Modifications::new(LazyLines::from(before_lines), LazyLines::from(after_lines));
+    let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\na";
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
     patch
         .apply_into(
-            &LazyLines::from("x\ny\nz\n".to_owned() + before_lines),
+            &Lines::from("x\ny\nz\n".to_owned() + before_lines),
+            &mut patched,
+            false,
+        )
+        .unwrap();
+    assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
+}
+
+#[test]
+fn displaced_no_final_eol_3() {
+    let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
+    let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz";
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
+    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let patch = WrappedDiffChunks(diff_chunks);
+    let mut patched = WrappedString::default();
+    patch
+        .apply_into(
+            &Lines::from("x\ny\nz\n".to_owned() + before_lines),
             &mut patched,
             false,
         )

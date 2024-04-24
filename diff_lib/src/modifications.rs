@@ -61,8 +61,8 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         antemod_range_bounds: impl RangeBounds<usize>,
         postmod_range_bounds: impl RangeBounds<usize>,
     ) -> Option<CommonSubsequence> {
-        let antemod_range = Range::from(antemod_range_bounds);
-        let postmod_range = Range::from(postmod_range_bounds);
+        let antemod_range = self.antemod.to_range(antemod_range_bounds);
+        let postmod_range = self.postmod.to_range(postmod_range_bounds);
 
         let mut best_lcs = CommonSubsequence::default();
 
@@ -104,25 +104,35 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         } else {
             let count = self
                 .antemod
-                .lines_reversed(antemod_range.start()..best_lcs.antemod_start())
+                .lines(antemod_range.start()..best_lcs.antemod_start())
+                .rev()
                 .zip(
                     self.postmod
-                        .lines_reversed(postmod_range.start()..best_lcs.postmod_start()),
+                        .lines(postmod_range.start()..best_lcs.postmod_start())
+                        .rev(),
                 )
                 .take_while(|(a, b)| a == b)
                 .count();
-            best_lcs.decr_starts(count);
+            best_lcs.decr_starts(
+                count
+                    .min(best_lcs.antemod_start())
+                    .min(best_lcs.postmod_start()),
+            );
 
-            let count = self
-                .antemod
-                .lines(best_lcs.antemod_end() + 1..antemod_range.end())
-                .zip(
-                    self.postmod
-                        .lines(best_lcs.postmod_end() + 1..postmod_range.end()),
-                )
-                .take_while(|(a, b)| a == b)
-                .count();
-            best_lcs.incr_size(count);
+            if best_lcs.antemod_end() + 1 < antemod_range.end()
+                && best_lcs.postmod_end() + 1 < postmod_range.end()
+            {
+                let count = self
+                    .antemod
+                    .lines(best_lcs.antemod_end() + 1..antemod_range.end())
+                    .zip(
+                        self.postmod
+                            .lines(best_lcs.postmod_end() + 1..postmod_range.end()),
+                    )
+                    .take_while(|(a, b)| a == b)
+                    .count();
+                best_lcs.incr_size(count);
+            }
 
             Some(best_lcs)
         }
@@ -182,13 +192,13 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     /// Example:
     /// ```
     /// use diff_lib::range::Range;
-    /// use diff_lib::lines::LazyLines;
+    /// use diff_lib::lines::Lines;
     /// use diff_lib::lcs::CommonSubsequence;
     /// use diff_lib::modifications::ModGenerator;
     /// use diff_lib::modifications::Modification::*;
     ///
-    /// let ante_lines = LazyLines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
-    /// let post_lines = LazyLines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
+    /// let ante_lines = Lines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
+    /// let post_lines = Lines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
     /// let modlist = ModGenerator::new(&ante_lines, &post_lines).generate();
     /// assert_eq!(
     ///     vec![
@@ -399,14 +409,14 @@ impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
     ///
     /// ```
     /// use diff_lib::lcs::CommonSubsequence;
-    /// use diff_lib::lines::LazyLines;
+    /// use diff_lib::lines::Lines;
     /// use diff_lib::modifications::{ModificationChunk, Modifications,Modification};
     /// use diff_lib::range::Range;
     /// use Modification::*;
     ///
     /// let before = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
     /// let after = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
-    /// let modifications = Modifications::new(LazyLines::from(before), LazyLines::from(after));
+    /// let modifications = Modifications::new(Lines::from(before), Lines::from(after));
     /// let modn_chunks: Vec<_> = modifications.modification_chunks(2).collect();
     /// assert_eq!(
     ///     modn_chunks,
