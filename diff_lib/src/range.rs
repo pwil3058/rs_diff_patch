@@ -33,21 +33,6 @@ impl Range {
     pub fn end(&self) -> usize {
         self.1
     }
-
-    pub fn from(bounds: impl RangeBounds<usize>) -> Self {
-        let start = match bounds.start_bound() {
-            Bound::Included(i) => *i,
-            Bound::Excluded(i) => *i + 1,
-            _ => 0,
-        };
-        let end = match bounds.end_bound() {
-            Bound::Included(i) => *i + 1,
-            Bound::Excluded(i) => *i,
-            _ => usize::MAX,
-        };
-
-        Range(start, end)
-    }
 }
 
 impl RangeBounds<usize> for Range {
@@ -69,8 +54,6 @@ mod crange_tests {
         assert_eq!(crange.start(), 3);
         assert_eq!(crange.end(), 5);
         assert_eq!(crange.len(), 2);
-        assert_eq!(Range::from(..), Range(0, usize::MAX));
-        assert_eq!(Range::from(1..6), Range(1, 6));
     }
     use super::*;
 }

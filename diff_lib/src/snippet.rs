@@ -1,8 +1,8 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::lines::{BasicLines, Lines};
-use crate::range::Range;
 use serde::{Deserialize, Serialize};
+use std::collections::Bound;
 use std::ops::RangeBounds;
 
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,9 +47,12 @@ impl Snippet {
 
 pub trait ExtractSnippet: BasicLines {
     fn extract_snippet(&self, range_bounds: impl RangeBounds<usize>) -> Snippet {
-        let range = Range::from(range_bounds);
-        let start = range.start();
-        let lines = self.lines(range).map(|s| s.to_string()).collect();
+        let start = match range_bounds.start_bound() {
+            Bound::Included(start) => *start,
+            Bound::Excluded(start) => *start + 1,
+            Bound::Unbounded => 0,
+        };
+        let lines = self.lines(range_bounds).map(|s| s.to_string()).collect();
         Snippet { start, lines }
     }
 }

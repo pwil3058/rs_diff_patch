@@ -139,7 +139,7 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     }
 
     fn longest_common_subsequences(&self) -> Vec<CommonSubsequence> {
-        let mut lifo = vec![(Range(0, self.antemod.len()), Range(0, self.postmod.len()))];
+        let mut lifo = vec![(self.antemod.to_range(..), self.postmod.to_range(..))];
         let mut raw_lcses = vec![];
         while let Some((antemod_range, postmod_range)) = lifo.pop() {
             if let Some(lcs) =

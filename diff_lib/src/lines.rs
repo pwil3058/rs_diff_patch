@@ -1,5 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
+use std::collections::Bound;
 use std::ops::RangeBounds;
 
 use crypto_hash;
@@ -20,10 +21,19 @@ impl MapKey for str {
 pub trait BasicLines: Len + Default {
     fn lines(&self, range_bounds: impl RangeBounds<usize>)
         -> impl DoubleEndedIterator<Item = &str>;
-    // fn lines_reversed(&self, range_bounds: impl RangeBounds<usize>) -> impl Iterator<Item = &str>;
-    fn to_range(&self, range_bounds: impl RangeBounds<usize>) -> Range {
-        let range = Range::from(range_bounds);
-        Range(range.0, range.1.min(self.len()))
+    fn to_range(&self, bounds: impl RangeBounds<usize>) -> Range {
+        let start = match bounds.start_bound() {
+            Bound::Included(i) => *i,
+            Bound::Excluded(i) => *i + 1,
+            _ => 0,
+        };
+        let end = match bounds.end_bound() {
+            Bound::Included(i) => *i + 1,
+            Bound::Excluded(i) => *i,
+            _ => self.len(),
+        };
+
+        Range(start, end)
     }
 }
 
@@ -42,12 +52,7 @@ impl BasicLines for Lines {
         range_bounds: impl RangeBounds<usize>,
     ) -> impl DoubleEndedIterator<Item = &str> {
         let range = self.to_range(range_bounds);
-        self.0[range.0..range.1.min(self.len())]
-            .iter()
-            .map(|s| s.as_str())
-        // let range = Range::from(range_bounds);
-        // let iter = self.text.split_inclusive(self.eol);
-        // iter.skip(range.start()).take(range.len())
+        self.0[range.0..range.1].iter().map(|s| s.as_str())
     }
 }
 
