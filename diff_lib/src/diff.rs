@@ -3,6 +3,7 @@
 use crate::apply::{Applies, ApplyChunkInto, MatchesAt, ProgressData};
 use crate::lines::BasicLines;
 use crate::modifications::ChunkIter;
+use crate::range::Range;
 use crate::snippet::Snippet;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -180,7 +181,7 @@ impl ApplyChunkInto for DiffChunk {
         let antemodn = self.antemodn(reverse);
         let end = antemodn.start(pd.offset, reductions);
         let post_text = self.postmodn(reverse).lines_as_text(reductions);
-        let text = pd.lines.lines_as_text(pd.consumed..end);
+        let text = pd.lines.lines_as_text(Range(pd.consumed, end));
         into.write_all(text.as_bytes())?;
         into.write_all(post_text.as_bytes())?;
         pd.consumed = end + antemodn.length(reductions);
@@ -200,7 +201,7 @@ impl ApplyChunkInto for DiffChunk {
     {
         let postmodn = self.postmodn(reverse);
         let end = postmodn.start(pd.offset, reductions) + postmodn.length(reductions);
-        let text = pd.lines.lines_as_text(pd.consumed..end);
+        let text = pd.lines.lines_as_text(Range(pd.consumed, end));
         into.write_all(text.as_bytes())?;
         pd.consumed = end;
         Ok(())

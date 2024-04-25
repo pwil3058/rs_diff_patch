@@ -1,9 +1,9 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::lines::{BasicLines, Lines};
+use crate::range::Range;
 use serde::{Deserialize, Serialize};
 use std::io;
-use std::ops::RangeBounds;
 
 pub struct ProgressData<'a, L>
 where
@@ -23,20 +23,20 @@ pub enum Applies {
 pub trait MatchesAt: BasicLines {
     fn matches_at(&self, lines: &[String], at: usize) -> bool {
         if at < self.len() && self.len() - at >= lines.len() {
-            lines.iter().zip(self.lines(at..)).all(|(b, a)| a == b)
+            lines
+                .iter()
+                .zip(self.lines(self.range_from(at)))
+                .all(|(b, a)| a == b)
         } else {
             false
         }
     }
 
-    fn lines_as_text(&self, range_bounds: impl RangeBounds<usize>) -> String {
-        self.lines(range_bounds).collect::<Vec<_>>().join("")
-    }
+    fn lines_as_text(&self, range: Range) -> String;
 }
 
 impl MatchesAt for Lines {
-    fn lines_as_text(&self, range_bounds: impl RangeBounds<usize>) -> String {
-        let range = self.to_range(range_bounds);
+    fn lines_as_text(&self, range: Range) -> String {
         self.0[range.0..range.1].join("")
     }
 }
@@ -179,7 +179,11 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }
         }
-        into.write_all(pd.lines.lines_as_text(pd.consumed..).as_bytes())?;
+        into.write_all(
+            pd.lines
+                .lines_as_text(pd.lines.range_from(pd.consumed))
+                .as_bytes(),
+        )?;
         Ok(())
     }
 }

@@ -4,7 +4,7 @@ use rayon::prelude::ParallelSliceMut;
 use std::collections::HashMap;
 use std::iter::Peekable;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut, RangeBounds};
+use std::ops::{Deref, DerefMut};
 use std::slice::Iter;
 
 use crate::lcs::CommonSubsequence;
@@ -40,7 +40,7 @@ pub struct ModGenerator<'a, A: BasicLines, P: BasicLines> {
 impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     pub fn new(antemod: &'a A, postmod: &'a P) -> Self {
         let mut postmod_line_indices = HashMap::<Vec<u8>, Vec<usize>>::new();
-        for (index, line) in postmod.lines(..).enumerate() {
+        for (index, line) in postmod.lines(postmod.range_from(0)).enumerate() {
             let key = line.map_key();
             if let Some(vec) = postmod_line_indices.get_mut(&key) {
                 vec.push(index);
@@ -58,12 +58,9 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
 
     fn longest_common_subsequence(
         &self,
-        antemod_range_bounds: impl RangeBounds<usize>,
-        postmod_range_bounds: impl RangeBounds<usize>,
+        antemod_range: Range,
+        postmod_range: Range,
     ) -> Option<CommonSubsequence> {
-        let antemod_range = self.antemod.to_range(antemod_range_bounds);
-        let postmod_range = self.postmod.to_range(postmod_range_bounds);
-
         let mut best_lcs = CommonSubsequence::default();
 
         let mut j_to_len = HashMap::<usize, usize>::new();
@@ -104,11 +101,11 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         } else {
             let count = self
                 .antemod
-                .lines(antemod_range.start()..best_lcs.antemod_start())
+                .lines(Range(antemod_range.start(), best_lcs.antemod_start()))
                 .rev()
                 .zip(
                     self.postmod
-                        .lines(postmod_range.start()..best_lcs.postmod_start())
+                        .lines(Range(postmod_range.start(), best_lcs.postmod_start()))
                         .rev(),
                 )
                 .take_while(|(a, b)| a == b)
@@ -124,10 +121,10 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
             {
                 let count = self
                     .antemod
-                    .lines(best_lcs.antemod_end() + 1..antemod_range.end())
+                    .lines(Range(best_lcs.antemod_end() + 1, antemod_range.end()))
                     .zip(
                         self.postmod
-                            .lines(best_lcs.postmod_end() + 1..postmod_range.end()),
+                            .lines(Range(best_lcs.postmod_end() + 1, postmod_range.end())),
                     )
                     .take_while(|(a, b)| a == b)
                     .count();
@@ -139,12 +136,10 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     }
 
     fn longest_common_subsequences(&self) -> Vec<CommonSubsequence> {
-        let mut lifo = vec![(self.antemod.to_range(..), self.postmod.to_range(..))];
+        let mut lifo = vec![(self.antemod.range_from(0), self.postmod.range_from(0))];
         let mut raw_lcses = vec![];
         while let Some((antemod_range, postmod_range)) = lifo.pop() {
-            if let Some(lcs) =
-                self.longest_common_subsequence(antemod_range.clone(), postmod_range.clone())
-            {
+            if let Some(lcs) = self.longest_common_subsequence(antemod_range, postmod_range) {
                 if antemod_range.start() < lcs.antemod_start()
                     && postmod_range.start() < lcs.postmod_start()
                 {
@@ -238,18 +233,18 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         }
         if i < self.antemod.len() && j < self.postmod.len() {
             op_codes.push(Modification::Replace(
-                Range(i, self.antemod.len()),
-                Range(j, self.postmod.len()),
+                self.antemod.range_from(i),
+                self.postmod.range_from(j),
             ));
         } else if i < self.antemod.len() {
             op_codes.push(Modification::Delete(
-                Range(i, self.antemod.len()),
+                self.antemod.range_from(i),
                 self.postmod.len(),
             ));
         } else if j < self.postmod.len() {
             op_codes.push(Modification::Insert(
                 self.antemod.len(),
-                Range(j, self.postmod.len()),
+                self.postmod.range_from(j),
             ));
         }
 

@@ -1,8 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use serde::{Deserialize, Serialize};
-use std::collections::Bound;
-use std::ops::RangeBounds;
 
 pub trait Len {
     fn len(&self) -> usize;
@@ -32,16 +30,6 @@ impl Range {
 
     pub fn end(&self) -> usize {
         self.1
-    }
-}
-
-impl RangeBounds<usize> for Range {
-    fn start_bound(&self) -> Bound<&usize> {
-        Bound::Included(&self.0)
-    }
-
-    fn end_bound(&self) -> Bound<&usize> {
-        Bound::Excluded(&self.1)
     }
 }
 

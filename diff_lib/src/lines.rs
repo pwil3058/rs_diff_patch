@@ -1,8 +1,5 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use std::collections::Bound;
-use std::ops::RangeBounds;
-
 use crypto_hash;
 
 use crate::range::*;
@@ -19,21 +16,9 @@ impl MapKey for str {
 }
 
 pub trait BasicLines: Len + Default {
-    fn lines(&self, range_bounds: impl RangeBounds<usize>)
-        -> impl DoubleEndedIterator<Item = &str>;
-    fn to_range(&self, bounds: impl RangeBounds<usize>) -> Range {
-        let start = match bounds.start_bound() {
-            Bound::Included(i) => *i,
-            Bound::Excluded(i) => *i + 1,
-            _ => 0,
-        };
-        let end = match bounds.end_bound() {
-            Bound::Included(i) => *i + 1,
-            Bound::Excluded(i) => *i,
-            _ => self.len(),
-        };
-
-        Range(start, end)
+    fn lines(&self, range: Range) -> impl DoubleEndedIterator<Item = &str>;
+    fn range_from(&self, start: usize) -> Range {
+        Range(start, self.len())
     }
 }
 
@@ -47,11 +32,7 @@ impl Len for Lines {
 }
 
 impl BasicLines for Lines {
-    fn lines(
-        &self,
-        range_bounds: impl RangeBounds<usize>,
-    ) -> impl DoubleEndedIterator<Item = &str> {
-        let range = self.to_range(range_bounds);
+    fn lines(&self, range: Range) -> impl DoubleEndedIterator<Item = &str> {
         self.0[range.0..range.1].iter().map(|s| s.as_str())
     }
 }
@@ -83,11 +64,13 @@ pub mod test_lines {
         assert_eq!(lazy_lines.len(), 4);
         assert_eq!(
             vec!["b\n", "c\n"],
-            lazy_lines.lines(1..3).collect::<Vec<&str>>()
+            lazy_lines.lines(Range(1, 3)).collect::<Vec<&str>>()
         );
         assert_eq!(
             vec!["b\n", "c\n", "d\n"],
-            lazy_lines.lines(1..).collect::<Vec<&str>>()
+            lazy_lines
+                .lines(lazy_lines.range_from(1))
+                .collect::<Vec<&str>>()
         );
     }
 }
