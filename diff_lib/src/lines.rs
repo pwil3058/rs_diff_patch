@@ -38,7 +38,7 @@ pub trait BasicLines: Len + Default {
 }
 
 #[derive(Debug, Default)]
-pub struct Lines(Vec<String>);
+pub struct Lines(pub Vec<String>);
 
 impl Len for Lines {
     fn len(&self) -> usize {

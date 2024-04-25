@@ -34,7 +34,12 @@ pub trait MatchesAt: BasicLines {
     }
 }
 
-impl MatchesAt for Lines {}
+impl MatchesAt for Lines {
+    fn lines_as_text(&self, range_bounds: impl RangeBounds<usize>) -> String {
+        let range = self.to_range(range_bounds);
+        self.0[range.0..range.1].join("")
+    }
+}
 
 pub trait ApplyChunkInto {
     fn antemodn_lines(
