@@ -1,6 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crypto_hash;
+use std::io::{self, BufRead, BufReader, Read};
 
 use crate::range::*;
 
@@ -22,7 +23,7 @@ pub trait BasicLines: Len + Default {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct Lines(pub Vec<String>);
 
 impl Len for Lines {
@@ -34,6 +35,22 @@ impl Len for Lines {
 impl BasicLines for Lines {
     fn lines(&self, range: Range) -> impl DoubleEndedIterator<Item = &str> {
         self.0[range.0..range.1].iter().map(|s| s.as_str())
+    }
+}
+
+impl Lines {
+    pub fn read<R: Read>(read: R) -> io::Result<Lines> {
+        let mut reader = BufReader::new(read);
+        let mut lines = vec![];
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line)? == 0 {
+                break;
+            } else {
+                lines.push(line)
+            }
+        }
+        Ok(Lines(lines))
     }
 }
 
@@ -57,20 +74,39 @@ impl From<&str> for Lines {
 #[cfg(test)]
 pub mod test_lines {
     use super::*;
+    use std::io::Cursor;
 
     #[test]
-    fn lazy_lines() {
-        let lazy_lines: Lines = String::from("a\nb\nc\nd\n").into();
-        assert_eq!(lazy_lines.len(), 4);
+    fn lines() {
+        let lines: Lines = String::from("a\nb\nc\nd\n").into();
+        assert_eq!(lines.len(), 4);
         assert_eq!(
             vec!["b\n", "c\n"],
-            lazy_lines.lines(Range(1, 3)).collect::<Vec<&str>>()
+            lines.lines(Range(1, 3)).collect::<Vec<&str>>()
         );
         assert_eq!(
             vec!["b\n", "c\n", "d\n"],
-            lazy_lines
-                .lines(lazy_lines.range_from(1))
-                .collect::<Vec<&str>>()
+            lines.lines(lines.range_from(1)).collect::<Vec<&str>>()
+        );
+    }
+
+    #[test]
+    fn read_lines() {
+        let cursor = Cursor::new("A\nB\nC");
+        let lines = Lines::read(cursor).unwrap();
+        assert_eq!(
+            Lines(vec!["A\n".to_string(), "B\n".to_string(), "C".to_string()]),
+            lines
+        );
+        let cursor = Cursor::new("A\r\nB\r\nC");
+        let lines = Lines::read(cursor).unwrap();
+        assert_eq!(
+            Lines(vec![
+                "A\r\n".to_string(),
+                "B\r\n".to_string(),
+                "C".to_string()
+            ]),
+            lines
         );
     }
 }

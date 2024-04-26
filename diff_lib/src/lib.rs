@@ -4,7 +4,6 @@ mod apply;
 pub mod diff;
 pub mod lcs;
 pub mod lines;
-pub mod range;
-//pub mod matcher;
 pub mod modifications;
+pub mod range;
 pub mod snippet;
