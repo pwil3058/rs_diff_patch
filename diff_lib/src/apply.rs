@@ -83,12 +83,26 @@ pub trait ApplyChunkInto {
         W: io::Write;
 }
 
+#[derive(Debug, Default)]
+pub struct Statistics {
+    pub clean: usize,
+    pub fuzzy: usize,
+    pub already_applied: usize,
+    pub already_applied_fuzzy: usize,
+    pub failed: usize,
+}
+
 pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
     fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s C>
     where
         C: 's;
 
-    fn apply_into<W>(&self, target: &impl MatchesAt, into: &mut W, reverse: bool) -> io::Result<()>
+    fn apply_into<W>(
+        &self,
+        target: &impl MatchesAt,
+        into: &mut W,
+        reverse: bool,
+    ) -> io::Result<Statistics>
     where
         W: io::Write,
     {
@@ -97,6 +111,7 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
             consumed: 0,
             offset: 0,
         };
+        let mut stats = Statistics::default();
         let mut iter = self.chunks().peekable();
         let mut chunk_num = 0;
         while let Some(chunk) = iter.next() {
@@ -108,10 +123,12 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                 match applies {
                     Applies::Cleanly => {
                         chunk.apply_into(&mut pd, into, None, reverse)?;
+                        stats.clean += 1;
                         log::info!("Chunk #{chunk_num} applies cleanly.");
                     }
                     Applies::WithReductions(reductions) => {
                         chunk.apply_into(&mut pd, into, Some(reductions), reverse)?;
+                        stats.fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions.");
                     }
                 }
@@ -126,10 +143,12 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                 match applies {
                     Applies::Cleanly => {
                         chunk.apply_into(&mut pd, into, None, reverse)?;
+                        stats.fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} applies with offset {offset_adj}.");
                     }
                     Applies::WithReductions(reductions) => {
                         chunk.apply_into(&mut pd, into, Some(reductions), reverse)?;
+                        stats.fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions and offset {offset_adj}.");
                     }
                 }
@@ -138,10 +157,12 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                 match applies {
                     Applies::Cleanly => {
                         chunk.already_applied_into(&mut pd, into, None, reverse)?;
+                        stats.already_applied += 1;
                         log::warn!("Chunk #{chunk_num} already applied")
                     }
                     Applies::WithReductions(reductions) => {
                         chunk.already_applied_into(&mut pd, into, Some(reductions), reverse)?;
+                        stats.already_applied_fuzzy += 1;
                         log::warn!(
                             "Chunk #{chunk_num} already applied with {reductions:?} reductions."
                         );
@@ -159,14 +180,17 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                 match applies {
                     Applies::Cleanly => {
                         chunk.already_applied_into(&mut pd, into, None, reverse)?;
+                        stats.already_applied_fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} already applied with offset {offset_adj}")
                     }
                     Applies::WithReductions(reductions) => {
                         chunk.already_applied_into(&mut pd, into, Some(reductions), reverse)?;
+                        stats.already_applied_fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} already applied with {reductions:?} reductions and offset {offset_adj}.")
                     }
                 }
             } else {
+                stats.failed += 1;
                 into.write_all(b"<<<<<<<\n")?;
                 for line in chunk.antemodn_lines(None, reverse) {
                     into.write_all(line.as_bytes())?;
@@ -184,7 +208,7 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                 .lines_as_text(pd.lines.range_from(pd.consumed))
                 .as_bytes(),
         )?;
-        Ok(())
+        Ok(stats)
     }
 }
 

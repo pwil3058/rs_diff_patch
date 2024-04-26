@@ -43,9 +43,14 @@ fn clean_patch() {
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
-    patch
+    let stats = patch
         .apply_into(&Lines::from(before_lines), &mut patched, false)
         .unwrap();
+    assert_eq!(stats.clean, 2);
+    assert_eq!(stats.fuzzy, 0);
+    assert_eq!(stats.already_applied, 0);
+    assert_eq!(stats.already_applied_fuzzy, 0);
+    assert_eq!(stats.failed, 0);
     assert_eq!(patched.0, after_lines);
 }
 
@@ -57,9 +62,14 @@ fn clean_patch_in_middle() {
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
-    patch
+    let stats = patch
         .apply_into(&Lines::from(before_lines), &mut patched, false)
         .unwrap();
+    assert_eq!(stats.clean, 2);
+    assert_eq!(stats.fuzzy, 0);
+    assert_eq!(stats.already_applied, 0);
+    assert_eq!(stats.already_applied_fuzzy, 0);
+    assert_eq!(stats.failed, 0);
     assert_eq!(patched.0, after_lines);
 }
 
@@ -71,9 +81,14 @@ fn already_applied() {
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
-    patch
+    let stats = patch
         .apply_into(&Lines::from(after_lines), &mut patched, false)
         .unwrap();
+    assert_eq!(stats.clean, 0);
+    assert_eq!(stats.fuzzy, 0);
+    assert_eq!(stats.already_applied, 2);
+    assert_eq!(stats.already_applied_fuzzy, 0);
+    assert_eq!(stats.failed, 0);
     assert_eq!(patched.0, after_lines);
 }
 
@@ -85,9 +100,14 @@ fn clean_patch_reverse() {
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
-    patch
+    let stats = patch
         .apply_into(&Lines::from(after_lines), &mut patched, true)
         .unwrap();
+    assert_eq!(stats.clean, 2);
+    assert_eq!(stats.fuzzy, 0);
+    assert_eq!(stats.already_applied, 0);
+    assert_eq!(stats.already_applied_fuzzy, 0);
+    assert_eq!(stats.failed, 0);
     assert_eq!(patched.0, before_lines);
 }
 
@@ -99,13 +119,18 @@ fn displaced() {
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
-    patch
+    let stats = patch
         .apply_into(
             &Lines::from("x\ny\nz\n".to_owned() + before_lines),
             &mut patched,
             false,
         )
         .unwrap();
+    assert_eq!(stats.clean, 1);
+    assert_eq!(stats.fuzzy, 1);
+    assert_eq!(stats.already_applied, 0);
+    assert_eq!(stats.already_applied_fuzzy, 0);
+    assert_eq!(stats.failed, 0);
     assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
 }
 
@@ -117,13 +142,18 @@ fn displaced_no_final_eol_1() {
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
-    patch
+    let stats = patch
         .apply_into(
             &Lines::from("x\ny\nz\n".to_owned() + before_lines),
             &mut patched,
             false,
         )
         .unwrap();
+    assert_eq!(stats.clean, 2);
+    assert_eq!(stats.fuzzy, 1);
+    assert_eq!(stats.already_applied, 0);
+    assert_eq!(stats.already_applied_fuzzy, 0);
+    assert_eq!(stats.failed, 0);
     assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
 }
 
@@ -135,13 +165,18 @@ fn displaced_no_final_eol_2() {
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
-    patch
+    let stats = patch
         .apply_into(
             &Lines::from("x\ny\nz\n".to_owned() + before_lines),
             &mut patched,
             false,
         )
         .unwrap();
+    assert_eq!(stats.clean, 2);
+    assert_eq!(stats.fuzzy, 1);
+    assert_eq!(stats.already_applied, 0);
+    assert_eq!(stats.already_applied_fuzzy, 0);
+    assert_eq!(stats.failed, 0);
     assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
 }
 
@@ -153,12 +188,17 @@ fn displaced_no_final_eol_3() {
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WrappedString::default();
-    patch
+    let stats = patch
         .apply_into(
             &Lines::from("x\ny\nz\n".to_owned() + before_lines),
             &mut patched,
             false,
         )
         .unwrap();
+    assert_eq!(stats.clean, 2);
+    assert_eq!(stats.fuzzy, 1);
+    assert_eq!(stats.already_applied, 0);
+    assert_eq!(stats.already_applied_fuzzy, 0);
+    assert_eq!(stats.failed, 0);
     assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
 }
