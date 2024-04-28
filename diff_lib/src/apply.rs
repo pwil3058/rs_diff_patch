@@ -21,21 +21,19 @@ pub enum Applies {
 }
 
 pub trait MatchesAt: BasicLines {
+    fn matches_at(&self, lines: &[String], at: usize) -> bool;
+    fn lines_as_text(&self, range: Range) -> String;
+}
+
+impl MatchesAt for Lines {
     fn matches_at(&self, lines: &[String], at: usize) -> bool {
-        if at < self.len() && self.len() - at >= lines.len() {
-            lines
-                .iter()
-                .zip(self.lines(self.range_from(at)))
-                .all(|(b, a)| a == b)
+        if at < self.0.len() && self.0.len() - at >= lines.len() {
+            lines.iter().zip(self.0[at..].iter()).all(|(b, a)| a == b)
         } else {
             false
         }
     }
 
-    fn lines_as_text(&self, range: Range) -> String;
-}
-
-impl MatchesAt for Lines {
     fn lines_as_text(&self, range: Range) -> String {
         self.0[range.0..range.1].join("")
     }
