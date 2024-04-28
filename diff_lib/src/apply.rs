@@ -59,6 +59,24 @@ pub trait ApplyChunkInto {
         offset: isize,
         reverse: bool,
     ) -> Option<(isize, Applies)>;
+    fn already_applied(
+        &self,
+        lines: &impl MatchesAt,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<Applies> {
+        self.applies(lines, offset, !reverse)
+    }
+    fn already_applied_nearby(
+        &self,
+        lines: &impl MatchesAt,
+        not_before: usize,
+        next_chunk: Option<&Self>,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<(isize, Applies)> {
+        self.applies_nearby(lines, not_before, next_chunk, offset, !reverse)
+    }
     fn apply_into<'a, L, W>(
         &self,
         pd: &mut ProgressData<'a, L>,
@@ -150,8 +168,7 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                         log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions and offset {offset_adj}.");
                     }
                 }
-            } else if let Some(applies) = chunk.applies(target, pd.offset, !reverse) {
-                // It's already applied
+            } else if let Some(applies) = chunk.already_applied(target, pd.offset, reverse) {
                 match applies {
                     Applies::Cleanly => {
                         chunk.already_applied_into(&mut pd, into, None, reverse)?;
@@ -166,14 +183,13 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                         );
                     }
                 }
-            } else if let Some((offset_adj, applies)) = chunk.applies_nearby(
+            } else if let Some((offset_adj, applies)) = chunk.already_applied_nearby(
                 target,
                 pd.consumed,
                 iter.peek().cloned(),
                 pd.offset,
-                !reverse,
+                reverse,
             ) {
-                // It's already applied
                 pd.offset += offset_adj;
                 match applies {
                     Applies::Cleanly => {
