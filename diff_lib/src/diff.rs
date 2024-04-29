@@ -49,27 +49,19 @@ impl DiffChunk {
 }
 
 impl ApplyChunk for DiffChunk {
-    fn antemodn_lines(
-        &self,
-        reductions: Option<(usize, usize)>,
-        reverse: bool,
-    ) -> impl Iterator<Item = &String> {
+    fn antemodn_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String {
         if reverse {
-            self.postmodn.lines(reductions)
+            self.postmodn.lines_as_text(reductions)
         } else {
-            self.antemodn.lines(reductions)
+            self.antemodn.lines_as_text(reductions)
         }
     }
 
-    fn postmodn_lines(
-        &self,
-        reductions: Option<(usize, usize)>,
-        reverse: bool,
-    ) -> impl Iterator<Item = &String> {
+    fn postmodn_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String {
         if reverse {
-            self.antemodn.lines(reductions)
+            self.antemodn.lines_as_text(reductions)
         } else {
-            self.postmodn.lines(reductions)
+            self.postmodn.lines_as_text(reductions)
         }
     }
 
@@ -168,10 +160,9 @@ impl ApplyChunk for DiffChunk {
     {
         let antemodn = self.antemodn(reverse);
         let end = antemodn.start(pd.offset, reductions);
-        let post_text = self.postmodn(reverse).lines_as_text(reductions);
         let text = pd.lines.lines_as_text(Range(pd.consumed, end));
         into.write_all(text.as_bytes())?;
-        into.write_all(post_text.as_bytes())?;
+        into.write_all(self.postmodn_lines_as_text(reductions, reverse).as_bytes())?;
         pd.consumed = end + antemodn.length(reductions);
         Ok(())
     }

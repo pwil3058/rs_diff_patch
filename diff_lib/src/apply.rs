@@ -20,16 +20,8 @@ pub enum Applies {
 }
 
 pub trait ApplyChunk {
-    fn antemodn_lines(
-        &self,
-        reductions: Option<(usize, usize)>,
-        reverse: bool,
-    ) -> impl Iterator<Item = &String>;
-    fn postmodn_lines(
-        &self,
-        reductions: Option<(usize, usize)>,
-        reverse: bool,
-    ) -> impl Iterator<Item = &String>;
+    fn antemodn_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String;
+    fn postmodn_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String;
     fn applies(&self, lines: &impl PatchableLines, offset: isize, reverse: bool)
         -> Option<Applies>;
     fn applies_nearby(
@@ -187,13 +179,9 @@ pub trait ApplyChunks<'a, C: ApplyChunk>: Serialize + Deserialize<'a> {
             } else {
                 stats.failed += 1;
                 into.write_all(b"<<<<<<<\n")?;
-                for line in chunk.antemodn_lines(None, reverse) {
-                    into.write_all(line.as_bytes())?;
-                }
+                into.write_all(chunk.antemodn_lines_as_text(None, reverse).as_bytes())?;
                 into.write_all(b"=======\n")?;
-                for line in chunk.postmodn_lines(None, reverse) {
-                    into.write_all(line.as_bytes())?;
-                }
+                into.write_all(chunk.postmodn_lines_as_text(None, reverse).as_bytes())?;
                 into.write_all(b">>>>>>>\n")?;
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }
