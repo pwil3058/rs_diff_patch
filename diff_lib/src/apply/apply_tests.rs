@@ -5,7 +5,8 @@ use crate::diff::DiffChunk;
 use crate::lines::Lines;
 use crate::modifications::Modifications;
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+use std::io::{Cursor, Write};
+use std::ops::{Deref, DerefMut};
 
 #[derive(Serialize, Deserialize)]
 struct WrappedDiffChunks(pub Vec<DiffChunk>);
@@ -19,19 +20,36 @@ impl<'a> ApplyInto<'a, DiffChunk> for WrappedDiffChunks {
     }
 }
 
-#[derive(Default)]
-struct WrappedString(pub String);
+#[derive(Debug, Default)]
+struct WriteableString(Cursor<Vec<u8>>);
 
-impl Write for WrappedString {
+impl Deref for WriteableString {
+    type Target = Cursor<Vec<u8>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for WriteableString {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Write for WriteableString {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        unsafe {
-            self.0.push_str(&std::str::from_utf8_unchecked(buf));
-        }
-        Ok(buf.len())
+        self.0.write(buf)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
+        self.0.flush()
+    }
+}
+
+impl PartialEq<String> for WriteableString {
+    fn eq(&self, other: &String) -> bool {
+        &String::from_utf8(self.get_ref().clone()).unwrap() == other
     }
 }
 
@@ -42,7 +60,8 @@ fn clean_patch() {
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
-    let mut patched = WrappedString::default();
+    let mut patched = WriteableString::default();
+
     let stats = patch
         .apply_into(&Lines::from(before_lines), &mut patched, false)
         .unwrap();
@@ -51,7 +70,7 @@ fn clean_patch() {
     assert_eq!(stats.already_applied, 0);
     assert_eq!(stats.already_applied_fuzzy, 0);
     assert_eq!(stats.failed, 0);
-    assert_eq!(patched.0, after_lines);
+    assert_eq!(patched, after_lines.to_string());
 }
 
 #[test]
@@ -61,7 +80,7 @@ fn clean_patch_in_middle() {
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
-    let mut patched = WrappedString::default();
+    let mut patched = WriteableString::default();
     let stats = patch
         .apply_into(&Lines::from(before_lines), &mut patched, false)
         .unwrap();
@@ -70,7 +89,7 @@ fn clean_patch_in_middle() {
     assert_eq!(stats.already_applied, 0);
     assert_eq!(stats.already_applied_fuzzy, 0);
     assert_eq!(stats.failed, 0);
-    assert_eq!(patched.0, after_lines);
+    assert_eq!(patched, after_lines.to_string());
 }
 
 #[test]
@@ -80,7 +99,7 @@ fn already_applied() {
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
-    let mut patched = WrappedString::default();
+    let mut patched = WriteableString::default();
     let stats = patch
         .apply_into(&Lines::from(after_lines), &mut patched, false)
         .unwrap();
@@ -89,7 +108,7 @@ fn already_applied() {
     assert_eq!(stats.already_applied, 2);
     assert_eq!(stats.already_applied_fuzzy, 0);
     assert_eq!(stats.failed, 0);
-    assert_eq!(patched.0, after_lines);
+    assert_eq!(patched, after_lines.to_string());
 }
 
 #[test]
@@ -99,7 +118,7 @@ fn clean_patch_reverse() {
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
-    let mut patched = WrappedString::default();
+    let mut patched = WriteableString::default();
     let stats = patch
         .apply_into(&Lines::from(after_lines), &mut patched, true)
         .unwrap();
@@ -108,7 +127,7 @@ fn clean_patch_reverse() {
     assert_eq!(stats.already_applied, 0);
     assert_eq!(stats.already_applied_fuzzy, 0);
     assert_eq!(stats.failed, 0);
-    assert_eq!(patched.0, before_lines);
+    assert_eq!(patched, before_lines.to_string());
 }
 
 #[test]
@@ -118,7 +137,7 @@ fn displaced() {
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
-    let mut patched = WrappedString::default();
+    let mut patched = WriteableString::default();
     let stats = patch
         .apply_into(
             &Lines::from("x\ny\nz\n".to_owned() + before_lines),
@@ -131,7 +150,7 @@ fn displaced() {
     assert_eq!(stats.already_applied, 0);
     assert_eq!(stats.already_applied_fuzzy, 0);
     assert_eq!(stats.failed, 0);
-    assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
+    assert_eq!(patched, "x\ny\nz\n".to_owned() + after_lines);
 }
 
 #[test]
@@ -141,7 +160,7 @@ fn displaced_no_final_eol_1() {
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
-    let mut patched = WrappedString::default();
+    let mut patched = WriteableString::default();
     let stats = patch
         .apply_into(
             &Lines::from("x\ny\nz\n".to_owned() + before_lines),
@@ -154,7 +173,7 @@ fn displaced_no_final_eol_1() {
     assert_eq!(stats.already_applied, 0);
     assert_eq!(stats.already_applied_fuzzy, 0);
     assert_eq!(stats.failed, 0);
-    assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
+    assert_eq!(patched, "x\ny\nz\n".to_owned() + after_lines);
 }
 
 #[test]
@@ -164,7 +183,7 @@ fn displaced_no_final_eol_2() {
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
-    let mut patched = WrappedString::default();
+    let mut patched = WriteableString::default();
     let stats = patch
         .apply_into(
             &Lines::from("x\ny\nz\n".to_owned() + before_lines),
@@ -177,7 +196,7 @@ fn displaced_no_final_eol_2() {
     assert_eq!(stats.already_applied, 0);
     assert_eq!(stats.already_applied_fuzzy, 0);
     assert_eq!(stats.failed, 0);
-    assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
+    assert_eq!(patched, "x\ny\nz\n".to_owned() + after_lines);
 }
 
 #[test]
@@ -187,7 +206,7 @@ fn displaced_no_final_eol_3() {
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
     let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
-    let mut patched = WrappedString::default();
+    let mut patched = WriteableString::default();
     let stats = patch
         .apply_into(
             &Lines::from("x\ny\nz\n".to_owned() + before_lines),
@@ -200,5 +219,5 @@ fn displaced_no_final_eol_3() {
     assert_eq!(stats.already_applied, 0);
     assert_eq!(stats.already_applied_fuzzy, 0);
     assert_eq!(stats.failed, 0);
-    assert_eq!(patched.0, "x\ny\nz\n".to_owned() + after_lines);
+    assert_eq!(patched, "x\ny\nz\n".to_owned() + after_lines);
 }
