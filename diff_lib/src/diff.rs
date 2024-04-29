@@ -1,6 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::apply::{Applies, ApplyChunkInto, MatchesAt, ProgressData};
+use crate::apply::{Applies, ApplyChunk, MatchesAt, ProgressData};
 use crate::lines::BasicLines;
 use crate::modifications::ChunkIter;
 use crate::range::Range;
@@ -65,7 +65,7 @@ impl DiffChunk {
     }
 }
 
-impl ApplyChunkInto for DiffChunk {
+impl ApplyChunk for DiffChunk {
     fn antemodn_lines(
         &self,
         reductions: Option<(usize, usize)>,

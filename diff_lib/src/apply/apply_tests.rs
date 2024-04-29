@@ -1,6 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::apply::ApplyInto;
+use crate::apply::ApplyChunks;
 use crate::diff::DiffChunk;
 use crate::lines::Lines;
 use crate::modifications::Modifications;
@@ -11,7 +11,7 @@ use std::ops::{Deref, DerefMut};
 #[derive(Serialize, Deserialize)]
 struct WrappedDiffChunks(pub Vec<DiffChunk>);
 
-impl<'a> ApplyInto<'a, DiffChunk> for WrappedDiffChunks {
+impl<'a> ApplyChunks<'a, DiffChunk> for WrappedDiffChunks {
     fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s DiffChunk>
     where
         DiffChunk: 's,
@@ -93,7 +93,7 @@ fn clean_patch_in_middle() {
 }
 
 #[test]
-fn already_applied() {
+fn already_partially_applied() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
@@ -220,4 +220,16 @@ fn displaced_no_final_eol_3() {
     assert_eq!(stats.already_applied_fuzzy, 0);
     assert_eq!(stats.failed, 0);
     assert_eq!(patched, "x\ny\nz\n".to_owned() + after_lines);
+}
+
+#[test]
+fn already_applied() {
+    let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
+    let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz";
+    let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
+    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let patch = WrappedDiffChunks(diff_chunks);
+    assert!(patch.already_applied(&Lines::from(after_lines), false));
+    assert!(!patch.already_applied(&Lines::from(before_lines), false));
+    assert!(patch.already_applied(&Lines::from("x\ny\nz\n".to_owned() + after_lines), false));
 }

@@ -39,7 +39,7 @@ impl MatchesAt for Lines {
     }
 }
 
-pub trait ApplyChunkInto {
+pub trait ApplyChunk {
     fn antemodn_lines(
         &self,
         reductions: Option<(usize, usize)>,
@@ -108,14 +108,14 @@ pub struct Statistics {
     pub failed: usize,
 }
 
-pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
+pub trait ApplyChunks<'a, C: ApplyChunk>: Serialize + Deserialize<'a> {
     fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s C>
     where
         C: 's;
 
     fn apply_into<W>(
         &self,
-        target: &impl MatchesAt,
+        patchable: &impl MatchesAt,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<Statistics>
@@ -123,7 +123,7 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
         W: io::Write,
     {
         let mut pd = ProgressData {
-            lines: target,
+            lines: patchable,
             consumed: 0,
             offset: 0,
         };
@@ -132,10 +132,10 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
         let mut chunk_num = 0;
         while let Some(chunk) = iter.next() {
             chunk_num += 1; // for human consumption
-            if pd.consumed > target.len() {
+            if pd.consumed > patchable.len() {
                 log::error!("Unexpected end of input processing hunk #{chunk_num}.");
             }
-            if let Some(applies) = chunk.applies(target, pd.offset, reverse) {
+            if let Some(applies) = chunk.applies(patchable, pd.offset, reverse) {
                 match applies {
                     Applies::Cleanly => {
                         chunk.apply_into(&mut pd, into, None, reverse)?;
@@ -149,7 +149,7 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                     }
                 }
             } else if let Some((offset_adj, applies)) = chunk.applies_nearby(
-                target,
+                patchable,
                 pd.consumed,
                 iter.peek().cloned(),
                 pd.offset,
@@ -168,7 +168,7 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                         log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions and offset {offset_adj}.");
                     }
                 }
-            } else if let Some(applies) = chunk.already_applied(target, pd.offset, reverse) {
+            } else if let Some(applies) = chunk.already_applied(patchable, pd.offset, reverse) {
                 match applies {
                     Applies::Cleanly => {
                         chunk.already_applied_into(&mut pd, into, None, reverse)?;
@@ -184,7 +184,7 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                     }
                 }
             } else if let Some((offset_adj, applies)) = chunk.already_applied_nearby(
-                target,
+                patchable,
                 pd.consumed,
                 iter.peek().cloned(),
                 pd.offset,
@@ -223,6 +223,54 @@ pub trait ApplyInto<'a, C: ApplyChunkInto>: Serialize + Deserialize<'a> {
                 .as_bytes(),
         )?;
         Ok(stats)
+    }
+
+    fn already_applied(&self, patchable: &impl MatchesAt, reverse: bool) -> bool {
+        let mut pd = ProgressData {
+            lines: patchable,
+            consumed: 0,
+            offset: 0,
+        };
+        let mut iter = self.chunks().peekable();
+        let mut chunk_num = 0;
+        while let Some(chunk) = iter.next() {
+            chunk_num += 1; // for human consumption
+            if pd.consumed > patchable.len() {
+                log::error!("Unexpected end of input processing hunk #{chunk_num}.");
+            }
+            if let Some(applies) = chunk.already_applied(patchable, pd.offset, reverse) {
+                match applies {
+                    Applies::Cleanly => {
+                        log::info!("Chunk #{chunk_num} already applied")
+                    }
+                    Applies::WithReductions(reductions) => {
+                        log::warn!(
+                            "Chunk #{chunk_num} already applied with {reductions:?} reductions."
+                        );
+                    }
+                }
+            } else if let Some((offset_adj, applies)) = chunk.already_applied_nearby(
+                patchable,
+                pd.consumed,
+                iter.peek().cloned(),
+                pd.offset,
+                reverse,
+            ) {
+                pd.offset += offset_adj;
+                match applies {
+                    Applies::Cleanly => {
+                        log::warn!("Chunk #{chunk_num} already applied with offset {offset_adj}")
+                    }
+                    Applies::WithReductions(reductions) => {
+                        log::warn!("Chunk #{chunk_num} already applied with {reductions:?} reductions and offset {offset_adj}.")
+                    }
+                }
+            } else {
+                log::error!("Chunk #{chunk_num} NOT already applied!");
+                return false;
+            }
+        }
+        true
     }
 }
 
