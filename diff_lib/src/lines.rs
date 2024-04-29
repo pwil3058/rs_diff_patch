@@ -3,6 +3,7 @@
 use std::io::{self, BufRead, BufReader, Read};
 
 use crate::range::*;
+use crate::snippet::Snippet;
 
 pub trait BasicLines: Len + Default {
     fn lines(&self, range: Range) -> impl DoubleEndedIterator<Item = &str>;
@@ -25,6 +26,25 @@ impl BasicLines for Lines {
         self.0[range.0..range.1].iter().map(|s| s.as_str())
     }
 }
+
+pub trait ExtractSnippet {
+    fn extract_snippet(&self, range: Range) -> Snippet;
+}
+
+impl ExtractSnippet for Lines {
+    fn extract_snippet(&self, range: Range) -> Snippet {
+        let start = range.start();
+        let lines = self.0[range.0..range.1]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        Snippet { start, lines }
+    }
+}
+
+pub trait DiffableLines: BasicLines + ExtractSnippet {}
+
+impl DiffableLines for Lines {}
 
 impl Lines {
     pub fn read<R: Read>(read: R) -> io::Result<Lines> {

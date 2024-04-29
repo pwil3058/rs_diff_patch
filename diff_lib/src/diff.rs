@@ -1,7 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::apply::{Applies, ApplyChunk, MatchesAt, ProgressData};
-use crate::lines::BasicLines;
+use crate::lines::DiffableLines;
 use crate::modifications::ChunkIter;
 use crate::range::Range;
 use crate::snippet::Snippet;
@@ -15,34 +15,17 @@ pub struct DiffChunk {
     postmodn: Snippet,
 }
 
-impl<'a, A: BasicLines, P: BasicLines> Iterator for ChunkIter<'a, A, P, DiffChunk> {
+impl<'a, A: DiffableLines, P: DiffableLines> Iterator for ChunkIter<'a, A, P, DiffChunk> {
     type Item = DiffChunk;
 
     fn next(&mut self) -> Option<Self::Item> {
         let modn_chunk = self.iter.next()?;
         let (antemodn_range, postmodn_range) = modn_chunk.ranges();
-        let context_lengths = modn_chunk.context_lengths();
-        let antemodn = Snippet {
-            start: antemodn_range.start(),
-            lines: self
-                .antemod
-                .lines(antemodn_range)
-                .map(|l| l.to_string())
-                .collect(),
-        };
-        let postmodn = Snippet {
-            start: postmodn_range.start(),
-            lines: self
-                .postmod
-                .lines(postmodn_range)
-                .map(|l| l.to_string())
-                .collect(),
-        };
 
         Some(DiffChunk {
-            context_lengths,
-            antemodn,
-            postmodn,
+            context_lengths: modn_chunk.context_lengths(),
+            antemodn: self.antemod.extract_snippet(antemodn_range),
+            postmodn: self.postmod.extract_snippet(postmodn_range),
         })
     }
 }

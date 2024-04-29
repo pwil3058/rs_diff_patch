@@ -8,7 +8,7 @@ use std::ops::{Deref, DerefMut};
 use std::slice::Iter;
 
 use crate::lcs::CommonSubsequence;
-use crate::lines::BasicLines;
+use crate::lines::{BasicLines, DiffableLines};
 use crate::range::{Len, Range};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -442,8 +442,8 @@ impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
 
 pub struct ChunkIter<'a, A, P, I>
 where
-    A: BasicLines,
-    P: BasicLines,
+    A: DiffableLines,
+    P: DiffableLines,
 {
     pub antemod: &'a A,
     pub postmod: &'a P,
@@ -451,7 +451,7 @@ where
     phantom_data: PhantomData<&'a I>,
 }
 
-impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
+impl<A: DiffableLines, P: DiffableLines> Modifications<A, P> {
     pub fn chunks<'a, I>(&'a self, context: usize) -> ChunkIter<'a, A, P, I> {
         ChunkIter {
             antemod: &self.antemod,
