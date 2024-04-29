@@ -1,7 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::apply::{Applies, ApplyChunk, MatchesAt, ProgressData};
-use crate::lines::DiffableLines;
+use crate::apply::{Applies, ApplyChunk, ProgressData};
+use crate::lines::{DiffableLines, PatchableLines};
 use crate::modifications::ChunkIter;
 use crate::range::Range;
 use crate::snippet::Snippet;
@@ -73,7 +73,12 @@ impl ApplyChunk for DiffChunk {
         }
     }
 
-    fn applies(&self, lines: &impl MatchesAt, offset: isize, reverse: bool) -> Option<Applies> {
+    fn applies(
+        &self,
+        lines: &impl PatchableLines,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<Applies> {
         let antemodn = self.antemodn(reverse);
         let start = antemodn.start as isize + offset;
         if !start.is_negative() && lines.matches_at(&antemodn.lines, start as usize) {
@@ -99,7 +104,7 @@ impl ApplyChunk for DiffChunk {
 
     fn applies_nearby(
         &self,
-        lines: &impl MatchesAt,
+        lines: &impl PatchableLines,
         not_before: usize,
         next_chunk: Option<&Self>,
         offset: isize,
@@ -158,7 +163,7 @@ impl ApplyChunk for DiffChunk {
         reverse: bool,
     ) -> std::io::Result<()>
     where
-        L: MatchesAt,
+        L: PatchableLines,
         W: Write,
     {
         let antemodn = self.antemodn(reverse);
@@ -179,7 +184,7 @@ impl ApplyChunk for DiffChunk {
         reverse: bool,
     ) -> std::io::Result<()>
     where
-        L: MatchesAt,
+        L: PatchableLines,
         W: Write,
     {
         let postmodn = self.postmodn(reverse);

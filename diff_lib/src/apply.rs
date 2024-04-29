@@ -1,7 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::lines::{BasicLines, Lines};
-use crate::range::Range;
+use crate::lines::{BasicLines, PatchableLines};
 use serde::{Deserialize, Serialize};
 use std::io;
 
@@ -20,25 +19,6 @@ pub enum Applies {
     WithReductions((usize, usize)),
 }
 
-pub trait MatchesAt: BasicLines {
-    fn matches_at(&self, lines: &[String], at: usize) -> bool;
-    fn lines_as_text(&self, range: Range) -> String;
-}
-
-impl MatchesAt for Lines {
-    fn matches_at(&self, lines: &[String], at: usize) -> bool {
-        if at < self.0.len() && self.0.len() - at >= lines.len() {
-            lines.iter().zip(self.0[at..].iter()).all(|(b, a)| a == b)
-        } else {
-            false
-        }
-    }
-
-    fn lines_as_text(&self, range: Range) -> String {
-        self.0[range.0..range.1].join("")
-    }
-}
-
 pub trait ApplyChunk {
     fn antemodn_lines(
         &self,
@@ -50,10 +30,11 @@ pub trait ApplyChunk {
         reductions: Option<(usize, usize)>,
         reverse: bool,
     ) -> impl Iterator<Item = &String>;
-    fn applies(&self, lines: &impl MatchesAt, offset: isize, reverse: bool) -> Option<Applies>;
+    fn applies(&self, lines: &impl PatchableLines, offset: isize, reverse: bool)
+        -> Option<Applies>;
     fn applies_nearby(
         &self,
-        lines: &impl MatchesAt,
+        lines: &impl PatchableLines,
         not_before: usize,
         next_chunk: Option<&Self>,
         offset: isize,
@@ -61,7 +42,7 @@ pub trait ApplyChunk {
     ) -> Option<(isize, Applies)>;
     fn already_applied(
         &self,
-        lines: &impl MatchesAt,
+        lines: &impl PatchableLines,
         offset: isize,
         reverse: bool,
     ) -> Option<Applies> {
@@ -69,7 +50,7 @@ pub trait ApplyChunk {
     }
     fn already_applied_nearby(
         &self,
-        lines: &impl MatchesAt,
+        lines: &impl PatchableLines,
         not_before: usize,
         next_chunk: Option<&Self>,
         offset: isize,
@@ -85,7 +66,7 @@ pub trait ApplyChunk {
         reverse: bool,
     ) -> io::Result<()>
     where
-        L: MatchesAt,
+        L: PatchableLines,
         W: io::Write;
     fn already_applied_into<'a, L, W>(
         &self,
@@ -95,7 +76,7 @@ pub trait ApplyChunk {
         reverse: bool,
     ) -> io::Result<()>
     where
-        L: MatchesAt,
+        L: PatchableLines,
         W: io::Write;
 }
 
@@ -115,7 +96,7 @@ pub trait ApplyChunks<'a, C: ApplyChunk>: Serialize + Deserialize<'a> {
 
     fn apply_into<W>(
         &self,
-        patchable: &impl MatchesAt,
+        patchable: &impl PatchableLines,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<Statistics>
@@ -225,7 +206,7 @@ pub trait ApplyChunks<'a, C: ApplyChunk>: Serialize + Deserialize<'a> {
         Ok(stats)
     }
 
-    fn already_applied(&self, patchable: &impl MatchesAt, reverse: bool) -> bool {
+    fn already_applied(&self, patchable: &impl PatchableLines, reverse: bool) -> bool {
         let mut pd = ProgressData {
             lines: patchable,
             consumed: 0,

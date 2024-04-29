@@ -46,6 +46,25 @@ pub trait DiffableLines: BasicLines + ExtractSnippet {}
 
 impl DiffableLines for Lines {}
 
+pub trait PatchableLines: BasicLines {
+    fn matches_at(&self, lines: &[String], at: usize) -> bool;
+    fn lines_as_text(&self, range: Range) -> String;
+}
+
+impl PatchableLines for Lines {
+    fn matches_at(&self, lines: &[String], at: usize) -> bool {
+        if at < self.0.len() && self.0.len() - at >= lines.len() {
+            lines.iter().zip(self.0[at..].iter()).all(|(b, a)| a == b)
+        } else {
+            false
+        }
+    }
+
+    fn lines_as_text(&self, range: Range) -> String {
+        self.0[range.0..range.1].join("")
+    }
+}
+
 impl Lines {
     pub fn read<R: Read>(read: R) -> io::Result<Lines> {
         let mut reader = BufReader::new(read);
