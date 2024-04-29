@@ -1,20 +1,8 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crypto_hash;
 use std::io::{self, BufRead, BufReader, Read};
 
 use crate::range::*;
-
-pub trait MapKey {
-    fn map_key(&self) -> Vec<u8>;
-}
-
-impl MapKey for str {
-    fn map_key(&self) -> Vec<u8> {
-        //self.as_bytes().to_vec()
-        crypto_hash::digest(crypto_hash::Algorithm::SHA1, &self.as_bytes())
-    }
-}
 
 pub trait BasicLines: Len + Default {
     fn lines(&self, range: Range) -> impl DoubleEndedIterator<Item = &str>;
