@@ -370,10 +370,10 @@ impl<'a> Iterator for ModificationChunkIter<'a> {
             match modn {
                 NoChange(common_sequence) => {
                     if chunk.is_empty() {
-                        // Trim starts
-                        chunk.push(NoChange(common_sequence.starts_trimmed(self.context)));
+                        if self.iter.peek().is_some() {
+                            chunk.push(NoChange(common_sequence.starts_trimmed(self.context)));
+                        }
                     } else if self.iter.peek().is_none() {
-                        // Trim size
                         chunk.push(NoChange(common_sequence.ends_trimmed(self.context)));
                         break;
                     } else if let Some((head, tail)) = common_sequence.split(self.context) {
