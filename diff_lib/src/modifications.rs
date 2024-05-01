@@ -19,33 +19,21 @@ pub enum Modification {
     Replace(Range, Range),
 }
 
-pub trait MapKey {
-    fn map_key(&self) -> Vec<u8>;
-}
-
-impl MapKey for str {
-    fn map_key(&self) -> Vec<u8> {
-        //self.as_bytes().to_vec()
-        crypto_hash::digest(crypto_hash::Algorithm::SHA1, &self.as_bytes())
-    }
-}
-
 #[derive(Debug)]
 pub struct ModGenerator<'a, A: BasicLines, P: BasicLines> {
     antemod: &'a A,
     postmod: &'a P,
-    postmod_line_indices: HashMap<Vec<u8>, Vec<usize>>,
+    postmod_line_indices: HashMap<String, Vec<usize>>,
 }
 
 impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     pub fn new(antemod: &'a A, postmod: &'a P) -> Self {
-        let mut postmod_line_indices = HashMap::<Vec<u8>, Vec<usize>>::new();
+        let mut postmod_line_indices = HashMap::<String, Vec<usize>>::new();
         for (index, line) in postmod.lines(postmod.range_from(0)).enumerate() {
-            let key = line.map_key();
-            if let Some(vec) = postmod_line_indices.get_mut(&key) {
-                vec.push(index);
+            if let Some(vec) = postmod_line_indices.get_mut(line) {
+                vec.push(index)
             } else {
-                postmod_line_indices.insert(key, vec![index]);
+                postmod_line_indices.insert(line.to_string(), vec![index]);
             }
         }
 
@@ -67,7 +55,7 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         for (i, line) in self.antemod.lines(antemod_range).enumerate() {
             let index = i + antemod_range.start();
             let mut new_j_to_len = HashMap::<usize, usize>::new();
-            if let Some(indices) = self.postmod_line_indices.get(&line.map_key()) {
+            if let Some(indices) = self.postmod_line_indices.get(line) {
                 for j in indices {
                     if j < &postmod_range.start() {
                         continue;
