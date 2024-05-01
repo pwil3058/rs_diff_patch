@@ -5,8 +5,13 @@ use crate::lines::{DiffableLines, PatchableLines};
 use crate::modifications::ChunkIter;
 use crate::range::Range;
 use crate::snippet::Snippet;
+use std::fs::File;
+use std::io;
+
+use crate::{Lines, Modifications};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DiffChunk {
@@ -184,6 +189,39 @@ impl ApplyChunk for DiffChunk {
         into.write_all(text.as_bytes())?;
         pd.consumed = end;
         Ok(())
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Diff {
+    before_path: PathBuf,
+    after_path: PathBuf,
+    chunks: Vec<DiffChunk>,
+}
+
+impl Diff {
+    pub fn new(
+        before_file_path: &Path,
+        after_file_path: &Path,
+        context: usize,
+    ) -> io::Result<Self> {
+        let before_lines = Lines::read(File::open(before_file_path)?)?;
+        let after_lines = Lines::read(File::open(after_file_path)?)?;
+        let modifications = Modifications::new(before_lines, after_lines);
+
+        Ok(Self {
+            before_path: before_file_path.to_path_buf(),
+            after_path: after_file_path.to_path_buf(),
+            chunks: modifications.chunks::<DiffChunk>(context).collect(),
+        })
+    }
+
+    pub fn from_reader<R: io::Read>(reader: &mut R) -> Result<Self, serde_json::Error> {
+        serde_json::from_reader(reader)
+    }
+
+    pub fn to_writer<W: io::Write>(&self, writer: &mut W) -> Result<(), serde_json::Error> {
+        serde_json::to_writer_pretty(writer, self)
     }
 }
 
