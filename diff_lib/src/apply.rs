@@ -20,8 +20,8 @@ pub enum Applies {
 }
 
 pub trait ApplyChunk {
-    fn antemodn_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String;
-    fn postmodn_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String;
+    fn before_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String;
+    fn after_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String;
     fn applies(&self, lines: &impl PatchableLines, offset: isize, reverse: bool)
         -> Option<Applies>;
     fn applies_nearby(
@@ -179,9 +179,9 @@ pub trait ApplyChunks<'a, C: ApplyChunk>: Serialize + Deserialize<'a> {
             } else {
                 stats.failed += 1;
                 into.write_all(b"<<<<<<<\n")?;
-                into.write_all(chunk.antemodn_lines_as_text(None, reverse).as_bytes())?;
+                into.write_all(chunk.before_lines_as_text(None, reverse).as_bytes())?;
                 into.write_all(b"=======\n")?;
-                into.write_all(chunk.postmodn_lines_as_text(None, reverse).as_bytes())?;
+                into.write_all(chunk.after_lines_as_text(None, reverse).as_bytes())?;
                 into.write_all(b">>>>>>>\n")?;
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }

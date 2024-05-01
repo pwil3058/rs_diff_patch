@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DiffChunk {
     context_lengths: (usize, usize),
-    antemodn: Snippet,
-    postmodn: Snippet,
+    before: Snippet,
+    after: Snippet,
 }
 
 impl<'a, A: DiffableLines, P: DiffableLines> Iterator for ChunkIter<'a, A, P, DiffChunk> {
@@ -25,48 +25,48 @@ impl<'a, A: DiffableLines, P: DiffableLines> Iterator for ChunkIter<'a, A, P, Di
 
     fn next(&mut self) -> Option<Self::Item> {
         let modn_chunk = self.iter.next()?;
-        let (antemodn_range, postmodn_range) = modn_chunk.ranges();
+        let (before_range, after_range) = modn_chunk.ranges();
 
         Some(DiffChunk {
             context_lengths: modn_chunk.context_lengths(),
-            antemodn: self.antemod.extract_snippet(antemodn_range),
-            postmodn: self.postmod.extract_snippet(postmodn_range),
+            before: self.before.extract_snippet(before_range),
+            after: self.after.extract_snippet(after_range),
         })
     }
 }
 
 impl DiffChunk {
-    pub fn antemodn(&self, reverse: bool) -> &Snippet {
+    pub fn before(&self, reverse: bool) -> &Snippet {
         if reverse {
-            &self.postmodn
+            &self.after
         } else {
-            &self.antemodn
+            &self.before
         }
     }
 
-    pub fn postmodn(&self, reverse: bool) -> &Snippet {
+    pub fn after(&self, reverse: bool) -> &Snippet {
         if reverse {
-            &self.antemodn
+            &self.before
         } else {
-            &self.postmodn
+            &self.after
         }
     }
 }
 
 impl ApplyChunk for DiffChunk {
-    fn antemodn_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String {
+    fn before_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String {
         if reverse {
-            self.postmodn.lines_as_text(reductions)
+            self.after.lines_as_text(reductions)
         } else {
-            self.antemodn.lines_as_text(reductions)
+            self.before.lines_as_text(reductions)
         }
     }
 
-    fn postmodn_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String {
+    fn after_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String {
         if reverse {
-            self.antemodn.lines_as_text(reductions)
+            self.before.lines_as_text(reductions)
         } else {
-            self.postmodn.lines_as_text(reductions)
+            self.after.lines_as_text(reductions)
         }
     }
 
@@ -76,9 +76,9 @@ impl ApplyChunk for DiffChunk {
         offset: isize,
         reverse: bool,
     ) -> Option<Applies> {
-        let antemodn = self.antemodn(reverse);
-        let start = antemodn.start as isize + offset;
-        if !start.is_negative() && lines.matches_at(&antemodn.lines, start as usize) {
+        let before = self.before(reverse);
+        let start = before.start as isize + offset;
+        if !start.is_negative() && lines.matches_at(&before.lines, start as usize) {
             Some(Applies::Cleanly)
         } else {
             let max_reduction = self.context_lengths.0.max(self.context_lengths.1);
@@ -88,7 +88,7 @@ impl ApplyChunk for DiffChunk {
                 let adj_start = start + start_redn as isize;
                 if !adj_start.is_negative()
                     && lines.matches_at(
-                        &antemodn.lines[start_redn..antemodn.length(None) - end_redn],
+                        &before.lines[start_redn..before.length(None) - end_redn],
                         adj_start as usize,
                     )
                 {
@@ -107,27 +107,27 @@ impl ApplyChunk for DiffChunk {
         offset: isize,
         reverse: bool,
     ) -> Option<(isize, Applies)> {
-        let antemodn = self.antemodn(reverse);
+        let before = self.before(reverse);
         let not_after = if let Some(next_chunk) = next_chunk {
             let next_chunk_before = if reverse {
-                &next_chunk.postmodn
+                &next_chunk.after
             } else {
-                &next_chunk.antemodn
+                &next_chunk.before
             };
             next_chunk_before
                 .start
                 .checked_add_signed(offset)
                 .expect("overflow")
-                - antemodn.length(Some(self.context_lengths))
+                - before.length(Some(self.context_lengths))
         } else {
-            lines.len() - antemodn.length(Some(self.context_lengths))
+            lines.len() - before.length(Some(self.context_lengths))
         };
         let mut backward_done = false;
         let mut forward_done = false;
         for i in 1isize.. {
             if !backward_done {
                 let adjusted_offset = offset - i;
-                if antemodn.start as isize + adjusted_offset < not_before as isize {
+                if before.start as isize + adjusted_offset < not_before as isize {
                     backward_done = true;
                 } else {
                     if let Some(applies) = self.applies(lines, adjusted_offset, reverse) {
@@ -137,7 +137,7 @@ impl ApplyChunk for DiffChunk {
             }
             if !forward_done {
                 let adjusted_offset = offset + i;
-                if antemodn.start as isize + adjusted_offset < not_after as isize {
+                if before.start as isize + adjusted_offset < not_after as isize {
                     if let Some(applies) = self.applies(lines, adjusted_offset, reverse) {
                         return Some((i, applies));
                     }
@@ -163,12 +163,12 @@ impl ApplyChunk for DiffChunk {
         L: PatchableLines,
         W: Write,
     {
-        let antemodn = self.antemodn(reverse);
-        let end = antemodn.start(pd.offset, reductions);
+        let before = self.before(reverse);
+        let end = before.start(pd.offset, reductions);
         let text = pd.lines.lines_as_text(Range(pd.consumed, end));
         into.write_all(text.as_bytes())?;
-        into.write_all(self.postmodn_lines_as_text(reductions, reverse).as_bytes())?;
-        pd.consumed = end + antemodn.length(reductions);
+        into.write_all(self.after_lines_as_text(reductions, reverse).as_bytes())?;
+        pd.consumed = end + before.length(reductions);
         Ok(())
     }
 
@@ -183,8 +183,8 @@ impl ApplyChunk for DiffChunk {
         L: PatchableLines,
         W: Write,
     {
-        let postmodn = self.postmodn(reverse);
-        let end = postmodn.start(pd.offset, reductions) + postmodn.length(reductions);
+        let after = self.after(reverse);
+        let end = after.start(pd.offset, reductions) + after.length(reductions);
         let text = pd.lines.lines_as_text(Range(pd.consumed, end));
         into.write_all(text.as_bytes())?;
         pd.consumed = end;

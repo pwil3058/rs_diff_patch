@@ -21,46 +21,46 @@ pub enum Modification {
 
 #[derive(Debug)]
 pub struct ModGenerator<'a, A: BasicLines, P: BasicLines> {
-    antemod: &'a A,
-    postmod: &'a P,
-    postmod_line_indices: HashMap<String, Vec<usize>>,
+    before: &'a A,
+    after: &'a P,
+    after_line_indices: HashMap<String, Vec<usize>>,
 }
 
 impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
-    pub fn new(antemod: &'a A, postmod: &'a P) -> Self {
-        let mut postmod_line_indices = HashMap::<String, Vec<usize>>::new();
-        for (index, line) in postmod.lines(postmod.range_from(0)).enumerate() {
-            if let Some(vec) = postmod_line_indices.get_mut(line) {
+    pub fn new(before: &'a A, after: &'a P) -> Self {
+        let mut after_line_indices = HashMap::<String, Vec<usize>>::new();
+        for (index, line) in after.lines(after.range_from(0)).enumerate() {
+            if let Some(vec) = after_line_indices.get_mut(line) {
                 vec.push(index)
             } else {
-                postmod_line_indices.insert(line.to_string(), vec![index]);
+                after_line_indices.insert(line.to_string(), vec![index]);
             }
         }
 
         Self {
-            antemod,
-            postmod,
-            postmod_line_indices,
+            before,
+            after,
+            after_line_indices,
         }
     }
 
     fn longest_common_subsequence(
         &self,
-        antemod_range: Range,
-        postmod_range: Range,
+        before_range: Range,
+        after_range: Range,
     ) -> Option<CommonSubsequence> {
         let mut best_lcs = CommonSubsequence::default();
 
         let mut j_to_len = HashMap::<usize, usize>::new();
-        for (i, line) in self.antemod.lines(antemod_range).enumerate() {
-            let index = i + antemod_range.start();
+        for (i, line) in self.before.lines(before_range).enumerate() {
+            let index = i + before_range.start();
             let mut new_j_to_len = HashMap::<usize, usize>::new();
-            if let Some(indices) = self.postmod_line_indices.get(line) {
+            if let Some(indices) = self.after_line_indices.get(line) {
                 for j in indices {
-                    if j < &postmod_range.start() {
+                    if j < &after_range.start() {
                         continue;
                     }
-                    if j >= &postmod_range.end() {
+                    if j >= &after_range.end() {
                         break;
                     }
 
@@ -88,31 +88,31 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
             None
         } else {
             let count = self
-                .antemod
-                .lines(Range(antemod_range.start(), best_lcs.antemod_start()))
+                .before
+                .lines(Range(before_range.start(), best_lcs.before_start()))
                 .rev()
                 .zip(
-                    self.postmod
-                        .lines(Range(postmod_range.start(), best_lcs.postmod_start()))
+                    self.after
+                        .lines(Range(after_range.start(), best_lcs.after_start()))
                         .rev(),
                 )
                 .take_while(|(a, b)| a == b)
                 .count();
             best_lcs.decr_starts(
                 count
-                    .min(best_lcs.antemod_start())
-                    .min(best_lcs.postmod_start()),
+                    .min(best_lcs.before_start())
+                    .min(best_lcs.after_start()),
             );
 
-            if best_lcs.antemod_end() + 1 < antemod_range.end()
-                && best_lcs.postmod_end() + 1 < postmod_range.end()
+            if best_lcs.before_end() + 1 < before_range.end()
+                && best_lcs.after_end() + 1 < after_range.end()
             {
                 let count = self
-                    .antemod
-                    .lines(Range(best_lcs.antemod_end() + 1, antemod_range.end()))
+                    .before
+                    .lines(Range(best_lcs.before_end() + 1, before_range.end()))
                     .zip(
-                        self.postmod
-                            .lines(Range(best_lcs.postmod_end() + 1, postmod_range.end())),
+                        self.after
+                            .lines(Range(best_lcs.after_end() + 1, after_range.end())),
                     )
                     .take_while(|(a, b)| a == b)
                     .count();
@@ -124,24 +124,22 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     }
 
     fn longest_common_subsequences(&self) -> Vec<CommonSubsequence> {
-        let mut lifo = vec![(self.antemod.range_from(0), self.postmod.range_from(0))];
+        let mut lifo = vec![(self.before.range_from(0), self.after.range_from(0))];
         let mut raw_lcses = vec![];
-        while let Some((antemod_range, postmod_range)) = lifo.pop() {
-            if let Some(lcs) = self.longest_common_subsequence(antemod_range, postmod_range) {
-                if antemod_range.start() < lcs.antemod_start()
-                    && postmod_range.start() < lcs.postmod_start()
+        while let Some((before_range, after_range)) = lifo.pop() {
+            if let Some(lcs) = self.longest_common_subsequence(before_range, after_range) {
+                if before_range.start() < lcs.before_start()
+                    && after_range.start() < lcs.after_start()
                 {
                     lifo.push((
-                        Range(antemod_range.start(), lcs.antemod_start()),
-                        Range(postmod_range.start(), lcs.postmod_start()),
+                        Range(before_range.start(), lcs.before_start()),
+                        Range(after_range.start(), lcs.after_start()),
                     ))
                 };
-                if lcs.antemod_end() < antemod_range.end()
-                    && lcs.postmod_end() < postmod_range.end()
-                {
+                if lcs.before_end() < before_range.end() && lcs.after_end() < after_range.end() {
                     lifo.push((
-                        Range(lcs.antemod_end(), antemod_range.end()),
-                        Range(lcs.postmod_end(), postmod_range.end()),
+                        Range(lcs.before_end(), before_range.end()),
+                        Range(lcs.after_end(), after_range.end()),
                     ))
                 }
                 raw_lcses.push(lcs);
@@ -155,8 +153,8 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
             let mut new_lcs = *lcs;
             i += 1;
             while let Some(lcs) = raw_lcses.get(i) {
-                if new_lcs.antemod_end() == lcs.antemod_start()
-                    && new_lcs.postmod_end() == lcs.postmod_start()
+                if new_lcs.before_end() == lcs.before_start()
+                    && new_lcs.after_end() == lcs.after_start()
                 {
                     new_lcs.incr_size(lcs.len());
                     i += 1
@@ -180,9 +178,9 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
     /// use diff_lib::modifications::ModGenerator;
     /// use diff_lib::modifications::Modification::*;
     ///
-    /// let ante_lines = Lines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
-    /// let post_lines = Lines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
-    /// let modlist = ModGenerator::new(&ante_lines, &post_lines).generate();
+    /// let before_lines = Lines::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
+    /// let after_lines = Lines::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
+    /// let modlist = ModGenerator::new(&before_lines, &after_lines).generate();
     /// assert_eq!(
     ///     vec![
     ///         NoChange(CommonSubsequence(0,0,1)), Delete(Range(1, 2), 1),     ///
@@ -199,40 +197,40 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
         let mut j = 0usize;
 
         for lcs in self.longest_common_subsequences() {
-            if i < lcs.antemod_start() && j < lcs.postmod_start() {
+            if i < lcs.before_start() && j < lcs.after_start() {
                 op_codes.push(Modification::Replace(
-                    Range(i, lcs.antemod_start()),
-                    Range(j, lcs.postmod_start()),
+                    Range(i, lcs.before_start()),
+                    Range(j, lcs.after_start()),
                 ));
-            } else if i < lcs.antemod_start() {
+            } else if i < lcs.before_start() {
                 op_codes.push(Modification::Delete(
-                    Range(i, lcs.antemod_start()),
-                    lcs.postmod_start(),
+                    Range(i, lcs.before_start()),
+                    lcs.after_start(),
                 ));
-            } else if j < lcs.postmod_start() {
+            } else if j < lcs.after_start() {
                 op_codes.push(Modification::Insert(
-                    lcs.antemod_start(),
-                    Range(j, lcs.postmod_start()),
+                    lcs.before_start(),
+                    Range(j, lcs.after_start()),
                 ));
             }
             op_codes.push(Modification::NoChange(lcs));
-            i = lcs.antemod_end();
-            j = lcs.postmod_end();
+            i = lcs.before_end();
+            j = lcs.after_end();
         }
-        if i < self.antemod.len() && j < self.postmod.len() {
+        if i < self.before.len() && j < self.after.len() {
             op_codes.push(Modification::Replace(
-                self.antemod.range_from(i),
-                self.postmod.range_from(j),
+                self.before.range_from(i),
+                self.after.range_from(j),
             ));
-        } else if i < self.antemod.len() {
+        } else if i < self.before.len() {
             op_codes.push(Modification::Delete(
-                self.antemod.range_from(i),
-                self.postmod.len(),
+                self.before.range_from(i),
+                self.after.len(),
             ));
-        } else if j < self.postmod.len() {
+        } else if j < self.after.len() {
             op_codes.push(Modification::Insert(
-                self.antemod.len(),
-                self.postmod.range_from(j),
+                self.before.len(),
+                self.after.range_from(j),
             ));
         }
 
@@ -242,17 +240,17 @@ impl<'a, A: BasicLines, P: BasicLines> ModGenerator<'a, A, P> {
 
 #[derive(Debug, Default)]
 pub struct Modifications<A: BasicLines, P: BasicLines> {
-    antemod: A,
-    postmod: P,
+    before: A,
+    after: P,
     mods: Vec<Modification>,
 }
 
 impl<A: BasicLines, P: BasicLines> Modifications<A, P> {
-    pub fn new(antemod: A, postmod: P) -> Self {
-        let mods = ModGenerator::new(&antemod, &postmod).generate();
+    pub fn new(before: A, after: P) -> Self {
+        let mods = ModGenerator::new(&before, &after).generate();
         Self {
-            antemod,
-            postmod,
+            before,
+            after,
             mods,
         }
     }
@@ -280,12 +278,10 @@ impl ModificationChunk {
         use Modification::*;
         if let Some(modn) = self.0.first() {
             match modn {
-                Delete(range, postmod_start) => (range.start(), *postmod_start),
-                NoChange(match_) => (match_.antemod_start(), match_.postmod_start()),
-                Insert(antemod_start, postmod_range) => (*antemod_start, postmod_range.start()),
-                Replace(antemod_range, postmod_range) => {
-                    (antemod_range.start(), postmod_range.start())
-                }
+                Delete(range, after_start) => (range.start(), *after_start),
+                NoChange(match_) => (match_.before_start(), match_.after_start()),
+                Insert(before_start, after_range) => (*before_start, after_range.start()),
+                Replace(before_range, after_range) => (before_range.start(), after_range.start()),
             }
         } else {
             (0, 0)
@@ -296,10 +292,10 @@ impl ModificationChunk {
         use Modification::*;
         if let Some(op_code) = self.0.last() {
             match op_code {
-                Delete(range, postmod_start) => (range.end(), *postmod_start),
-                NoChange(match_) => (match_.antemod_end(), match_.postmod_end()),
-                Insert(antemod_start, postmod_range) => (*antemod_start, postmod_range.end()),
-                Replace(antemod_range, postmod_range) => (antemod_range.end(), postmod_range.end()),
+                Delete(range, after_start) => (range.end(), *after_start),
+                NoChange(match_) => (match_.before_end(), match_.after_end()),
+                Insert(before_start, after_range) => (*before_start, after_range.end()),
+                Replace(before_range, after_range) => (before_range.end(), after_range.end()),
             }
         } else {
             (0, 0)
@@ -307,12 +303,12 @@ impl ModificationChunk {
     }
 
     pub fn ranges(&self) -> (Range, Range) {
-        let (antemod_start, postmod_start) = self.starts();
-        let (antemod_end, postmod_end) = self.ends();
+        let (before_start, after_start) = self.starts();
+        let (before_end, after_end) = self.ends();
 
         (
-            Range(antemod_start, antemod_end),
-            Range(postmod_start, postmod_end),
+            Range(before_start, before_end),
+            Range(after_start, after_end),
         )
     }
 
@@ -433,8 +429,8 @@ where
     A: DiffableLines,
     P: DiffableLines,
 {
-    pub antemod: &'a A,
-    pub postmod: &'a P,
+    pub before: &'a A,
+    pub after: &'a P,
     pub iter: ModificationChunkIter<'a>,
     phantom_data: PhantomData<&'a I>,
 }
@@ -442,8 +438,8 @@ where
 impl<A: DiffableLines, P: DiffableLines> Modifications<A, P> {
     pub fn chunks<'a, I>(&'a self, context: usize) -> ChunkIter<'a, A, P, I> {
         ChunkIter {
-            antemod: &self.antemod,
-            postmod: &self.postmod,
+            before: &self.before,
+            after: &self.after,
             iter: self.modification_chunks(context),
             phantom_data: PhantomData::default(),
         }

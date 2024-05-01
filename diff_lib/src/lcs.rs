@@ -13,27 +13,27 @@ impl Len for CommonSubsequence {
 }
 
 impl CommonSubsequence {
-    pub fn antemod_range(&self) -> Range {
+    pub fn before_range(&self) -> Range {
         Range(self.0, self.0 + self.2)
     }
 
-    pub fn postmod_range(&self) -> Range {
+    pub fn after_range(&self) -> Range {
         Range(self.1, self.1 + self.2)
     }
 
-    pub fn antemod_start(&self) -> usize {
+    pub fn before_start(&self) -> usize {
         self.0
     }
 
-    pub fn postmod_start(&self) -> usize {
+    pub fn after_start(&self) -> usize {
         self.1
     }
 
-    pub fn antemod_end(&self) -> usize {
+    pub fn before_end(&self) -> usize {
         self.0 + self.2
     }
 
-    pub fn postmod_end(&self) -> usize {
+    pub fn after_end(&self) -> usize {
         self.1 + self.2
     }
 
