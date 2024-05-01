@@ -1,6 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::apply::{Applies, ApplyChunk, ProgressData};
+use crate::apply::{Applies, ApplyChunk, ApplyChunks, ProgressData};
 use crate::lines::{DiffableLines, PatchableLines};
 use crate::modifications::ChunkIter;
 use crate::range::Range;
@@ -220,8 +220,25 @@ impl Diff {
         serde_json::from_reader(reader)
     }
 
+    pub fn before_path(&self) -> &Path {
+        &self.before_path
+    }
+
+    pub fn after_path(&self) -> &Path {
+        &self.after_path
+    }
+
     pub fn to_writer<W: io::Write>(&self, writer: &mut W) -> Result<(), serde_json::Error> {
         serde_json::to_writer_pretty(writer, self)
+    }
+}
+
+impl<'a> ApplyChunks<'a, DiffChunk> for Diff {
+    fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s DiffChunk>
+    where
+        DiffChunk: 's,
+    {
+        self.chunks.iter()
     }
 }
 
