@@ -6,13 +6,16 @@ use std::path::PathBuf;
 
 use log;
 use stderrlog;
+use stderrlog::LogLevelNum;
 
 use diff_lib::apply::ApplyChunks;
 use diff_lib::{Diff, Lines};
 
 #[derive(Debug, Parser)]
 struct Cli {
-    #[arg(short, long)]
+    #[arg(short, long, action = clap::ArgAction::Count, help = "Control reporting")]
+    verbose: u8,
+    #[arg(short, long, help = "Apply the patch in reverse")]
     reverse: bool,
     #[arg(required = true)]
     patch_path: PathBuf,
@@ -21,7 +24,11 @@ struct Cli {
 fn main() {
     let args = Cli::parse();
 
-    stderrlog::new().module(module_path!()).init().unwrap();
+    stderrlog::new()
+        .module(module_path!())
+        .verbosity(LogLevelNum::from(args.verbose as usize))
+        .init()
+        .unwrap();
 
     let mut patch_file = match File::open(&args.patch_path) {
         Ok(file) => file,
