@@ -1,7 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::apply::ApplyChunks;
-use crate::diff::DiffChunk;
+use crate::diff::ChangeChunk;
 use crate::lines::Lines;
 use crate::modifications::Modifications;
 use serde::{Deserialize, Serialize};
@@ -9,12 +9,12 @@ use std::io::{Cursor, Write};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Serialize, Deserialize)]
-struct WrappedDiffChunks(pub Vec<DiffChunk>);
+struct WrappedDiffChunks(pub Vec<ChangeChunk>);
 
-impl<'a> ApplyChunks<'a, DiffChunk> for WrappedDiffChunks {
-    fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s DiffChunk>
+impl<'a> ApplyChunks<'a, ChangeChunk> for WrappedDiffChunks {
+    fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s ChangeChunk>
     where
-        DiffChunk: 's,
+        ChangeChunk: 's,
     {
         self.0.iter()
     }
@@ -58,7 +58,7 @@ fn clean_patch() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
     let after_lines = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WriteableString::default();
 
@@ -78,7 +78,7 @@ fn clean_patch_in_middle() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WriteableString::default();
     let stats = patch
@@ -97,7 +97,7 @@ fn already_partially_applied() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WriteableString::default();
     let stats = patch
@@ -116,7 +116,7 @@ fn clean_patch_reverse() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WriteableString::default();
     let stats = patch
@@ -135,7 +135,7 @@ fn displaced() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WriteableString::default();
     let stats = patch
@@ -158,7 +158,7 @@ fn displaced_no_final_eol_1() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WriteableString::default();
     let stats = patch
@@ -181,7 +181,7 @@ fn displaced_no_final_eol_2() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\na";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WriteableString::default();
     let stats = patch
@@ -204,7 +204,7 @@ fn displaced_no_final_eol_3() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     let mut patched = WriteableString::default();
     let stats = patch
@@ -227,7 +227,7 @@ fn already_applied() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
     let patch = WrappedDiffChunks(diff_chunks);
     assert!(patch.already_applied(&Lines::from(after_lines), false));
     assert!(!patch.already_applied(&Lines::from(before_lines), false));

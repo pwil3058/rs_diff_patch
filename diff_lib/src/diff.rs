@@ -10,24 +10,24 @@ use std::io;
 
 use crate::{Lines, Modifications};
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DiffChunk {
+pub struct ChangeChunk {
     context_lengths: (usize, usize),
     before: Snippet,
     after: Snippet,
 }
 
-impl<'a, A: DiffableLines, P: DiffableLines> Iterator for ChunkIter<'a, A, P, DiffChunk> {
-    type Item = DiffChunk;
+impl<'a, A: DiffableLines, P: DiffableLines> Iterator for ChunkIter<'a, A, P, ChangeChunk> {
+    type Item = ChangeChunk;
 
     fn next(&mut self) -> Option<Self::Item> {
         let modn_chunk = self.iter.next()?;
         let (before_range, after_range) = modn_chunk.ranges();
 
-        Some(DiffChunk {
+        Some(ChangeChunk {
             context_lengths: modn_chunk.context_lengths(),
             before: self.before.extract_snippet(before_range),
             after: self.after.extract_snippet(after_range),
@@ -35,7 +35,7 @@ impl<'a, A: DiffableLines, P: DiffableLines> Iterator for ChunkIter<'a, A, P, Di
     }
 }
 
-impl DiffChunk {
+impl ChangeChunk {
     pub fn before(&self, reverse: bool) -> &Snippet {
         if reverse {
             &self.after
@@ -53,7 +53,7 @@ impl DiffChunk {
     }
 }
 
-impl ApplyChunk for DiffChunk {
+impl ApplyChunk for ChangeChunk {
     fn before_lines_as_text(&self, reductions: Option<(usize, usize)>, reverse: bool) -> String {
         if reverse {
             self.after.lines_as_text(reductions)
@@ -193,13 +193,13 @@ impl ApplyChunk for DiffChunk {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Diff {
+pub struct ChangeDiff {
     before_path: PathBuf,
     after_path: PathBuf,
-    chunks: Vec<DiffChunk>,
+    chunks: Vec<ChangeChunk>,
 }
 
-impl Diff {
+impl ChangeDiff {
     pub fn new(
         before_file_path: &Path,
         after_file_path: &Path,
@@ -212,7 +212,7 @@ impl Diff {
         Ok(Self {
             before_path: before_file_path.to_path_buf(),
             after_path: after_file_path.to_path_buf(),
-            chunks: modifications.chunks::<DiffChunk>(context).collect(),
+            chunks: modifications.chunks::<ChangeChunk>(context).collect(),
         })
     }
 
@@ -233,12 +233,82 @@ impl Diff {
     }
 }
 
-impl<'a> ApplyChunks<'a, DiffChunk> for Diff {
-    fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s DiffChunk>
+impl<'a> ApplyChunks<'a, ChangeChunk> for ChangeDiff {
+    fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s ChangeChunk>
     where
-        DiffChunk: 's,
+        ChangeChunk: 's,
     {
         self.chunks.iter()
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct PathAndContent {
+    path: PathBuf,
+    lines: Vec<String>,
+}
+
+impl PathAndContent {
+    pub fn new(path: &Path) -> io::Result<Self> {
+        let mut lines = vec![];
+        let mut reader = BufReader::new(File::open(path)?);
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line)? == 0 {
+                break;
+            } else {
+                lines.push(line)
+            }
+        }
+
+        Ok(Self {
+            path: path.to_path_buf(),
+            lines,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Diff {
+    Change(ChangeDiff),
+    Create(PathAndContent),
+    Delete(PathAndContent),
+}
+
+impl Diff {
+    pub fn new(
+        before_file_path: &Path,
+        after_file_path: &Path,
+        context: usize,
+    ) -> io::Result<Self> {
+        if before_file_path.exists() {
+            if after_file_path.exists() {
+                Ok(Self::Change(ChangeDiff::new(
+                    before_file_path,
+                    after_file_path,
+                    context,
+                )?))
+            } else {
+                Ok(Self::Delete(PathAndContent::new(before_file_path)?))
+            }
+        } else if after_file_path.exists() {
+            let mut pac = PathAndContent::new(after_file_path)?;
+            pac.path = before_file_path.to_path_buf();
+            Ok(Self::Create(pac))
+        } else {
+            Err(io::Error::new(
+                ErrorKind::NotFound,
+                "Neither input file exists!",
+            ))
+        }
+    }
+
+    pub fn from_reader<R: io::Read>(reader: &mut R) -> Result<Self, serde_json::Error> {
+        serde_json::from_reader(reader)
+    }
+
+    pub fn to_writer<W: io::Write>(&self, writer: &mut W) -> Result<(), serde_json::Error> {
+        serde_json::to_writer_pretty(writer, self)
     }
 }
 

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use log;
 use stderrlog;
 
-use diff_lib::Diff;
+use diff_lib::ChangeDiff;
 
 #[derive(Parser)]
 struct Cli {
@@ -22,7 +22,7 @@ fn main() {
 
     stderrlog::new().module(module_path!()).init().unwrap();
 
-    let diff = match Diff::new(&args.before_file_path, &args.after_file_path, args.context) {
+    let diff = match ChangeDiff::new(&args.before_file_path, &args.after_file_path, args.context) {
         Ok(diff) => diff,
         Err(err) => {
             log::error!("Error: {err}");

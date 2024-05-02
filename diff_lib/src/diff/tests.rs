@@ -10,7 +10,7 @@ fn diff_chunk_applies() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
     let after_lines = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
 
     for diff_chunk in diff_chunks.iter() {
         assert_eq!(
@@ -78,7 +78,7 @@ fn find_compromise() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
     let after_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nX\nY\nZ\n\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
 
     assert_eq!(
         diff_chunks
@@ -102,7 +102,7 @@ fn find_compromise_edges() {
     let after_lines =
         "A\nX\nB\nC\nD\nE\nF\nG\nH\nI\nX\nY\nZ\n\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nX\nY\nZ\nT\n";
     let modifications = Modifications::new(Lines::from(before_lines), Lines::from(after_lines));
-    let diff_chunks: Vec<DiffChunk> = modifications.chunks::<DiffChunk>(2).collect();
+    let diff_chunks: Vec<ChangeChunk> = modifications.chunks::<ChangeChunk>(2).collect();
     assert_eq!(diff_chunks.len(), 3);
 
     assert_eq!(

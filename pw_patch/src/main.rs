@@ -6,7 +6,7 @@ use log;
 use stderrlog;
 
 use diff_lib::apply::ApplyChunks;
-use diff_lib::{Diff, Lines};
+use diff_lib::{ChangeDiff, Lines};
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -29,7 +29,7 @@ fn main() {
         }
     };
 
-    let diff: Diff = match Diff::from_reader(&mut patch_file) {
+    let diff: ChangeDiff = match ChangeDiff::from_reader(&mut patch_file) {
         Ok(diff) => diff,
         Err(err) => {
             log::error!("Error reading patch file: {err}");
