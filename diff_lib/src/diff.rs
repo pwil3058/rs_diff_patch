@@ -266,6 +266,14 @@ impl PathAndContent {
             lines,
         })
     }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn lines_as_text(&self) -> String {
+        self.lines.join("")
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
