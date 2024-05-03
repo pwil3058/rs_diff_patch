@@ -4,3 +4,4 @@ pub mod common_subsequence;
 pub mod data;
 pub mod modifications;
 pub mod range;
+pub mod snippet;
