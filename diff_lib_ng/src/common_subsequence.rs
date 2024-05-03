@@ -49,24 +49,28 @@ impl CommonSubsequence {
         self.2 -= arg;
     }
 
-    pub fn starts_trimmed(&self, arg: usize) -> Self {
-        if self.2 > arg {
-            Self(self.0 + self.2 - arg, self.1 + self.2 - arg, arg)
+    pub fn starts_trimmed(&self, arg: u8) -> Self {
+        if self.2 > arg as usize {
+            Self(
+                self.0 + self.2 - arg as usize,
+                self.1 + self.2 - arg as usize,
+                arg as usize,
+            )
         } else {
             *self
         }
     }
 
-    pub fn ends_trimmed(&self, arg: usize) -> Self {
-        if self.2 > arg {
-            Self(self.0, self.1, arg)
+    pub fn ends_trimmed(&self, arg: u8) -> Self {
+        if self.2 > arg as usize {
+            Self(self.0, self.1, arg as usize)
         } else {
             *self
         }
     }
 
-    pub fn split(&self, arg: usize) -> Option<(Self, Self)> {
-        if self.2 >= arg * 2 {
+    pub fn split(&self, arg: u8) -> Option<(Self, Self)> {
+        if self.2 >= arg as usize * 2 {
             Some((self.ends_trimmed(arg), self.starts_trimmed(arg)))
         } else {
             None

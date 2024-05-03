@@ -337,7 +337,7 @@ impl ModificationChunk {
         )
     }
 
-    pub fn context_lengths(&self) -> (usize, usize) {
+    pub fn context_lengths(&self) -> (u8, u8) {
         use Modification::NoChange;
         let start = if let Some(modn) = self.first() {
             match modn {
@@ -355,13 +355,13 @@ impl ModificationChunk {
         } else {
             0
         };
-        (start, end)
+        (start as u8, end as u8)
     }
 }
 
 pub struct ModificationChunkIter<'a> {
     iter: Peekable<Iter<'a, Modification>>,
-    context: usize,
+    context: u8,
     stash: Option<CommonSubsequence>,
 }
 
@@ -440,7 +440,7 @@ impl<T: PartialEq> Modifications<T> {
     ///     ]
     /// );
     /// ```
-    pub fn modification_chunks<'a>(&'a self, context: usize) -> ModificationChunkIter<'a> {
+    pub fn modification_chunks<'a>(&'a self, context: u8) -> ModificationChunkIter<'a> {
         ModificationChunkIter {
             iter: self.mods.iter().peekable(),
             context,
@@ -456,7 +456,7 @@ pub struct ChunkIter<'a, T: PartialEq> {
 }
 
 impl<T: PartialEq> Modifications<T> {
-    pub fn chunks<'a, I>(&'a self, context: usize) -> ChunkIter<'a, T> {
+    pub fn chunks<'a, I>(&'a self, context: u8) -> ChunkIter<'a, T> {
         ChunkIter {
             before: &self.before,
             after: &self.after,
