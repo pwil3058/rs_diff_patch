@@ -52,13 +52,14 @@ impl SnippetWrite for Snippet<u8> {
 impl SnippetWrite for Snippet<String> {
     fn write_into<W: Write>(&self, writer: &mut W, reductions: Option<(u8, u8)>) -> io::Result<()> {
         if let Some((start, end)) = reductions {
-            writer.write_all(
-                &self.items[start as usize..self.items.len() - end as usize]
-                    .join("")
-                    .as_bytes(),
-            )
+            for string in self.items[start as usize..self.items.len() - end as usize].iter() {
+                writer.write_all(string.as_bytes())?;
+            }
         } else {
-            writer.write_all(&self.items.join("").as_bytes())
+            for string in self.items.iter() {
+                writer.write_all(string.as_bytes())?;
+            }
         }
+        Ok(())
     }
 }
