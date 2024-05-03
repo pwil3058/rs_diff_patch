@@ -49,39 +49,35 @@ impl CommonSubsequence {
         self.2 -= arg;
     }
 
-    pub fn starts_trimmed(&self, arg: u8) -> Self {
-        if self.2 > arg as usize {
-            Self(
-                self.0 + self.2 - arg as usize,
-                self.1 + self.2 - arg as usize,
-                arg as usize,
-            )
-        } else {
-            *self
-        }
+    pub fn starts_trimmed(&self, requested_size: u8) -> Self {
+        let new_size = self.2.min(requested_size as usize);
+        Self(
+            self.0 + self.2 - new_size,
+            self.1 + self.2 - new_size,
+            new_size,
+        )
     }
 
-    pub fn ends_trimmed(&self, arg: u8) -> Self {
-        if self.2 > arg as usize {
-            Self(self.0, self.1, arg as usize)
-        } else {
-            *self
-        }
+    pub fn ends_trimmed(&self, requested_size: u8) -> Self {
+        Self(self.0, self.1, self.2.min(requested_size as usize))
     }
 
-    pub fn split(&self, arg: u8) -> Option<(Self, Self)> {
-        if self.2 >= arg as usize * 2 {
-            Some((self.ends_trimmed(arg), self.starts_trimmed(arg)))
+    pub fn split(&self, requested_size: u8) -> Option<(Self, Self)> {
+        if self.2 >= requested_size as usize * 2 {
+            Some((
+                self.ends_trimmed(requested_size),
+                self.starts_trimmed(requested_size),
+            ))
         } else {
             None
         }
     }
 
-    pub fn incr_size(&mut self, arg: usize) {
-        self.2 += arg;
+    pub fn incr_size(&mut self, increment: usize) {
+        self.2 += increment;
     }
 
-    pub fn decr_size(&mut self, arg: usize) {
-        self.2 -= arg;
+    pub fn decr_size(&mut self, decrement: usize) {
+        self.2 -= decrement;
     }
 }
