@@ -37,16 +37,14 @@ impl CommonSubsequence {
         self.1 + self.2
     }
 
-    pub fn decr_starts(&mut self, arg: usize) {
+    pub fn incr_size_moving_starts(&mut self, arg: usize) {
         self.0 -= arg;
         self.1 -= arg;
         self.2 += arg;
     }
 
-    pub fn incr_starts(&mut self, arg: usize) {
-        self.0 += arg;
-        self.1 += arg;
-        self.2 -= arg;
+    pub fn incr_size_moving_ends(&mut self, increment: usize) {
+        self.2 += increment;
     }
 
     pub fn starts_trimmed(&self, requested_size: u8) -> Self {
@@ -71,13 +69,5 @@ impl CommonSubsequence {
         } else {
             None
         }
-    }
-
-    pub fn incr_size(&mut self, increment: usize) {
-        self.2 += increment;
-    }
-
-    pub fn decr_size(&mut self, decrement: usize) {
-        self.2 -= decrement;
     }
 }

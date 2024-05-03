@@ -112,7 +112,7 @@ impl<'a, T: PartialEq, I: ContentIndices<T>> ModGenerator<'a, T, I> {
                 )
                 .take_while(|(a, b)| a == b)
                 .count();
-            best_lcs.decr_starts(
+            best_lcs.incr_size_moving_starts(
                 count
                     .min(best_lcs.before_start())
                     .min(best_lcs.after_start()),
@@ -130,7 +130,7 @@ impl<'a, T: PartialEq, I: ContentIndices<T>> ModGenerator<'a, T, I> {
                     )
                     .take_while(|(a, b)| a == b)
                     .count();
-                best_lcs.incr_size(count);
+                best_lcs.incr_size_moving_ends(count);
             }
 
             Some(best_lcs)
@@ -170,7 +170,7 @@ impl<'a, T: PartialEq, I: ContentIndices<T>> ModGenerator<'a, T, I> {
                 if new_lcs.before_end() == lcs.before_start()
                     && new_lcs.after_end() == lcs.after_start()
                 {
-                    new_lcs.incr_size(lcs.len());
+                    new_lcs.incr_size_moving_ends(lcs.len());
                     i += 1
                 } else {
                     break;
