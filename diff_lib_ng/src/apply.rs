@@ -3,18 +3,31 @@
 use crate::data::{DataIfce, WriteDataInto};
 use crate::range::Range;
 use crate::snippet::{SnippetIfec, SnippetWrite};
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::io;
 use std::marker::PhantomData;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
-pub struct PatchableData<'a, T: PartialEq, D: DataIfce<T>> {
+use crate::data;
+use log;
+
+#[derive(Debug, Clone)]
+pub struct PatchableData<'a, T, D>
+where
+    T: PartialEq,
+    D: DataIfce<T> + WriteDataInto,
+{
     data: &'a D,
     consumed: usize,
     phantom_data: PhantomData<&'a T>,
 }
 
-impl<'a, T: PartialEq, D: DataIfce<T>> Deref for PatchableData<'a, T, D> {
+impl<'a, T, D> Deref for PatchableData<'a, T, D>
+where
+    T: PartialEq,
+    D: DataIfce<T> + WriteDataInto,
+{
     type Target = D;
 
     fn deref(&self) -> &Self::Target {
@@ -22,10 +35,24 @@ impl<'a, T: PartialEq, D: DataIfce<T>> Deref for PatchableData<'a, T, D> {
     }
 }
 
-pub trait PatchableDataIfce<'a, T: PartialEq, D: DataIfce<T>> {
+impl<'a, T, D> DerefMut for PatchableData<'a, T, D>
+where
+    T: PartialEq,
+    D: DataIfce<T> + WriteDataInto,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        mut self.data
+    }
+}
+
+pub trait PatchableDataIfce<'a, T: PartialEq, D: DataIfce<T>>
+where
+    D: WriteDataInto,
+{
     fn new(data: &'a D) -> Self;
     fn incr_consumed(&mut self, increment: usize);
     fn write_upto_into<W: io::Write>(&mut self, upto: usize, writer: &mut W) -> io::Result<bool>;
+    fn write_remainder<W: io::Write>(&mut self, writer: &mut W) -> io::Result<bool>;
 }
 
 impl<'a, T: PartialEq, D: DataIfce<T> + WriteDataInto> PatchableDataIfce<'a, T, D>
@@ -57,6 +84,11 @@ impl<'a, T: PartialEq, D: DataIfce<T> + WriteDataInto> PatchableDataIfce<'a, T, 
         } else {
             Ok(false)
         }
+    }
+    fn write_remainder<W: io::Write>(&mut self, writer: &mut W) -> io::Result<bool> {
+        let range = self.range_from(self.consumed);
+        self.consumed = self.len();
+        self.data.write_into(writer, range)
     }
 }
 
@@ -99,5 +131,80 @@ pub trait AppliableChunk<
         } else {
             Ok(false)
         }
+    }
+}
+
+pub trait ApplyChunkClean<'a, T, D>
+where
+    T: PartialEq,
+    D: DataIfce<T> + WriteDataInto,
+{
+    fn applies(&self, data: &D, reverse: bool) -> bool;
+    fn already_applied(&self, data: &D, reverse: bool) -> bool;
+    fn apply_into<W: io::Write>(
+        &self,
+        patchable: &mut D,
+        into: &mut W,
+        reverse: bool,
+    ) -> io::Result<bool>;
+    fn already_applied_into<W: io::Write>(
+        &self,
+        patchable: &mut D,
+        into: &mut W,
+        reverse: bool,
+    ) -> io::Result<bool>;
+}
+
+pub trait ApplyChunksClean<'a, T, D, C>
+where
+    T: 'a + PartialEq,
+    D: DataIfce<T> + WriteDataInto,
+    C: ApplyChunkClean<'a, T, D>,
+{
+    fn chunks<'b>(&'b self) -> impl Iterator<Item = &'b C>
+    where
+        C: 'b;
+
+    fn apply_into<W: io::Write>(
+        &self,
+        patchable: &'a D,
+        into: &mut W,
+        reverse: bool,
+    ) -> io::Result<bool> {
+        let mut pd = PatchableData::<T, D>::new(patchable);
+        let mut iter = self.chunks();
+        let mut chunk_num = 0;
+        let mut success = true;
+        while let Some(chunk) = iter.next() {
+            chunk_num += 1; // for human consumption
+            if chunk.applies(patchable, reverse) {
+                chunk.apply_into(&mut pd, into, reverse)?;
+                log::info!("Chunk #{chunk_num} applies cleanly.");
+            } else if chunk.already_applied(patchable, reverse) {
+                chunk.already_applied_into(&mut pd, into, reverse)?;
+                log::warn!("Chunk #{chunk_num} already applied");
+            } else {
+                success = false;
+                log::error!("Chunk #{chunk_num} could NOT be applied!");
+            }
+        }
+        pd.write_remainder(into)
+    }
+
+    fn already_applied(&self, patchable: &D, reverse: bool) -> bool {
+        let mut pd = PatchableData::<T, D>::new(patchable);
+        let mut iter = self.chunks();
+        let mut chunk_num = 0;
+        let mut iter = self.chunks().peekable();
+        while let Some(chunk) = iter.next() {
+            chunk_num += 1; // for human consumption
+            if chunk.already_applied(&pd, reverse) {
+                log::info!("Chunk #{chunk_num} already applied")
+            } else {
+                log::error!("Chunk #{chunk_num} NOT already applied!");
+                return false;
+            }
+        }
+        true
     }
 }
