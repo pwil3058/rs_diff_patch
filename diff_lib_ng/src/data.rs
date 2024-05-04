@@ -162,3 +162,29 @@ impl<T: PartialEq> Data<T> {
         }
     }
 }
+
+pub trait DataIfce<T: PartialEq>: Len + GenerateContentIndices<T> + WriteDataInto {
+    fn data(&self) -> &Box<[T]>;
+
+    fn range_from(&self, from: usize) -> Range {
+        Range(from, self.len())
+    }
+
+    fn subsequence<'a>(&'a self, range: Range) -> impl DoubleEndedIterator<Item = &'a T>
+    where
+        T: 'a,
+    {
+        self.data()[range.0..range.1].iter()
+    }
+
+    fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
+        if at < self.len() && self.len() - at >= subsequence.len() {
+            subsequence
+                .iter()
+                .zip(self.data()[at..].iter())
+                .all(|(b, a)| a == b)
+        } else {
+            false
+        }
+    }
+}
