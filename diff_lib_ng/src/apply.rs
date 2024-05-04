@@ -67,12 +67,22 @@ pub trait AppliableChunk<
     S: SnippetIfec<T> + SnippetWrite,
 >
 {
-    fn before(&self, reverse: bool) -> &S;
-    fn after(&self, reverse: bool) -> &S;
+    // fn before(&self, reverse: bool) -> &S;
+    // fn after(&self, reverse: bool) -> &S;
+    fn before_start(&self, fuzz: Option<(isize, (usize, usize))>, reverse: bool) -> usize;
+    fn before_items(&self, reductions: Option<(usize, usize)>, reverse: bool) -> &[T];
+    fn before_length(&self, reductions: Option<(usize, usize)>, reverse: bool) -> usize;
+    fn after_write_into<W: io::Write>(
+        &self,
+        writer: &mut W,
+        reductions: Option<(u8, u8)>,
+    ) -> io::Result<()>;
 
     fn applies_cleanly(&self, pd: &PatchableData<'a, T, D>, reverse: bool) -> bool {
-        let before = self.before(reverse);
-        pd.has_subsequence_at(&before.items(), before.start())
+        pd.has_subsequence_at(
+            &self.before_items(None, reverse),
+            self.before_start(None, reverse),
+        )
     }
 
     fn apply_into_cleanly<W: io::Write>(
@@ -81,11 +91,10 @@ pub trait AppliableChunk<
         into: &mut W,
         reverse: bool,
     ) -> io::Result<bool> {
-        let before = self.before(reverse);
-        if pd.write_upto_into(before.start(), into)? {
-            let after = self.after(reverse);
-            let _ = after.write_into(into, None);
-            pd.incr_consumed(before.len());
+        let start = self.before_start(None, reverse);
+        if pd.write_upto_into(start, into)? {
+            let _ = self.after_write_into(into, None);
+            pd.incr_consumed(self.before_length(None, reverse));
             Ok(true)
         } else {
             Ok(false)
