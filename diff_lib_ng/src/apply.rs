@@ -1,6 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::data::DataIfce;
+use crate::data::{DataIfce, WriteDataInto};
 use crate::range::Range;
 use crate::snippet::{SnippetIfec, SnippetWrite};
 use std::cmp::Ordering;
@@ -28,7 +28,9 @@ pub trait PatchableDataIfce<'a, T: PartialEq, D: DataIfce<T>> {
     fn write_upto_into<W: io::Write>(&mut self, upto: usize, writer: &mut W) -> io::Result<bool>;
 }
 
-impl<'a, T: PartialEq, D: DataIfce<T>> PatchableDataIfce<'a, T, D> for PatchableData<'a, T, D> {
+impl<'a, T: PartialEq, D: DataIfce<T> + WriteDataInto> PatchableDataIfce<'a, T, D>
+    for PatchableData<'a, T, D>
+{
     fn new(data: &'a D) -> Self {
         Self {
             data,
@@ -58,7 +60,13 @@ impl<'a, T: PartialEq, D: DataIfce<T>> PatchableDataIfce<'a, T, D> for Patchable
     }
 }
 
-pub trait AppliableChunk<'a, T: PartialEq, D: DataIfce<T>, S: SnippetIfec<T> + SnippetWrite> {
+pub trait AppliableChunk<
+    'a,
+    T: PartialEq,
+    D: DataIfce<T> + WriteDataInto,
+    S: SnippetIfec<T> + SnippetWrite,
+>
+{
     fn before(&self, reverse: bool) -> &S;
     fn after(&self, reverse: bool) -> &S;
 

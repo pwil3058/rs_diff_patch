@@ -140,30 +140,30 @@ impl WriteDataInto for Data<String> {
         }
     }
 }
+//
+// impl<T: PartialEq> Data<T> {
+//     /// Convenience function
+//     pub fn range_from(&self, from: usize) -> Range {
+//         Range(from, self.0.len())
+//     }
+//
+//     pub fn subsequence(&self, range: Range) -> impl DoubleEndedIterator<Item = &T> {
+//         self.0[range.0..range.1].iter()
+//     }
+//
+//     pub fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
+//         if at < self.0.len() && self.0.len() - at >= subsequence.len() {
+//             subsequence
+//                 .iter()
+//                 .zip(self.0[at..].iter())
+//                 .all(|(b, a)| a == b)
+//         } else {
+//             false
+//         }
+//     }
+// }
 
-impl<T: PartialEq> Data<T> {
-    /// Convenience function
-    pub fn range_from(&self, from: usize) -> Range {
-        Range(from, self.0.len())
-    }
-
-    pub fn subsequence(&self, range: Range) -> impl DoubleEndedIterator<Item = &T> {
-        self.0[range.0..range.1].iter()
-    }
-
-    pub fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
-        if at < self.0.len() && self.0.len() - at >= subsequence.len() {
-            subsequence
-                .iter()
-                .zip(self.0[at..].iter())
-                .all(|(b, a)| a == b)
-        } else {
-            false
-        }
-    }
-}
-
-pub trait DataIfce<T: PartialEq>: Len + GenerateContentIndices<T> + WriteDataInto {
+pub trait DataIfce<T: PartialEq>: Len {
     fn data(&self) -> &Box<[T]>;
 
     fn range_from(&self, from: usize) -> Range {
@@ -186,5 +186,11 @@ pub trait DataIfce<T: PartialEq>: Len + GenerateContentIndices<T> + WriteDataInt
         } else {
             false
         }
+    }
+}
+
+impl<T: PartialEq> DataIfce<T> for Data<T> {
+    fn data(&self) -> &Box<[T]> {
+        &self.0
     }
 }

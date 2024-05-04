@@ -1,10 +1,13 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::common_subsequence::*;
-use crate::data::{ByteIndices, ContentIndices, Data, GenerateContentIndices, LineIndices};
+use crate::data::{
+    ByteIndices, ContentIndices, Data, DataIfce, GenerateContentIndices, LineIndices,
+};
 use crate::range::*;
 use std::collections::HashMap;
 use std::iter::Peekable;
+use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::slice::Iter;
 
@@ -19,50 +22,51 @@ pub enum Modification {
 }
 
 #[derive(Debug)]
-pub struct ModGenerator<'a, T, I>
-where
-    T: PartialEq,
-    I: ContentIndices<T>,
-{
-    before: &'a Data<T>,
-    after: &'a Data<T>,
+pub struct ModificationsGenerator<'a, T: PartialEq, D: DataIfce<T>, I: ContentIndices<T>> {
+    before: &'a D,
+    after: &'a D,
     before_content_indices: I,
+    phantom_data: PhantomData<&'a T>,
 }
 
-impl<'a> ModGenerator<'a, String, LineIndices> {
+impl<'a> ModificationsGenerator<'a, String, Data<String>, LineIndices> {
     pub fn new(before: &'a Data<String>, after: &'a Data<String>) -> Self {
         let before_content_indices = before.generate_content_indices();
         Self {
             before,
             after,
             before_content_indices,
+            phantom_data: PhantomData,
         }
     }
 }
 
-impl<'a> ModGenerator<'a, u8, ByteIndices> {
+impl<'a> ModificationsGenerator<'a, u8, Data<u8>, ByteIndices> {
     pub fn new(before: &'a Data<u8>, after: &'a Data<u8>) -> Self {
         let before_content_indices = before.generate_content_indices();
         Self {
             before,
             after,
             before_content_indices,
+            phantom_data: PhantomData,
         }
     }
 }
 
-impl<'a, T: PartialEq, I: ContentIndices<T>> ModGenerator<'a, T, I> {
+impl<'a, T: PartialEq, D: DataIfce<T> + GenerateContentIndices<T>, I: ContentIndices<T>>
+    ModificationsGenerator<'a, T, D, I>
+{
     /// Find the longest common subsequences in the given subsequences
     ///
     /// Example:
     /// ```
-    /// use diff_lib_ng::data::{Data, LineIndices};
-    /// use diff_lib_ng::modifications::ModGenerator;
+    /// use diff_lib_ng::data::{Data, LineIndices, DataIfce};
+    /// use diff_lib_ng::modifications::ModificationsGenerator;
     /// use diff_lib_ng::range::Range;
     /// use diff_lib_ng::common_subsequence::CommonSubsequence;
     /// let before = Data::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\n");
     /// let after = Data::<String>::from("X\nY\nZ\nC\nD\nE\nH\nI\nX\n");
-    /// let generator = ModGenerator::<String, LineIndices>::new(&before, &after);
+    /// let generator = ModificationsGenerator::<String, Data<String>, LineIndices>::new(&before, &after);
     /// assert_eq!(Some(CommonSubsequence(2,3,3)), generator.longest_common_subsequence(before.range_from(0), after.range_from(0)));
     /// ```
     pub fn longest_common_subsequence(
@@ -189,12 +193,12 @@ impl<'a, T: PartialEq, I: ContentIndices<T>> ModGenerator<'a, T, I> {
     /// use diff_lib_ng::range::Range;
     /// use diff_lib_ng::data::{Data, LineIndices};
     /// use diff_lib_ng::common_subsequence::CommonSubsequence;
-    /// use diff_lib_ng::modifications::ModGenerator;
+    /// use diff_lib_ng::modifications::ModificationsGenerator;
     /// use diff_lib_ng::modifications::Modification::*;
     ///
     /// let before_lines = Data::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
     /// let after_lines = Data::<String>::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
-    /// let modlist = ModGenerator::<String, LineIndices>::new(&before_lines, &after_lines).generate();
+    /// let modlist = ModificationsGenerator::<String, Data<String>, LineIndices>::new(&before_lines, &after_lines).generate();
     /// assert_eq!(
     ///     vec![
     ///         NoChange(CommonSubsequence(0,0,1)), Delete(Range(1, 2), 1),
@@ -261,7 +265,9 @@ pub struct Modifications<T: PartialEq> {
 
 impl Modifications<String> {
     pub fn new(before: Data<String>, after: Data<String>) -> Self {
-        let mods = ModGenerator::<String, LineIndices>::new(&before, &after).generate();
+        let mods =
+            ModificationsGenerator::<String, Data<String>, LineIndices>::new(&before, &after)
+                .generate();
         Self {
             before,
             after,
@@ -272,7 +278,8 @@ impl Modifications<String> {
 
 impl Modifications<u8> {
     pub fn new(before: Data<u8>, after: Data<u8>) -> Self {
-        let mods = ModGenerator::<u8, ByteIndices>::new(&before, &after).generate();
+        let mods =
+            ModificationsGenerator::<u8, Data<u8>, ByteIndices>::new(&before, &after).generate();
         Self {
             before,
             after,
