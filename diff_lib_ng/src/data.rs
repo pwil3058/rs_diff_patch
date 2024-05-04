@@ -2,6 +2,8 @@
 
 use crate::range::{Len, Range};
 use std::collections::HashMap;
+use std::io;
+use std::io::Write;
 
 pub trait ContentIndices<T> {
     fn indices(&self, key: &T) -> Option<&Vec<usize>>;
@@ -111,6 +113,34 @@ impl GenerateContentIndices<u8> for Data<u8> {
     }
 }
 
+pub trait WriteDataInto {
+    fn write_into<W: io::Write>(&self, into: &mut W, range: Range) -> io::Result<bool>;
+}
+
+impl WriteDataInto for Data<u8> {
+    fn write_into<W: Write>(&self, into: &mut W, range: Range) -> io::Result<bool> {
+        if range.end() > self.len() || range.start() > self.len() {
+            Ok(false)
+        } else {
+            into.write_all(&self.0[range.start()..range.end()])?;
+            Ok(true)
+        }
+    }
+}
+
+impl WriteDataInto for Data<String> {
+    fn write_into<W: Write>(&self, into: &mut W, range: Range) -> io::Result<bool> {
+        if range.end() > self.len() || range.start() > self.len() {
+            Ok(false)
+        } else {
+            for datum in self.0[range.start()..range.end()].iter() {
+                into.write_all(datum.as_bytes())?;
+            }
+            Ok(true)
+        }
+    }
+}
+
 impl<T: PartialEq> Data<T> {
     /// Convenience function
     pub fn range_from(&self, from: usize) -> Range {
@@ -119,5 +149,16 @@ impl<T: PartialEq> Data<T> {
 
     pub fn subsequence(&self, range: Range) -> impl DoubleEndedIterator<Item = &T> {
         self.0[range.0..range.1].iter()
+    }
+
+    pub fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
+        if at < self.0.len() && self.0.len() - at >= subsequence.len() {
+            subsequence
+                .iter()
+                .zip(self.0[at..].iter())
+                .all(|(b, a)| a == b)
+        } else {
+            false
+        }
     }
 }
