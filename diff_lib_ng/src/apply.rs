@@ -203,7 +203,8 @@ where
         &self,
         into: &mut W,
         pd: &mut PatchableData<T, D>,
-        reductions: Option<(usize, usize)>,
+        offset: isize,
+        reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> io::Result<()>;
     fn applies_nearby(
@@ -225,7 +226,7 @@ where
         &self,
         into: &mut W,
         pd: &mut PatchableData<T, D>,
-        reductions: Option<(usize, usize)>,
+        reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> io::Result<()>;
     fn write_failure_data_into<W: io::Write>(&self, into: &mut W);
@@ -234,7 +235,7 @@ where
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Applies {
     Cleanly,
-    WithReductions((usize, usize)),
+    WithReductions((u8, u8)),
 }
 
 #[derive(Debug, Default)]
@@ -272,12 +273,12 @@ where
             if let Some(applies) = chunk.applies(patchable, offset, reverse) {
                 match applies {
                     Applies::Cleanly => {
-                        chunk.apply_into(into, &mut pd, None, reverse)?;
+                        chunk.apply_into(into, &mut pd, offset, None, reverse)?;
                         stats.clean += 1;
                         log::info!("Chunk #{chunk_num} applies cleanly.");
                     }
                     Applies::WithReductions(reductions) => {
-                        chunk.apply_into(into, &mut pd, Some(reductions), reverse)?;
+                        chunk.apply_into(into, &mut pd, offset, Some(reductions), reverse)?;
                         stats.fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions.");
                     }
@@ -288,12 +289,12 @@ where
                 offset += offset_adj;
                 match applies {
                     Applies::Cleanly => {
-                        chunk.apply_into(into, &mut pd, None, reverse)?;
+                        chunk.apply_into(into, &mut pd, offset, None, reverse)?;
                         stats.fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} applies with offset {offset_adj}.");
                     }
                     Applies::WithReductions(reductions) => {
-                        chunk.apply_into(into, &mut pd, Some(reductions), reverse)?;
+                        chunk.apply_into(into, &mut pd, offset, Some(reductions), reverse)?;
                         stats.fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions and offset {offset_adj}.");
                     }

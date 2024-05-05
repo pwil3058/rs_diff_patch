@@ -1,7 +1,9 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::apply::{ApplyChunkClean, ApplyChunksClean, PatchableData, PatchableDataIfce};
-use crate::data::{Data, DataIfce};
+use crate::apply::{
+    Applies, ApplyChunkClean, ApplyChunkFuzzy, ApplyChunksClean, PatchableData, PatchableDataIfce,
+};
+use crate::data::{Data, DataIfce, WriteDataInto};
 use crate::modifications::ChunkIter;
 use crate::range::Len;
 use crate::snippet::{Snippet, SnippetWrite};
@@ -107,4 +109,131 @@ impl<'a> ApplyChunksClean<'a, u8, Data<u8>, ByteChangeChunk> for ByteChangeDiff 
     {
         self.chunks.iter()
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TextChangeChunk {
+    context_lengths: (u8, u8),
+    before: Snippet<String>,
+    after: Snippet<String>,
+}
+
+impl<'a> Iterator for ChunkIter<'a, String>
+where
+    Data<String>: ExtractSnippet<String>,
+{
+    type Item = crate::diff::TextChangeChunk;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let modn_chunk = self.iter.next()?;
+        let (before_range, after_range) = modn_chunk.ranges();
+
+        Some(crate::diff::TextChangeChunk {
+            context_lengths: modn_chunk.context_lengths(),
+            before: self.before.extract_snippet(before_range),
+            after: self.after.extract_snippet(after_range),
+        })
+    }
+}
+
+impl crate::diff::TextChangeChunk {
+    pub fn before(&self, reverse: bool) -> &Snippet<String> {
+        if reverse {
+            &self.after
+        } else {
+            &self.before
+        }
+    }
+
+    pub fn after(&self, reverse: bool) -> &Snippet<String> {
+        if reverse {
+            &self.before
+        } else {
+            &self.after
+        }
+    }
+}
+
+impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
+    fn applies(&self, patchable: &Data<String>, offset: isize, reverse: bool) -> Option<Applies> {
+        let before = self.before(reverse);
+        let start = before.start as isize + offset;
+        if !start.is_negative() && patchable.has_subsequence_at(&before.items, start as usize) {
+            Some(Applies::Cleanly)
+        } else {
+            let max_reduction = self.context_lengths.0.max(self.context_lengths.1);
+            for redn in 1..max_reduction {
+                let start_redn = redn.min(self.context_lengths.0);
+                let end_redn = redn.min(self.context_lengths.1);
+                let adj_start = start + start_redn as isize;
+                if !adj_start.is_negative()
+                    && patchable.has_subsequence_at(
+                        &before.items
+                            [start_redn as usize..before.adj_length(None) - end_redn as usize],
+                        adj_start as usize,
+                    )
+                {
+                    return Some(Applies::WithReductions((start_redn, end_redn)));
+                }
+            }
+            None
+        }
+    }
+
+    fn apply_into<W: io::Write>(
+        &self,
+        into: &mut W,
+        pd: &mut PatchableData<String, Data<String>>,
+        offset: isize,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> io::Result<()> {
+        let before = self.before(reverse);
+        let end = before.adj_start(offset, reductions);
+        pd.write_into_upto(into, end)?;
+        self.after(reverse).write_into(into, None)?;
+        pd.advance_consumed_by(before.adj_length(reductions));
+        Ok(())
+    }
+
+    fn applies_nearby(
+        &self,
+        pd: &PatchableData<String, Data<String>>,
+        next_chunk: Option<&Self>,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<(isize, Applies)> {
+        None
+    }
+
+    fn is_already_applied(
+        &self,
+        patchable: &Data<String>,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<Applies> {
+        None
+    }
+
+    fn is_already_applied_nearby(
+        &self,
+        pd: &PatchableData<String, Data<String>>,
+        ext_chunk: Option<&Self>,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<(isize, Applies)> {
+        None
+    }
+
+    fn already_applied_into<W: io::Write>(
+        &self,
+        into: &mut W,
+        pd: &mut PatchableData<String, Data<String>>,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn write_failure_data_into<W: io::Write>(&self, into: &mut W) {}
 }
