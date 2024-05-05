@@ -11,7 +11,7 @@ pub struct Snippet<T> {
     pub items: Box<[T]>,
 }
 
-pub trait SnippetIfec<T>: Len {
+pub trait SnippetIfce<T>: Len {
     fn length(&self, reductions: Option<(u8, u8)>) -> usize;
     fn start(&self) -> usize;
     fn offset_start(&self, offset: isize, reductions: Option<(u8, u8)>) -> usize;
@@ -27,7 +27,7 @@ impl<T> Len for Snippet<T> {
     }
 }
 
-impl<T> SnippetIfec<T> for Snippet<T> {
+impl<T> SnippetIfce<T> for Snippet<T> {
     #[inline]
     fn start(&self) -> usize {
         self.start

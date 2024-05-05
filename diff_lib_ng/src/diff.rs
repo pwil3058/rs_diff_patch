@@ -54,7 +54,7 @@ impl ByteChangeChunk {
     }
 }
 
-impl<'a> ApplyChunkClean<'a, u8, Data<u8>> for ByteChangeChunk {
+impl<'a> ApplyChunkClean<u8, Data<u8>> for ByteChangeChunk {
     fn applies(&self, data: &Data<u8>, reverse: bool) -> bool {
         let before = self.before(reverse);
         data.has_subsequence_at(&before.items, before.start)
@@ -72,7 +72,7 @@ impl<'a> ApplyChunkClean<'a, u8, Data<u8>> for ByteChangeChunk {
         reverse: bool,
     ) -> io::Result<bool> {
         let before = self.before(reverse);
-        if pd.write_upto_into(before.start, into)? {
+        if pd.write_into_upto(into, before.start)? {
             self.after(reverse).write_into(into, None)?;
             pd.advance_consumed_by(before.len());
             Ok(true)
@@ -88,7 +88,7 @@ impl<'a> ApplyChunkClean<'a, u8, Data<u8>> for ByteChangeChunk {
         reverse: bool,
     ) -> io::Result<bool> {
         let after = self.after(reverse);
-        pd.write_upto_into(after.start + after.len(), into)
+        pd.write_into_upto(into, after.start + after.len())
     }
 }
 

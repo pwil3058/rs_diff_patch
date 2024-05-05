@@ -37,7 +37,7 @@ pub trait GenerateContentIndices<T> {
     fn generate_content_indices(&self) -> impl ContentIndices<T>;
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct Data<T: PartialEq>(Box<[T]>);
 
 impl From<String> for Data<String> {
@@ -116,6 +116,7 @@ impl GenerateContentIndices<u8> for Data<u8> {
 
 pub trait WriteDataInto {
     fn write_into<W: io::Write>(&self, into: &mut W, range: Range) -> io::Result<bool>;
+    fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()>;
 }
 
 impl WriteDataInto for Data<u8> {
@@ -125,6 +126,14 @@ impl WriteDataInto for Data<u8> {
         } else {
             into.write_all(&self.0[range.start()..range.end()])?;
             Ok(true)
+        }
+    }
+
+    fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()> {
+        if from < self.len() {
+            into.write_all(&self.0[from..])
+        } else {
+            Ok(())
         }
     }
 }
@@ -138,6 +147,17 @@ impl WriteDataInto for Data<String> {
                 into.write_all(datum.as_bytes())?;
             }
             Ok(true)
+        }
+    }
+
+    fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()> {
+        if from < self.len() {
+            for datum in self.0[from..].iter() {
+                into.write_all(datum.as_bytes())?;
+            }
+            Ok(())
+        } else {
+            Ok(())
         }
     }
 }
