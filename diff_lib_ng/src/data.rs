@@ -4,7 +4,7 @@ use crate::range::{Len, Range};
 use crate::snippet::Snippet;
 use std::collections::HashMap;
 use std::io;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Read, Write};
 
 pub trait ContentIndices<T> {
     fn indices(&self, key: &T) -> Option<&Vec<usize>>;
@@ -214,5 +214,30 @@ pub trait DataIfce<T: PartialEq>: Len {
 impl<T: PartialEq> DataIfce<T> for Data<T> {
     fn data(&self) -> &Box<[T]> {
         &self.0
+    }
+}
+
+impl Data<String> {
+    pub fn read<R: Read>(read: R) -> io::Result<Self> {
+        let mut reader = BufReader::new(read);
+        let mut lines = vec![];
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line)? == 0 {
+                break;
+            } else {
+                lines.push(line)
+            }
+        }
+        Ok(Self(lines.into_boxed_slice()))
+    }
+}
+
+impl Data<u8> {
+    pub fn read<R: Read>(read: R) -> io::Result<Self> {
+        let mut reader = BufReader::new(read);
+        let mut bytes = vec![];
+        reader.read_to_end(&mut bytes)?;
+        Ok(Self(bytes.into_boxed_slice()))
     }
 }

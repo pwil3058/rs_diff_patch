@@ -1,15 +1,18 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::apply::{
-    ApplyChunkClean, ApplyChunkFuzzy, ApplyChunksClean, PatchableData, PatchableDataIfce, WillApply,
+    ApplyChunkClean, ApplyChunkFuzzy, ApplyChunksClean, ApplyChunksFuzzy, PatchableData,
+    PatchableDataIfce, WillApply,
 };
 use crate::data::{Data, DataIfce};
-use crate::modifications::ChunkIter;
+use crate::modifications::{ChunkIter, Modifications};
 use crate::range::Len;
 use crate::snippet::{Snippet, SnippetWrite};
 use serde::{Deserialize, Serialize};
+use std::fs::File;
 use std::io;
-use std::path::PathBuf;
+use std::io::{BufRead, BufReader, Read};
+use std::path::{Path, PathBuf};
 
 use crate::data::ExtractSnippet;
 
@@ -102,12 +105,72 @@ pub struct ByteChangeDiff {
     chunks: Box<[ByteChangeChunk]>,
 }
 
+impl ByteChangeDiff {
+    pub fn new(before_file_path: &Path, after_file_path: &Path, context: u8) -> io::Result<Self> {
+        let before_bytes = Data::<u8>::read(File::open(before_file_path)?)?;
+        let after_bytes = Data::<u8>::read(File::open(after_file_path)?)?;
+        let modifications = Modifications::<u8>::new(before_bytes, after_bytes);
+
+        Ok(Self {
+            before_path: before_file_path.to_path_buf(),
+            after_path: after_file_path.to_path_buf(),
+            compressed: false,
+            chunks: modifications.chunks::<ByteChangeChunk>(context).collect(),
+        })
+    }
+
+    pub fn from_reader<R: io::Read>(reader: &mut R) -> Result<Self, serde_json::Error> {
+        serde_json::from_reader(reader)
+    }
+
+    pub fn before_path(&self) -> &Path {
+        &self.before_path
+    }
+
+    pub fn after_path(&self) -> &Path {
+        &self.after_path
+    }
+
+    pub fn to_writer<W: io::Write>(&self, writer: &mut W) -> Result<(), serde_json::Error> {
+        serde_json::to_writer_pretty(writer, self)
+    }
+}
+
 impl<'a> ApplyChunksClean<'a, u8, Data<u8>, ByteChangeChunk> for ByteChangeDiff {
     fn chunks<'b>(&'b self) -> impl Iterator<Item = &'b ByteChangeChunk>
     where
         ByteChangeChunk: 'b,
     {
         self.chunks.iter()
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct PathAndBytes {
+    path: PathBuf,
+    compressed: bool,
+    bytes: Box<[u8]>,
+}
+
+impl crate::diff::PathAndBytes {
+    pub fn new(path: &Path) -> io::Result<Self> {
+        let mut bytes = vec![];
+        let mut reader = BufReader::new(File::open(path)?);
+        reader.read_to_end(&mut bytes)?;
+
+        Ok(Self {
+            path: path.to_path_buf(),
+            compressed: false,
+            bytes: bytes.into_boxed_slice(),
+        })
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn write_into<W: io::Write>(&self, into: &mut W) -> io::Result<()> {
+        into.write_all(&self.bytes)
     }
 }
 
@@ -293,5 +356,88 @@ impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
         into.write_all(b"=======\n")?;
         self.after(reverse).write_into(into, None)?;
         into.write_all(b">>>>>>>\n")
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct TextChangeDiff {
+    before_path: PathBuf,
+    after_path: PathBuf,
+    chunks: Vec<TextChangeChunk>,
+}
+
+impl TextChangeDiff {
+    pub fn new(before_file_path: &Path, after_file_path: &Path, context: u8) -> io::Result<Self> {
+        let before_lines = Data::<String>::read(File::open(before_file_path)?)?;
+        let after_lines = Data::<String>::read(File::open(after_file_path)?)?;
+        let modifications = Modifications::<String>::new(before_lines, after_lines);
+
+        Ok(Self {
+            before_path: before_file_path.to_path_buf(),
+            after_path: after_file_path.to_path_buf(),
+            chunks: modifications.chunks::<TextChangeChunk>(context).collect(),
+        })
+    }
+
+    pub fn from_reader<R: io::Read>(reader: &mut R) -> Result<Self, serde_json::Error> {
+        serde_json::from_reader(reader)
+    }
+
+    pub fn before_path(&self) -> &Path {
+        &self.before_path
+    }
+
+    pub fn after_path(&self) -> &Path {
+        &self.after_path
+    }
+
+    pub fn to_writer<W: io::Write>(&self, writer: &mut W) -> Result<(), serde_json::Error> {
+        serde_json::to_writer_pretty(writer, self)
+    }
+}
+
+impl ApplyChunksFuzzy<String, Data<String>, TextChangeChunk> for TextChangeDiff {
+    fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s TextChangeChunk>
+    where
+        TextChangeChunk: 's,
+    {
+        self.chunks.iter()
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct PathAndLines {
+    path: PathBuf,
+    lines: Box<[String]>,
+}
+
+impl PathAndLines {
+    pub fn new(path: &Path) -> io::Result<Self> {
+        let mut lines = vec![];
+        let mut reader = BufReader::new(File::open(path)?);
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line)? == 0 {
+                break;
+            } else {
+                lines.push(line)
+            }
+        }
+
+        Ok(Self {
+            path: path.to_path_buf(),
+            lines: lines.into_boxed_slice(),
+        })
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn write_into<W: io::Write>(&self, into: &mut W) -> io::Result<()> {
+        for line in self.lines.iter() {
+            into.write_all(line.as_bytes())?;
+        }
+        Ok(())
     }
 }
