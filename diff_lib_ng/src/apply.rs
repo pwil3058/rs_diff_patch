@@ -3,13 +3,10 @@
 use crate::data::{DataIfce, WriteDataInto};
 use crate::range::Range;
 use crate::snippet::{SnippetIfec, SnippetWrite};
-use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::io;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 
-use crate::data;
 use log;
 
 #[derive(Debug, Clone)]
@@ -23,33 +20,13 @@ where
     phantom_data: PhantomData<&'a T>,
 }
 
-impl<'a, T, D> Deref for PatchableData<'a, T, D>
-where
-    T: PartialEq,
-    D: DataIfce<T> + WriteDataInto,
-{
-    type Target = D;
-
-    fn deref(&self) -> &Self::Target {
-        self.data
-    }
-}
-
-impl<'a, T, D> DerefMut for PatchableData<'a, T, D>
-where
-    T: PartialEq,
-    D: DataIfce<T> + WriteDataInto,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        mut self.data
-    }
-}
-
 pub trait PatchableDataIfce<'a, T: PartialEq, D: DataIfce<T>>
 where
     D: WriteDataInto,
 {
     fn new(data: &'a D) -> Self;
+    fn range_from(&self, from: usize) -> Range;
+    fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool;
     fn incr_consumed(&mut self, increment: usize);
     fn write_upto_into<W: io::Write>(&mut self, upto: usize, writer: &mut W) -> io::Result<bool>;
     fn write_remainder<W: io::Write>(&mut self, writer: &mut W) -> io::Result<bool>;
@@ -64,6 +41,15 @@ impl<'a, T: PartialEq, D: DataIfce<T> + WriteDataInto> PatchableDataIfce<'a, T, 
             consumed: 0,
             phantom_data: PhantomData,
         }
+    }
+
+    fn range_from(&self, from: usize) -> Range {
+        Range(from, self.data.len())
+    }
+
+    #[inline]
+    fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
+        self.data.has_subsequence_at(subsequence, at)
     }
 
     fn incr_consumed(&mut self, increment: usize) {
@@ -87,7 +73,7 @@ impl<'a, T: PartialEq, D: DataIfce<T> + WriteDataInto> PatchableDataIfce<'a, T, 
     }
     fn write_remainder<W: io::Write>(&mut self, writer: &mut W) -> io::Result<bool> {
         let range = self.range_from(self.consumed);
-        self.consumed = self.len();
+        self.consumed = self.data.len();
         self.data.write_into(writer, range)
     }
 }
@@ -143,13 +129,13 @@ where
     fn already_applied(&self, data: &D, reverse: bool) -> bool;
     fn apply_into<W: io::Write>(
         &self,
-        patchable: &mut D,
+        pd: &mut PatchableData<T, D>,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<bool>;
     fn already_applied_into<W: io::Write>(
         &self,
-        patchable: &mut D,
+        pd: &mut PatchableData<T, D>,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<bool>;
@@ -188,17 +174,16 @@ where
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }
         }
-        pd.write_remainder(into)
+        success &= pd.write_remainder(into)?;
+        Ok(success)
     }
 
     fn already_applied(&self, patchable: &D, reverse: bool) -> bool {
-        let mut pd = PatchableData::<T, D>::new(patchable);
-        let mut iter = self.chunks();
         let mut chunk_num = 0;
         let mut iter = self.chunks().peekable();
         while let Some(chunk) = iter.next() {
             chunk_num += 1; // for human consumption
-            if chunk.already_applied(&pd, reverse) {
+            if chunk.already_applied(patchable, reverse) {
                 log::info!("Chunk #{chunk_num} already applied")
             } else {
                 log::error!("Chunk #{chunk_num} NOT already applied!");
