@@ -27,7 +27,7 @@ where
     fn new(data: &'a D) -> Self;
     fn range_from(&self, from: usize) -> Range;
     fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool;
-    fn incr_consumed(&mut self, increment: usize);
+    fn advance_consumed_by(&mut self, increment: usize);
     fn write_upto_into<W: io::Write>(&mut self, upto: usize, writer: &mut W) -> io::Result<bool>;
     fn write_remainder<W: io::Write>(&mut self, writer: &mut W) -> io::Result<bool>;
 }
@@ -52,7 +52,7 @@ impl<'a, T: PartialEq, D: DataIfce<T> + WriteDataInto> PatchableDataIfce<'a, T, 
         self.data.has_subsequence_at(subsequence, at)
     }
 
-    fn incr_consumed(&mut self, increment: usize) {
+    fn advance_consumed_by(&mut self, increment: usize) {
         self.consumed += increment
     }
 
@@ -112,7 +112,7 @@ pub trait AppliableChunk<
         let start = self.before_start(None, reverse);
         if pd.write_upto_into(start, into)? {
             let _ = self.after_write_into(into, None);
-            pd.incr_consumed(self.before_length(None, reverse));
+            pd.advance_consumed_by(self.before_length(None, reverse));
             Ok(true)
         } else {
             Ok(false)
@@ -126,7 +126,7 @@ where
     D: DataIfce<T> + WriteDataInto,
 {
     fn applies(&self, data: &D, reverse: bool) -> bool;
-    fn already_applied(&self, data: &D, reverse: bool) -> bool;
+    fn is_already_applied(&self, data: &D, reverse: bool) -> bool;
     fn apply_into<W: io::Write>(
         &self,
         pd: &mut PatchableData<T, D>,
@@ -166,7 +166,7 @@ where
             if chunk.applies(patchable, reverse) {
                 chunk.apply_into(&mut pd, into, reverse)?;
                 log::info!("Chunk #{chunk_num} applies cleanly.");
-            } else if chunk.already_applied(patchable, reverse) {
+            } else if chunk.is_already_applied(patchable, reverse) {
                 chunk.already_applied_into(&mut pd, into, reverse)?;
                 log::warn!("Chunk #{chunk_num} already applied");
             } else {
@@ -183,7 +183,7 @@ where
         let mut iter = self.chunks().peekable();
         while let Some(chunk) = iter.next() {
             chunk_num += 1; // for human consumption
-            if chunk.already_applied(patchable, reverse) {
+            if chunk.is_already_applied(patchable, reverse) {
                 log::info!("Chunk #{chunk_num} already applied")
             } else {
                 log::error!("Chunk #{chunk_num} NOT already applied!");

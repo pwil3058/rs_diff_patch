@@ -1,6 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::range::{Len, Range};
+use crate::snippet::Snippet;
 use std::collections::HashMap;
 use std::io;
 use std::io::Write;
@@ -36,7 +37,7 @@ pub trait GenerateContentIndices<T> {
     fn generate_content_indices(&self) -> impl ContentIndices<T>;
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Data<T: PartialEq>(Box<[T]>);
 
 impl From<String> for Data<String> {
@@ -140,28 +141,29 @@ impl WriteDataInto for Data<String> {
         }
     }
 }
-//
-// impl<T: PartialEq> Data<T> {
-//     /// Convenience function
-//     pub fn range_from(&self, from: usize) -> Range {
-//         Range(from, self.0.len())
-//     }
-//
-//     pub fn subsequence(&self, range: Range) -> impl DoubleEndedIterator<Item = &T> {
-//         self.0[range.0..range.1].iter()
-//     }
-//
-//     pub fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
-//         if at < self.0.len() && self.0.len() - at >= subsequence.len() {
-//             subsequence
-//                 .iter()
-//                 .zip(self.0[at..].iter())
-//                 .all(|(b, a)| a == b)
-//         } else {
-//             false
-//         }
-//     }
-// }
+
+pub trait ExtractSnippet<T> {
+    fn extract_snippet(&self, range: Range) -> Snippet<T>;
+}
+
+impl ExtractSnippet<u8> for Data<u8> {
+    fn extract_snippet(&self, range: Range) -> Snippet<u8> {
+        let start = range.start();
+        let items = self.0[range.0..range.1].to_vec().into_boxed_slice();
+        Snippet { start, items }
+    }
+}
+
+impl ExtractSnippet<String> for Data<String> {
+    fn extract_snippet(&self, range: Range) -> Snippet<String> {
+        let start = range.start();
+        let items = self.0[range.0..range.1]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        Snippet { start, items }
+    }
+}
 
 pub trait DataIfce<T: PartialEq>: Len {
     fn data(&self) -> &Box<[T]>;
