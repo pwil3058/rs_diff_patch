@@ -24,6 +24,8 @@ where
     D: WriteDataInto,
 {
     fn new(data: &'a D) -> Self;
+    fn data(&self) -> &D;
+    fn consumed(&self) -> usize;
     fn range_from(&self, from: usize) -> Range;
     fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool;
     fn advance_consumed_by(&mut self, increment: usize);
@@ -40,6 +42,16 @@ impl<'a, T: PartialEq + Clone, D: DataIfce<T> + WriteDataInto + Clone> Patchable
             consumed: 0,
             phantom_data: PhantomData,
         }
+    }
+
+    #[inline]
+    fn data(&self) -> &D {
+        self.data
+    }
+
+    #[inline]
+    fn consumed(&self) -> usize {
+        self.consumed
     }
 
     fn range_from(&self, from: usize) -> Range {
@@ -76,55 +88,13 @@ impl<'a, T: PartialEq + Clone, D: DataIfce<T> + WriteDataInto + Clone> Patchable
         self.data.write_into(writer, range)
     }
 }
-//
-// pub trait AppliableChunk<
-//     'a,
-//     T: PartialEq,
-//     D: DataIfce<T> + WriteDataInto,
-//     S: SnippetIfec<T> + SnippetWrite,
-// >
-// {
-//     // fn before(&self, reverse: bool) -> &S;
-//     // fn after(&self, reverse: bool) -> &S;
-//     fn before_start(&self, fuzz: Option<(isize, (usize, usize))>, reverse: bool) -> usize;
-//     fn before_items(&self, reductions: Option<(usize, usize)>, reverse: bool) -> &[T];
-//     fn before_length(&self, reductions: Option<(usize, usize)>, reverse: bool) -> usize;
-//     fn after_write_into<W: io::Write>(
-//         &self,
-//         writer: &mut W,
-//         reductions: Option<(u8, u8)>,
-//     ) -> io::Result<()>;
-//
-//     fn applies_cleanly(&self, pd: &PatchableData<'a, T, D>, reverse: bool) -> bool {
-//         pd.has_subsequence_at(
-//             &self.before_items(None, reverse),
-//             self.before_start(None, reverse),
-//         )
-//     }
-//
-//     fn apply_into_cleanly<W: io::Write>(
-//         &self,
-//         pd: &mut PatchableData<'a, T, D>,
-//         into: &mut W,
-//         reverse: bool,
-//     ) -> io::Result<bool> {
-//         let start = self.before_start(None, reverse);
-//         if pd.write_upto_into(start, into)? {
-//             let _ = self.after_write_into(into, None);
-//             pd.advance_consumed_by(self.before_length(None, reverse));
-//             Ok(true)
-//         } else {
-//             Ok(false)
-//         }
-//     }
-// }
 
 pub trait ApplyChunkClean<T, D>
 where
     T: PartialEq + Clone,
     D: DataIfce<T> + WriteDataInto + Clone,
 {
-    fn applies(&self, data: &D, reverse: bool) -> bool;
+    fn will_apply(&self, data: &D, reverse: bool) -> bool;
     fn is_already_applied(&self, data: &D, reverse: bool) -> bool;
     fn apply_into<W: io::Write>(
         &self,
@@ -162,7 +132,7 @@ where
         let mut success = true;
         while let Some(chunk) = iter.next() {
             chunk_num += 1; // for human consumption
-            if chunk.applies(patchable, reverse) {
+            if chunk.will_apply(patchable, reverse) {
                 chunk.apply_into(&mut pd, into, reverse)?;
                 log::info!("Chunk #{chunk_num} applies cleanly.");
             } else if chunk.is_already_applied(patchable, reverse) {
@@ -198,7 +168,7 @@ where
     T: PartialEq + Clone,
     D: DataIfce<T> + WriteDataInto + Clone,
 {
-    fn applies(&self, patchable: &D, offset: isize, reverse: bool) -> Option<Applies>;
+    fn will_apply(&self, patchable: &D, offset: isize, reverse: bool) -> Option<WillApply>;
     fn apply_into<W: io::Write>(
         &self,
         into: &mut W,
@@ -207,33 +177,34 @@ where
         reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> io::Result<()>;
-    fn applies_nearby(
+    fn will_apply_nearby(
         &self,
         pd: &PatchableData<T, D>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
-    ) -> Option<(isize, Applies)>;
-    fn is_already_applied(&self, patchable: &D, offset: isize, reverse: bool) -> Option<Applies>;
+    ) -> Option<(isize, WillApply)>;
+    fn is_already_applied(&self, patchable: &D, offset: isize, reverse: bool) -> Option<WillApply>;
     fn is_already_applied_nearby(
         &self,
         pd: &PatchableData<T, D>,
-        ext_chunk: Option<&Self>,
+        next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
-    ) -> Option<(isize, Applies)>;
+    ) -> Option<(isize, WillApply)>;
     fn already_applied_into<W: io::Write>(
         &self,
         into: &mut W,
         pd: &mut PatchableData<T, D>,
+        offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> io::Result<()>;
-    fn write_failure_data_into<W: io::Write>(&self, into: &mut W);
+    fn write_failure_data_into<W: io::Write>(&self, into: &mut W, reverse: bool) -> io::Result<()>;
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Applies {
+pub enum WillApply {
     Cleanly,
     WithReductions((u8, u8)),
 }
@@ -270,73 +241,86 @@ where
         let mut offset: isize = 0;
         while let Some(chunk) = iter.next() {
             chunk_num += 1; // for human consumption
-            if let Some(applies) = chunk.applies(patchable, offset, reverse) {
-                match applies {
-                    Applies::Cleanly => {
+            if let Some(will_apply) = chunk.will_apply(patchable, offset, reverse) {
+                match will_apply {
+                    WillApply::Cleanly => {
                         chunk.apply_into(into, &mut pd, offset, None, reverse)?;
                         stats.clean += 1;
                         log::info!("Chunk #{chunk_num} applies cleanly.");
                     }
-                    Applies::WithReductions(reductions) => {
+                    WillApply::WithReductions(reductions) => {
                         chunk.apply_into(into, &mut pd, offset, Some(reductions), reverse)?;
                         stats.fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions.");
                     }
                 }
-            } else if let Some((offset_adj, applies)) =
-                chunk.applies_nearby(&pd, iter.peek().copied(), offset, reverse)
+            } else if let Some((offset_adj, will_apply)) =
+                chunk.will_apply_nearby(&pd, iter.peek().copied(), offset, reverse)
             {
                 offset += offset_adj;
-                match applies {
-                    Applies::Cleanly => {
+                match will_apply {
+                    WillApply::Cleanly => {
                         chunk.apply_into(into, &mut pd, offset, None, reverse)?;
                         stats.fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} applies with offset {offset_adj}.");
                     }
-                    Applies::WithReductions(reductions) => {
+                    WillApply::WithReductions(reductions) => {
                         chunk.apply_into(into, &mut pd, offset, Some(reductions), reverse)?;
                         stats.fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions and offset {offset_adj}.");
                     }
                 }
-            } else if let Some(applies) = chunk.is_already_applied(patchable, offset, reverse) {
-                match applies {
-                    Applies::Cleanly => {
-                        chunk.already_applied_into(into, &mut pd, None, reverse)?;
+            } else if let Some(appplied) = chunk.is_already_applied(patchable, offset, reverse) {
+                match appplied {
+                    WillApply::Cleanly => {
+                        chunk.already_applied_into(into, &mut pd, offset, None, reverse)?;
                         stats.already_applied += 1;
                         log::warn!("Chunk #{chunk_num} already applied")
                     }
-                    Applies::WithReductions(reductions) => {
-                        chunk.already_applied_into(into, &mut pd, Some(reductions), reverse)?;
+                    WillApply::WithReductions(reductions) => {
+                        chunk.already_applied_into(
+                            into,
+                            &mut pd,
+                            offset,
+                            Some(reductions),
+                            reverse,
+                        )?;
                         stats.already_applied_fuzzy += 1;
                         log::warn!(
                             "Chunk #{chunk_num} already applied with {reductions:?} reductions."
                         );
                     }
                 }
-            } else if let Some((offset_adj, applies)) =
+            } else if let Some((offset_adj, applied)) =
                 chunk.is_already_applied_nearby(&pd, iter.peek().copied(), offset, reverse)
             {
                 offset += offset_adj;
-                match applies {
-                    Applies::Cleanly => {
-                        chunk.already_applied_into(into, &mut pd, None, reverse)?;
+                match applied {
+                    WillApply::Cleanly => {
+                        chunk.already_applied_into(into, &mut pd, offset, None, reverse)?;
                         stats.already_applied_fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} already applied with offset {offset_adj}")
                     }
-                    Applies::WithReductions(reductions) => {
-                        chunk.already_applied_into(into, &mut pd, Some(reductions), reverse)?;
+                    WillApply::WithReductions(reductions) => {
+                        chunk.already_applied_into(
+                            into,
+                            &mut pd,
+                            offset,
+                            Some(reductions),
+                            reverse,
+                        )?;
                         stats.already_applied_fuzzy += 1;
                         log::warn!("Chunk #{chunk_num} already applied with {reductions:?} reductions and offset {offset_adj}.")
                     }
                 }
             } else {
                 stats.failed += 1;
-                chunk.write_failure_data_into(into);
+                chunk.write_failure_data_into(into, reverse)?;
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }
         }
-        assert!(pd.write_remainder(into)?);
+        let ok = pd.write_remainder(into)?;
+        debug_assert!(ok);
         Ok(stats)
     }
 
@@ -347,26 +331,26 @@ where
         let mut offset: isize = 0;
         while let Some(chunk) = iter.next() {
             chunk_num += 1; // for human consumption
-            if let Some(applies) = chunk.is_already_applied(patchable, offset, reverse) {
-                match applies {
-                    Applies::Cleanly => {
+            if let Some(applied) = chunk.is_already_applied(patchable, offset, reverse) {
+                match applied {
+                    WillApply::Cleanly => {
                         log::info!("Chunk #{chunk_num} already applied")
                     }
-                    Applies::WithReductions(reductions) => {
+                    WillApply::WithReductions(reductions) => {
                         log::warn!(
                             "Chunk #{chunk_num} already applied with {reductions:?} reductions."
                         );
                     }
                 }
-            } else if let Some((offset_adj, applies)) =
+            } else if let Some((offset_adj, applied)) =
                 chunk.is_already_applied_nearby(&pd, iter.peek().copied(), offset, reverse)
             {
                 offset += offset_adj;
-                match applies {
-                    Applies::Cleanly => {
+                match applied {
+                    WillApply::Cleanly => {
                         log::warn!("Chunk #{chunk_num} already applied with offset {offset_adj}")
                     }
-                    Applies::WithReductions(reductions) => {
+                    WillApply::WithReductions(reductions) => {
                         log::warn!("Chunk #{chunk_num} already applied with {reductions:?} reductions and offset {offset_adj}.")
                     }
                 }

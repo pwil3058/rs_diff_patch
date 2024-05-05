@@ -1,9 +1,9 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::apply::{
-    Applies, ApplyChunkClean, ApplyChunkFuzzy, ApplyChunksClean, PatchableData, PatchableDataIfce,
+    ApplyChunkClean, ApplyChunkFuzzy, ApplyChunksClean, PatchableData, PatchableDataIfce, WillApply,
 };
-use crate::data::{Data, DataIfce, WriteDataInto};
+use crate::data::{Data, DataIfce};
 use crate::modifications::ChunkIter;
 use crate::range::Len;
 use crate::snippet::{Snippet, SnippetWrite};
@@ -57,7 +57,7 @@ impl ByteChangeChunk {
 }
 
 impl<'a> ApplyChunkClean<u8, Data<u8>> for ByteChangeChunk {
-    fn applies(&self, data: &Data<u8>, reverse: bool) -> bool {
+    fn will_apply(&self, data: &Data<u8>, reverse: bool) -> bool {
         let before = self.before(reverse);
         data.has_subsequence_at(&before.items, before.start)
     }
@@ -155,11 +155,16 @@ impl crate::diff::TextChangeChunk {
 }
 
 impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
-    fn applies(&self, patchable: &Data<String>, offset: isize, reverse: bool) -> Option<Applies> {
+    fn will_apply(
+        &self,
+        patchable: &Data<String>,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<WillApply> {
         let before = self.before(reverse);
         let start = before.start as isize + offset;
         if !start.is_negative() && patchable.has_subsequence_at(&before.items, start as usize) {
-            Some(Applies::Cleanly)
+            Some(WillApply::Cleanly)
         } else {
             let max_reduction = self.context_lengths.0.max(self.context_lengths.1);
             for redn in 1..max_reduction {
@@ -173,7 +178,7 @@ impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
                         adj_start as usize,
                     )
                 {
-                    return Some(Applies::WithReductions((start_redn, end_redn)));
+                    return Some(WillApply::WithReductions((start_redn, end_redn)));
                 }
             }
             None
@@ -196,13 +201,55 @@ impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
         Ok(())
     }
 
-    fn applies_nearby(
+    fn will_apply_nearby(
         &self,
         pd: &PatchableData<String, Data<String>>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
-    ) -> Option<(isize, Applies)> {
+    ) -> Option<(isize, WillApply)> {
+        let before = self.before(reverse);
+        let not_after = if let Some(next_chunk) = next_chunk {
+            let next_chunk_before = if reverse {
+                &next_chunk.after
+            } else {
+                &next_chunk.before
+            };
+            next_chunk_before
+                .start
+                .checked_add_signed(offset)
+                .expect("overflow")
+                - before.adj_length(Some(self.context_lengths))
+        } else {
+            pd.data().len() - before.adj_length(Some(self.context_lengths))
+        };
+        let mut backward_done = false;
+        let mut forward_done = false;
+        for i in 1isize.. {
+            if !backward_done {
+                let adjusted_offset = offset - i;
+                if before.start as isize + adjusted_offset < pd.consumed() as isize {
+                    backward_done = true;
+                } else {
+                    if let Some(will_apply) = self.will_apply(pd.data(), adjusted_offset, reverse) {
+                        return Some((-i, will_apply));
+                    }
+                }
+            }
+            if !forward_done {
+                let adjusted_offset = offset + i;
+                if before.start as isize + adjusted_offset < not_after as isize {
+                    if let Some(will_apply) = self.will_apply(pd.data(), adjusted_offset, reverse) {
+                        return Some((i, will_apply));
+                    }
+                } else {
+                    forward_done = true
+                }
+            }
+            if forward_done && backward_done {
+                break;
+            }
+        }
         None
     }
 
@@ -211,29 +258,40 @@ impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
         patchable: &Data<String>,
         offset: isize,
         reverse: bool,
-    ) -> Option<Applies> {
-        None
+    ) -> Option<WillApply> {
+        self.will_apply(patchable, offset, !reverse)
     }
 
     fn is_already_applied_nearby(
         &self,
         pd: &PatchableData<String, Data<String>>,
-        ext_chunk: Option<&Self>,
+        next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
-    ) -> Option<(isize, Applies)> {
-        None
+    ) -> Option<(isize, WillApply)> {
+        self.will_apply_nearby(pd, next_chunk, offset, !reverse)
     }
 
     fn already_applied_into<W: io::Write>(
         &self,
         into: &mut W,
         pd: &mut PatchableData<String, Data<String>>,
+        offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> io::Result<()> {
+        let after = self.after(reverse);
+        let end = after.adj_start(offset, reductions) + after.adj_length(reductions);
+        let ok = pd.write_into_upto(into, end)?;
+        debug_assert!(ok);
         Ok(())
     }
 
-    fn write_failure_data_into<W: io::Write>(&self, into: &mut W) {}
+    fn write_failure_data_into<W: io::Write>(&self, into: &mut W, reverse: bool) -> io::Result<()> {
+        into.write_all(b"<<<<<<<\n")?;
+        self.before(reverse).write_into(into, None)?;
+        into.write_all(b"=======\n")?;
+        self.after(reverse).write_into(into, None)?;
+        into.write_all(b">>>>>>>\n")
+    }
 }
