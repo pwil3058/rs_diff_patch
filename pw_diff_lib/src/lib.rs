@@ -8,4 +8,6 @@ pub mod modifications;
 pub mod range;
 pub mod snippet;
 
+pub use apply::*;
+pub use data::*;
 pub use diff::*;

@@ -1,15 +1,13 @@
 use clap::Parser;
 use std::fs;
 use std::fs::File;
-use std::io::Write;
 use std::path::PathBuf;
 
 use log;
 use stderrlog;
 use stderrlog::LogLevelNum;
 
-use diff_lib::apply::ApplyChunks;
-use diff_lib::{Diff, Lines};
+use pw_diff_lib::{ApplyChunksClean, ApplyChunksFuzzy, Data, Diff};
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -47,7 +45,7 @@ fn main() {
     };
 
     match diff {
-        Diff::Change(diff) => {
+        Diff::TextChange(diff) => {
             let patchable_path = diff.before_path();
             let patchable_file = match File::open(patchable_path) {
                 Ok(file) => file,
@@ -56,7 +54,7 @@ fn main() {
                     std::process::exit(1);
                 }
             };
-            let patchable_lines = match Lines::read(patchable_file) {
+            let patchable_lines = match Data::<String>::read(patchable_file) {
                 Ok(lines) => lines,
                 Err(err) => {
                     log::error!("Error reading {patchable_path:?}: {err}");
@@ -95,8 +93,8 @@ fn main() {
                 }
             }
         }
-        Diff::Create(pac) => {
-            let path = pac.path();
+        Diff::TextAdd(path_and_lines) => {
+            let path = path_and_lines.path();
             if args.reverse {
                 match fs::remove_file(path) {
                     Ok(_) => log::info!("{path:?} deleted"),
@@ -107,7 +105,7 @@ fn main() {
                 }
             } else {
                 match File::create_new(path) {
-                    Ok(mut file) => match file.write_all(pac.lines_as_text().as_bytes()) {
+                    Ok(mut file) => match path_and_lines.write_into(&mut file) {
                         Ok(_) => log::info!("{path:?} created"),
                         Err(err) => {
                             log::error!("{path:?} creation failed: {err}")
@@ -119,11 +117,107 @@ fn main() {
                 }
             }
         }
-        Diff::Delete(pac) => {
-            let path = pac.path();
+        Diff::TextRemove(path_and_lines) => {
+            let path = path_and_lines.path();
             if args.reverse {
                 match File::create_new(path) {
-                    Ok(mut file) => match file.write_all(pac.lines_as_text().as_bytes()) {
+                    Ok(mut file) => match path_and_lines.write_into(&mut file) {
+                        Ok(_) => log::info!("{path:?} created"),
+                        Err(err) => {
+                            log::error!("{path:?} creation failed: {err}")
+                        }
+                    },
+                    Err(err) => {
+                        log::error!("{path:?} creation failed: {err}")
+                    }
+                }
+            } else {
+                match fs::remove_file(path) {
+                    Ok(_) => log::info!("{path:?} deleted"),
+                    Err(err) => {
+                        log::error!("{path:?} deletion failed: {err}");
+                        std::process::exit(1)
+                    }
+                }
+            }
+        }
+        Diff::ByteChange(diff) => {
+            let patchable_path = diff.before_path();
+            let patchable_file = match File::open(patchable_path) {
+                Ok(file) => file,
+                Err(err) => {
+                    log::error!("Error opening {patchable_path:?}: {err}");
+                    std::process::exit(1);
+                }
+            };
+            let patchable_bytes = match Data::<u8>::read(patchable_file) {
+                Ok(lines) => lines,
+                Err(err) => {
+                    log::error!("Error reading {patchable_path:?}: {err}");
+                    std::process::exit(1);
+                }
+            };
+
+            match temp_file::TempFile::in_dir(".") {
+                Ok(temp_file) => {
+                    let mut writer = match File::create(temp_file.path()) {
+                        Ok(file) => file,
+                        Err(err) => {
+                            log::error!("Error opening temporary file: {err}");
+                            std::process::exit(1);
+                        }
+                    };
+                    match diff.apply_into(&patchable_bytes, &mut writer, args.reverse) {
+                        Ok(stats) => {
+                            match std::fs::rename(temp_file.path(), patchable_path) {
+                                Ok(_) => log::info!("{stats:?}"),
+                                Err(err) => {
+                                    log::error!("Error writing patched file: {err}");
+                                    std::process::exit(1);
+                                }
+                            };
+                        }
+                        Err(err) => {
+                            log::error!("Patch failed to apply: {err}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Err(err) => {
+                    log::error!("Error creating temp file: {err}");
+                    std::process::exit(1)
+                }
+            }
+        }
+        Diff::ByteAdd(path_and_bytes) => {
+            let path = path_and_bytes.path();
+            if args.reverse {
+                match fs::remove_file(path) {
+                    Ok(_) => log::info!("{path:?} deleted"),
+                    Err(err) => {
+                        log::error!("{path:?} deletion failed: {err}");
+                        std::process::exit(1)
+                    }
+                }
+            } else {
+                match File::create_new(path) {
+                    Ok(mut file) => match path_and_bytes.write_into(&mut file) {
+                        Ok(_) => log::info!("{path:?} created"),
+                        Err(err) => {
+                            log::error!("{path:?} creation failed: {err}")
+                        }
+                    },
+                    Err(err) => {
+                        log::error!("{path:?} creation failed: {err}")
+                    }
+                }
+            }
+        }
+        Diff::ByteRemove(path_and_bytes) => {
+            let path = path_and_bytes.path();
+            if args.reverse {
+                match File::create_new(path) {
+                    Ok(mut file) => match path_and_bytes.write_into(&mut file) {
                         Ok(_) => log::info!("{path:?} created"),
                         Err(err) => {
                             log::error!("{path:?} creation failed: {err}")
