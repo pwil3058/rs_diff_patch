@@ -2,8 +2,8 @@
 
 use crate::apply::ApplyChunksFuzzy;
 use crate::data::Data;
-use crate::diff::TextChangeChunk;
 use crate::modifications::Modifications;
+use crate::text_diff::TextChangeChunk;
 use serde::{Deserialize, Serialize};
 use std::io::{Cursor, Write};
 use std::ops::{Deref, DerefMut};

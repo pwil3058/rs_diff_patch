@@ -2,8 +2,8 @@
 
 use crate::apply::*;
 use crate::data::*;
-use crate::diff::*;
 use crate::modifications::Modifications;
+use crate::text_diff::*;
 
 #[test]
 fn diff_chunk_applies() {
