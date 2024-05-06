@@ -362,3 +362,6 @@ where
         true
     }
 }
+
+#[cfg(test)]
+mod apply_tests;
