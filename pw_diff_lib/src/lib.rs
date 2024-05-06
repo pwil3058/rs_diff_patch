@@ -7,3 +7,5 @@ pub mod diff;
 pub mod modifications;
 pub mod range;
 pub mod snippet;
+
+pub use diff::*;

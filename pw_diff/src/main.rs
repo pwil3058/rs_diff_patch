@@ -6,7 +6,7 @@ use log;
 use stderrlog;
 use stderrlog::LogLevelNum;
 
-use diff_lib::Diff;
+use pw_diff_lib::Diff;
 
 #[derive(Parser)]
 struct Cli {
@@ -18,7 +18,7 @@ struct Cli {
         help = "Number of lines of context to use",
         default_value = "2"
     )]
-    context: usize,
+    context: u8,
     #[arg(required = true)]
     before_file_path: PathBuf,
     #[arg(required = true)]
