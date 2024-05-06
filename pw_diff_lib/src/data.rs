@@ -69,7 +69,7 @@ impl GenerateContentIndices<String> for Data<String> {
     ///
     /// Example:
     /// ```
-    /// use diff_lib_ng::data::*;
+    /// use pw_diff_lib::data::*;
     /// let data = Data::<String>::from("A\nB\nC\nD\nA\nB\nC\nD\n");
     /// let indices = data.generate_content_indices();
     /// assert_eq!(indices.indices(&"A\n".to_string()),Some( &vec![0usize,4]));
@@ -96,7 +96,7 @@ impl GenerateContentIndices<u8> for Data<u8> {
     ///
     /// Example:
     /// ```
-    /// use diff_lib_ng::data::*;
+    /// use pw_diff_lib::data::*;
     /// let data = Data::<u8>::from(vec![0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]);
     /// let indices = data.generate_content_indices();
     /// assert_eq!(indices.indices(&0u8),Some( &vec![0usize,17]));

@@ -60,10 +60,10 @@ impl<'a, T: PartialEq, D: DataIfce<T> + GenerateContentIndices<T>, I: ContentInd
     ///
     /// Example:
     /// ```
-    /// use diff_lib_ng::data::{Data, LineIndices, DataIfce};
-    /// use diff_lib_ng::modifications::ModificationsGenerator;
-    /// use diff_lib_ng::range::Range;
-    /// use diff_lib_ng::common_subsequence::CommonSubsequence;
+    /// use pw_diff_lib::data::{Data, LineIndices, DataIfce};
+    /// use pw_diff_lib::modifications::ModificationsGenerator;
+    /// use pw_diff_lib::range::Range;
+    /// use pw_diff_lib::common_subsequence::CommonSubsequence;
     /// let before = Data::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\n");
     /// let after = Data::<String>::from("X\nY\nZ\nC\nD\nE\nH\nI\nX\n");
     /// let generator = ModificationsGenerator::<String, Data<String>, LineIndices>::new(&before, &after);
@@ -190,11 +190,11 @@ impl<'a, T: PartialEq, D: DataIfce<T> + GenerateContentIndices<T>, I: ContentInd
     ///
     /// Example:
     /// ```
-    /// use diff_lib_ng::range::Range;
-    /// use diff_lib_ng::data::{Data, LineIndices};
-    /// use diff_lib_ng::common_subsequence::CommonSubsequence;
-    /// use diff_lib_ng::modifications::ModificationsGenerator;
-    /// use diff_lib_ng::modifications::Modification::*;
+    /// use pw_diff_lib::range::Range;
+    /// use pw_diff_lib::data::{Data, LineIndices};
+    /// use pw_diff_lib::common_subsequence::CommonSubsequence;
+    /// use pw_diff_lib::modifications::ModificationsGenerator;
+    /// use pw_diff_lib::modifications::Modification::*;
     ///
     /// let before_lines = Data::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
     /// let after_lines = Data::<String>::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
@@ -419,10 +419,10 @@ impl<T: PartialEq> Modifications<T> {
     /// Example:
     ///
     /// ```
-    /// use diff_lib_ng::common_subsequence::CommonSubsequence;
-    /// use diff_lib_ng::data::{Data, LineIndices};
-    /// use diff_lib_ng::modifications::{ModificationChunk, Modifications,Modification};
-    /// use diff_lib_ng::range::Range;
+    /// use pw_diff_lib::common_subsequence::CommonSubsequence;
+    /// use pw_diff_lib::data::{Data, LineIndices};
+    /// use pw_diff_lib::modifications::{ModificationChunk, Modifications,Modification};
+    /// use pw_diff_lib::range::Range;
     /// use Modification::*;
     ///
     /// let before = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
