@@ -2,4 +2,4 @@
 
 resolver = "2"
 
-members = ["diff_lib", "pw_diff_lib", "pw_diff", "pw_patch", ]
+members = ["pw_diff_lib", "pw_diff", "pw_patch", ]
