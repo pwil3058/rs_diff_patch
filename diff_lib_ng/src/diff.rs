@@ -498,3 +498,6 @@ impl Diff {
         serde_json::to_writer_pretty(writer, self)
     }
 }
+
+#[cfg(test)]
+mod diff_tests;
