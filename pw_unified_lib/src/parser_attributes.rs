@@ -26,9 +26,33 @@ impl ParserAttributes {
         }
     }
 
+    pub fn after_path(&self) -> &String {
+        match self {
+            ParserAttributes::AfterPath(path) => path,
+            _ => panic!("invalid variant"),
+        }
+    }
+
+    pub fn chunk_header(&self) -> &String {
+        match self {
+            ParserAttributes::ChunkHeader(header) => header,
+            _ => panic!("invalid variant"),
+        }
+    }
+
     pub fn chunk_line(&self) -> &String {
         match self {
             ParserAttributes::ChunkLine(line) => line,
+            _ => panic!("invalid variant"),
+        }
+    }
+
+    pub fn chunk_lines(&self) -> Box<[String]> {
+        match self {
+            ParserAttributes::ChunkLines(lines) => {
+                let lines = lines.to_vec();
+                lines.into_boxed_slice()
+            }
             _ => panic!("invalid variant"),
         }
     }

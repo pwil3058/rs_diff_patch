@@ -1,6 +1,8 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 %{
+use std::path::PathBuf;
+
 use crate::parser_attributes::ParserAttributes;
 use crate::unified_diff::{UnifiedDiff, UnifiedDiffPatch};
 
@@ -29,7 +31,16 @@ DiffList: Diff
         $$.diff_mut().push($2.diff().clone());
     !}
     .
-Diff: BeforePath AfterPath ChunkHeader ChunkLines.
+Diff: BeforePath AfterPath ChunkHeader ChunkLines
+    !{
+        $$ = ParserAttributes::Diff(UnifiedDiff{
+            before_path: PathBuf::from($1.before_path()),
+            after_path: PathBuf::from($2.after_path()),
+            header: $3.chunk_header().to_string(),
+            lines: $4.chunk_lines(),
+        });
+    !}
+    .
 ChunkLines: ChunkLine
     !{
         $$ = ParserAttributes::ChunkLines(vec![$1.chunk_line().clone()]);
