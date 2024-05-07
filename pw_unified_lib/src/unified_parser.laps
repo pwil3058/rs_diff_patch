@@ -1,0 +1,41 @@
+// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+
+%{
+use crate::parser_attributes::ParserAttributes;
+use crate::unified_diff::{UnifiedDiff, UnifiedDiffPatch};
+
+%}
+
+%attr   ParserAttributes
+%target UnifiedDiffPatch
+
+%%
+
+%token  BeforePath  (^---.*\n)
+%token  AfterPath   (^\+\+\+.*\n)
+%token  ChunkHeader (^@@.*@@.*\n)
+%token  ChunkLine   (^[ -+].*\n)
+%token  Preamble    ([^-]{3}*)
+
+%%
+Specification: Preamble DiffList.
+DiffList: Diff
+    !{
+        $$ = ParserAttributes::DiffList(vec![$1.diff().clone()]);
+    !}
+    |
+    DiffList Diff
+    !{
+        $$.diff_mut().push($2.diff().clone());
+    !}
+    .
+Diff: BeforePath AfterPath ChunkHeader ChunkLines.
+ChunkLines: ChunkLine
+    !{
+        $$ = ParserAttributes::ChunkLines(vec![$1.chunk_line().clone()]);
+    !}
+    | ChunkLines ChunkLine
+    !{
+        $$.chunk_lines_mut().push($2.chunk_line().clone());
+    !}
+    .
