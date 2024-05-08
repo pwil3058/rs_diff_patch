@@ -1,7 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::unified_diff::UnifiedDiff;
 use crate::unified_parser::AATerminal;
+use crate::unified_parser::UnifiedDiff;
 use lexan::Token;
 
 #[derive(Debug, Default, Clone)]
