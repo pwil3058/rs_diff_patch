@@ -8,6 +8,8 @@ fn main() {
         .args([
             "-o",
             "src/unified_parser.rs",
+            "--ignore-sr-conflicts",
+            "--ignore-rr-conflicts",
             "-f",
             "src/unified_parser.laps",
         ])
