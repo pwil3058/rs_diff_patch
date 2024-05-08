@@ -10,6 +10,7 @@ pub enum ParserAttributes {
     Diff(UnifiedDiff),
     Diffs(Vec<UnifiedDiff>),
     Token(lexan::Token<AATerminal>),
+    Tokens(Vec<lexan::Token<AATerminal>>),
     Error(lalr1::Error<AATerminal>),
     #[default]
     Default,
@@ -28,13 +29,27 @@ impl ParserAttributes {
             _ => panic!("invalid variant"),
         }
     }
-    // pub fn string(&self) -> &String {
-    //     match self {
-    //         ParserAttributes::String(string) => string,
-    //         _ => panic!("invalid variant"),
-    //     }
-    // }
-    //
+    pub fn tokens(&self) -> &Vec<lexan::Token<AATerminal>> {
+        match self {
+            ParserAttributes::Tokens(tokens) => tokens,
+            _ => panic!("invalid variant"),
+        }
+    }
+
+    pub fn tokens_mut(&mut self) -> &mut Vec<lexan::Token<AATerminal>> {
+        match self {
+            ParserAttributes::Tokens(tokens) => tokens,
+            _ => panic!("{self:?}: Wrong attribute variant."),
+        }
+    }
+
+    pub fn strings(&self) -> Box<[String]> {
+        match self {
+            ParserAttributes::Strings(strings) => strings.clone().into_boxed_slice(),
+            _ => panic!("invalid variant"),
+        }
+    }
+
     pub fn strings_mut(&mut self) -> &mut Vec<String> {
         match self {
             ParserAttributes::Strings(strings) => strings,

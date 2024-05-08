@@ -3,18 +3,31 @@
 use crate::parser_attributes::*;
 
 #[derive(Debug, Default, Clone)]
-pub struct UnifiedDiff {
+pub struct UnifiedChunk {
     _header: String,
     _lines: Box<[String]>,
 }
 
 #[derive(Debug, Default, Clone)]
+pub struct UnifiedDiff {
+    _before: String,
+    _after: String,
+    _header: String,
+    _lines: Box<[UnifiedChunk]>,
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct UnifiedDiffs {
-    preamble: Option<String>,
+    _preamble: Option<String>,
     _diffs: Vec<UnifiedDiff>,
 }
 
-impl lalr1::ReportError<AATerminal> for UnifiedDiffs {}
+#[derive(Debug, Default, Clone)]
+struct UnifiedDiffsData {
+    preamble: Option<String>,
+}
+
+impl lalr1::ReportError<AATerminal> for UnifiedDiffsData {}
 
 use std::collections::BTreeSet;
 
@@ -78,7 +91,9 @@ lazy_static::lazy_static! {
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 pub enum AANonTerminal {
     AAStart,
+    Chunk,
     ChunkLines,
+    ChunkList,
     Diff,
     DiffList,
     Specification,
@@ -88,7 +103,9 @@ impl std::fmt::Display for AANonTerminal {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             AANonTerminal::AAStart => write!(f, r"AAStart"),
+            AANonTerminal::Chunk => write!(f, r"Chunk"),
             AANonTerminal::ChunkLines => write!(f, r"ChunkLines"),
+            AANonTerminal::ChunkList => write!(f, r"ChunkList"),
             AANonTerminal::Diff => write!(f, r"Diff"),
             AANonTerminal::DiffList => write!(f, r"DiffList"),
             AANonTerminal::Specification => write!(f, r"Specification"),
@@ -96,7 +113,7 @@ impl std::fmt::Display for AANonTerminal {
     }
 }
 
-impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffs {
+impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffsData {
     fn lexical_analyzer(&self) -> &lexan::LexicalAnalyzer<AATerminal> {
         &AALEXAN
     }
@@ -179,7 +196,7 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffs
             },
             9 => match aa_tag {
                 // ChunkLines: <empty> #(NonAssoc, 0)
-                BeforePath | ChunkLine | AAEnd => Action::Reduce(7),
+                BeforePath | ChunkLine | AAEnd => Action::Reduce(10),
                 _ => Action::SyntaxError,
             },
             10 => match aa_tag {
@@ -190,7 +207,7 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffs
             },
             11 => match aa_tag {
                 // ChunkLines: ChunkLines ChunkLine #(NonAssoc, 0)
-                BeforePath | ChunkLine | AAEnd => Action::Reduce(8),
+                BeforePath | ChunkLine | AAEnd => Action::Reduce(11),
                 _ => Action::SyntaxError,
             },
             _ => panic!("illegal state: {aa_state}"),
@@ -206,8 +223,11 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffs
             4 => (AANonTerminal::DiffList, 1),
             5 => (AANonTerminal::DiffList, 2),
             6 => (AANonTerminal::Diff, 4),
-            7 => (AANonTerminal::ChunkLines, 0),
-            8 => (AANonTerminal::ChunkLines, 2),
+            7 => (AANonTerminal::ChunkList, 0),
+            8 => (AANonTerminal::ChunkList, 2),
+            9 => (AANonTerminal::Chunk, 2),
+            10 => (AANonTerminal::ChunkLines, 0),
+            11 => (AANonTerminal::ChunkLines, 2),
             _ => panic!("malformed production data table"),
         }
     }
@@ -255,16 +275,22 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffs
         match aa_production_id {
             2 => {
                 // Specification: Preamble DiffList #(NonAssoc, 0)
-
                 self.preamble = Some(aa_rhs[1].token().lexeme().to_string());
             }
-            7 => {
+            6 => {
+                // Diff: BeforePath AfterPath ChunkHeader ChunkLines #(NonAssoc, 0)
+                let _diff = aa_rhs[3].strings();
+            }
+            9 => {
+                // Chunk: ChunkHeader ChunkLines #(NonAssoc, 0)
+                let _diff = aa_rhs[3].strings();
+            }
+            10 => {
                 // ChunkLines: <empty> #(NonAssoc, 0)
                 aa_lhs = ParserAttributes::Strings(vec![]);
             }
-            8 => {
+            11 => {
                 // ChunkLines: ChunkLines ChunkLine #(NonAssoc, 0)
-
                 aa_lhs
                     .strings_mut()
                     .push(aa_rhs[1].token().lexeme().to_string());

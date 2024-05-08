@@ -4,23 +4,36 @@
 use crate::parser_attributes::*;
 
 #[derive(Debug, Default, Clone)]
-pub struct UnifiedDiff {
+pub struct UnifiedChunk {
     _header: String,
     _lines: Box<[String]>,
 }
 
 #[derive(Debug, Default, Clone)]
+pub struct UnifiedDiff {
+    _before: String,
+    _after: String,
+    _header: String,
+    _lines: Box<[UnifiedChunk]>,
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct UnifiedDiffs {
-    preamble: Option<String>,
+    _preamble: Option<String>,
     _diffs: Vec<UnifiedDiff>,
 }
 
-impl lalr1::ReportError<AATerminal> for UnifiedDiffs {}
+#[derive(Debug, Default, Clone)]
+struct UnifiedDiffsData {
+    preamble: Option<String>,
+}
+
+impl lalr1::ReportError<AATerminal> for UnifiedDiffsData {}
 
 %}
 
 %attr   ParserAttributes
-%target UnifiedDiffs
+%target UnifiedDiffsData
 
 %shift_reduce 2
 %%
@@ -33,19 +46,21 @@ impl lalr1::ReportError<AATerminal> for UnifiedDiffs {}
 
 %%
 Specification: DiffList
-     | Preamble DiffList
-     !{
-        self.preamble = Some($2.token().lexeme().to_string());
-     !}
-    .
+     | Preamble DiffList !{ self.preamble = Some($2.token().lexeme().to_string()); !}.
 DiffList:
     | Diff
     | DiffList Diff
     .
-Diff: BeforePath AfterPath ChunkHeader ChunkLines.
+Diff: BeforePath AfterPath ChunkHeader ChunkLines
+    !{  let _diff = $4.strings(); !}
+    .
+ChunkList:
+    | ChunkList Chunk
+    .
+Chunk: ChunkHeader ChunkLines
+    !{  let _diff = $4.strings(); !}
+    .
 ChunkLines: !{ $$ = ParserAttributes::Strings(vec![]); !}
     | ChunkLines ChunkLine
-    !{
-        $$.strings_mut().push($2.token().lexeme().to_string());
-    !}
+    !{  $$.strings_mut().push($2.token().lexeme().to_string()); !}
     .
