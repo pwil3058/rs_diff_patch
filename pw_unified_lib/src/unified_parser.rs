@@ -3,7 +3,6 @@
 use crate::parser_attributes::ParserAttributes;
 use crate::unified_diff::{UnifiedDiff, UnifiedDiffPatch};
 
-use lazy_static::lazy_static;
 use std::collections::BTreeSet;
 
 macro_rules! btree_set {
@@ -43,11 +42,12 @@ impl std::fmt::Display for AATerminal {
     }
 }
 
-lazy_static! {
+lazy_static::lazy_static! {
     static ref AALEXAN: lexan::LexicalAnalyzer<AATerminal> = {
         use AATerminal::*;
         lexan::LexicalAnalyzer::new(
-            &[],
+            &[
+            ],
             &[
                 (Preamble, r###"([^-]{3}*)"###),
                 (BeforePath, r###"(^---.*\n)"###),
@@ -55,7 +55,8 @@ lazy_static! {
                 (ChunkLine, r###"(^[ -+].*\n)"###),
                 (AfterPath, r###"(^\+\+\+.*\n)"###),
             ],
-            &[],
+            &[
+            ],
             AAEnd,
         )
     };
@@ -227,24 +228,22 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffP
             2 => {
                 // DiffList: Diff #(NonAssoc, 0)
 
-                aa_lhs = ParserAttributes::DiffList(vec![aa_rhs[0].diff().clone()]);
+                aa_lhs = ParserAttributes::Diffs(vec![aa_rhs[0].diff().clone()]);
             }
             3 => {
                 // DiffList: DiffList Diff #(NonAssoc, 0)
 
-                aa_lhs.diff_mut().push(aa_rhs[1].diff().clone());
+                aa_lhs.diffs_mut().push(aa_rhs[1].diff().clone());
             }
             5 => {
                 // ChunkLines: ChunkLine #(NonAssoc, 0)
 
-                aa_lhs = ParserAttributes::ChunkLines(vec![aa_rhs[0].chunk_line().clone()]);
+                aa_lhs = ParserAttributes::Strings(vec![aa_rhs[0].string().clone()]);
             }
             6 => {
                 // ChunkLines: ChunkLines ChunkLine #(NonAssoc, 0)
 
-                aa_lhs
-                    .chunk_lines_mut()
-                    .push(aa_rhs[1].chunk_line().clone());
+                aa_lhs.strings_mut().push(aa_rhs[1].string().clone());
             }
             _ => aa_inject(String::new(), String::new()),
         };

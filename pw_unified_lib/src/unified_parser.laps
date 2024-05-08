@@ -21,21 +21,21 @@ use crate::unified_diff::{UnifiedDiff, UnifiedDiffPatch};
 Specification: Preamble DiffList.
 DiffList: Diff
     !{
-        $$ = ParserAttributes::DiffList(vec![$1.diff().clone()]);
+        $$ = ParserAttributes::Diffs(vec![$1.diff().clone()]);
     !}
     |
     DiffList Diff
     !{
-        $$.diff_mut().push($2.diff().clone());
+        $$.diff_list_mut().push($2.diff().clone());
     !}
     .
 Diff: BeforePath AfterPath ChunkHeader ChunkLines.
 ChunkLines: ChunkLine
     !{
-        $$ = ParserAttributes::ChunkLines(vec![$1.chunk_line().clone()]);
+        $$ = ParserAttributes::Strings(vec![$1.string().clone()]);
     !}
     | ChunkLines ChunkLine
     !{
-        $$.chunk_lines_mut().push($2.chunk_line().clone());
+        $$.strings_mut().push($2.string().clone());
     !}
     .

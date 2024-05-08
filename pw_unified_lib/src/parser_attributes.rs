@@ -5,37 +5,27 @@ use crate::unified_parser::AATerminal;
 
 #[derive(Debug, Default, Clone)]
 pub enum ParserAttributes {
+    String(String),
+    Strings(Vec<String>),
     Token(lexan::Token<AATerminal>),
     Error(lalr1::Error<AATerminal>),
-    BeforePath(String),
-    AfterPath(String),
-    ChunkHeader(String),
-    ChunkLine(String),
-    ChunkLines(Vec<String>),
     Diff(UnifiedDiff),
-    DiffList(Vec<UnifiedDiff>),
+    Diffs(Vec<UnifiedDiff>),
     #[default]
     Default,
 }
 
 impl ParserAttributes {
-    pub fn before_path(&self) -> &String {
+    pub fn string(&self) -> &String {
         match self {
-            ParserAttributes::BeforePath(path) => path,
+            ParserAttributes::String(string) => string,
             _ => panic!("invalid variant"),
         }
     }
 
-    pub fn chunk_line(&self) -> &String {
+    pub fn strings_mut(&mut self) -> &mut Vec<String> {
         match self {
-            ParserAttributes::ChunkLine(line) => line,
-            _ => panic!("invalid variant"),
-        }
-    }
-
-    pub fn chunk_lines_mut(&mut self) -> &mut Vec<String> {
-        match self {
-            ParserAttributes::ChunkLines(list) => list,
+            ParserAttributes::Strings(strings) => strings,
             _ => panic!("{self:?}: Wrong attribute variant."),
         }
     }
@@ -47,9 +37,9 @@ impl ParserAttributes {
         }
     }
 
-    pub fn diff_mut(&mut self) -> &mut Vec<UnifiedDiff> {
+    pub fn diffs_mut(&mut self) -> &mut Vec<UnifiedDiff> {
         match self {
-            ParserAttributes::DiffList(list) => list,
+            ParserAttributes::Diffs(diffs) => diffs,
             _ => panic!("{self:?}: Wrong attribute variant."),
         }
     }
@@ -57,11 +47,11 @@ impl ParserAttributes {
 
 impl From<lexan::Token<AATerminal>> for ParserAttributes {
     fn from(input: lexan::Token<AATerminal>) -> Self {
+        use AATerminal::*;
         match input.tag() {
-            AATerminal::BeforePath => ParserAttributes::BeforePath(input.lexeme().to_string()),
-            AATerminal::AfterPath => ParserAttributes::AfterPath(input.lexeme().to_string()),
-            AATerminal::ChunkHeader => ParserAttributes::ChunkHeader(input.lexeme().to_string()),
-            AATerminal::ChunkLine => ParserAttributes::ChunkLine(input.lexeme().to_string()),
+            BeforePath | AfterPath | ChunkHeader | ChunkLine | Preamble => {
+                ParserAttributes::String(input.lexeme().to_string())
+            }
             _ => ParserAttributes::Token(input.clone()),
         }
     }

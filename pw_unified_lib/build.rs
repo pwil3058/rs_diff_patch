@@ -1,8 +1,10 @@
 // Copyright 2021 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+use std::fs;
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rerun-if-changed=src/unified.laps");
+    println!("cargo:rerun-if-changed=src/unified_parser.laps");
+    fs::remove_file("src/unified_parser.rs");
     match Command::new("lap_gen")
         .args([
             "-o",
@@ -24,5 +26,4 @@ fn main() {
         }
         Err(err) => panic!("Build error: {err}"),
     }
-    // println!("cargo:rerun-if-changed=buildx");
 }
