@@ -1,8 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::unified_parser::AATerminal;
-use crate::unified_parser::UnifiedDiff;
-use lexan::Token;
+use crate::unified_diff::AATerminal;
+use crate::unified_diff::UnifiedDiff;
 
 #[derive(Debug, Default, Clone)]
 pub enum ParserAttributes {
@@ -23,7 +22,7 @@ impl From<lexan::Token<AATerminal>> for ParserAttributes {
 }
 
 impl ParserAttributes {
-    pub fn token(&self) -> &Token<AATerminal> {
+    pub fn token(&self) -> &lexan::Token<AATerminal> {
         match self {
             ParserAttributes::Token(token) => token,
             _ => panic!("invalid variant"),

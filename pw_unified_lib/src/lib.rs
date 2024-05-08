@@ -2,4 +2,3 @@
 
 pub mod parser_attributes;
 pub mod unified_diff;
-pub mod unified_parser;

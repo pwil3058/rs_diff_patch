@@ -1,7 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 %{
-use crate::parser_attributes::ParserAttributes;
+use crate::parser_attributes::*;
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedDiff {
@@ -35,7 +35,7 @@ impl lalr1::ReportError<AATerminal> for UnifiedDiffs {}
 Specification: DiffList
      | Preamble DiffList
      !{
-        self.preamble = $2.token().lexeme().to_string();
+        self.preamble = Some($2.token().lexeme().to_string());
      !}
     .
 DiffList:
