@@ -1,0 +1,157 @@
+Symbols:
+  Tokens:
+    AAEnd(): #(NonAssoc, 0)
+    AfterPath((^\+\+\+.*\n)): #(NonAssoc, 0)
+    BeforePath((^---.*\n)): #(NonAssoc, 0)
+    ChunkHeader((^@@.*@@.*\n)): #(NonAssoc, 0)
+    ChunkLine((^[ -+].*\n)): #(NonAssoc, 0)
+    Preamble(([^-]{3}*)): #(NonAssoc, 0)
+  Non Terminal Symbols:
+    AAStart: TokenSet{Preamble}:(false)
+    ChunkLines: TokenSet{ChunkLine}:(false)
+    Diff: TokenSet{BeforePath}:(false)
+    DiffList: TokenSet{BeforePath}:(false)
+    Specification: TokenSet{Preamble}:(false)
+
+Productions:
+  AAStart: Specification #(NonAssoc, 0)
+  Specification: Preamble DiffList #(NonAssoc, 0)
+  DiffList: Diff #(NonAssoc, 0)
+  DiffList: DiffList Diff #(NonAssoc, 0)
+  Diff: BeforePath AfterPath ChunkHeader ChunkLines #(NonAssoc, 0)
+  ChunkLines: ChunkLine #(NonAssoc, 0)
+  ChunkLines: ChunkLines ChunkLine #(NonAssoc, 0)
+
+State<0>:
+  Grammar Items:
+    AAStart: . Specification #(NonAssoc, 0): TokenSet{AAEnd}
+    Specification: . Preamble DiffList #(NonAssoc, 0): TokenSet{AAEnd}
+  Parser Action Table:
+    Shifts:
+      Preamble -> State<2>
+  Go To Table:
+    Specification -> State<1>
+  Error Recovery State: <none>
+
+State<1>:
+  Grammar Items:
+    AAStart: Specification .  #(NonAssoc, 0): TokenSet{AAEnd}
+  Parser Action Table:
+    Reductions:
+      AAEnd: accept AAStart: Specification #(NonAssoc, 0)
+  Go To Table:
+    <empty>
+  Error Recovery State: <none>
+
+State<2>:
+  Grammar Items:
+    Specification: Preamble . DiffList #(NonAssoc, 0): TokenSet{AAEnd}
+    DiffList: . Diff #(NonAssoc, 0): TokenSet{BeforePath, AAEnd}
+    DiffList: . DiffList Diff #(NonAssoc, 0): TokenSet{BeforePath, AAEnd}
+    Diff: . BeforePath AfterPath ChunkHeader ChunkLines #(NonAssoc, 0): TokenSet{BeforePath, AAEnd}
+  Parser Action Table:
+    Shifts:
+      BeforePath -> State<5>
+  Go To Table:
+    Diff -> State<4>
+    DiffList -> State<3>
+  Error Recovery State: <none>
+
+State<3>:
+  Grammar Items:
+    Specification: Preamble DiffList .  #(NonAssoc, 0): TokenSet{AAEnd}
+    DiffList: DiffList . Diff #(NonAssoc, 0): TokenSet{BeforePath, AAEnd}
+    Diff: . BeforePath AfterPath ChunkHeader ChunkLines #(NonAssoc, 0): TokenSet{BeforePath, AAEnd}
+  Parser Action Table:
+    Shifts:
+      BeforePath -> State<5>
+    Reductions:
+      AAEnd: reduce Specification: Preamble DiffList #(NonAssoc, 0)
+  Go To Table:
+    Diff -> State<6>
+  Error Recovery State: <none>
+
+State<4>:
+  Grammar Items:
+    DiffList: Diff .  #(NonAssoc, 0): TokenSet{BeforePath, AAEnd}
+  Parser Action Table:
+    Reductions:
+      BeforePath | AAEnd: reduce DiffList: Diff #(NonAssoc, 0)
+  Go To Table:
+    <empty>
+  Error Recovery State: <none>
+
+State<5>:
+  Grammar Items:
+    Diff: BeforePath . AfterPath ChunkHeader ChunkLines #(NonAssoc, 0): TokenSet{BeforePath, AAEnd}
+  Parser Action Table:
+    Shifts:
+      AfterPath -> State<7>
+  Go To Table:
+    <empty>
+  Error Recovery State: <none>
+
+State<6>:
+  Grammar Items:
+    DiffList: DiffList Diff .  #(NonAssoc, 0): TokenSet{BeforePath, AAEnd}
+  Parser Action Table:
+    Reductions:
+      BeforePath | AAEnd: reduce DiffList: DiffList Diff #(NonAssoc, 0)
+  Go To Table:
+    <empty>
+  Error Recovery State: <none>
+
+State<7>:
+  Grammar Items:
+    Diff: BeforePath AfterPath . ChunkHeader ChunkLines #(NonAssoc, 0): TokenSet{BeforePath, AAEnd}
+  Parser Action Table:
+    Shifts:
+      ChunkHeader -> State<8>
+  Go To Table:
+    <empty>
+  Error Recovery State: <none>
+
+State<8>:
+  Grammar Items:
+    Diff: BeforePath AfterPath ChunkHeader . ChunkLines #(NonAssoc, 0): TokenSet{BeforePath, AAEnd}
+    ChunkLines: . ChunkLine #(NonAssoc, 0): TokenSet{BeforePath, ChunkLine, AAEnd}
+    ChunkLines: . ChunkLines ChunkLine #(NonAssoc, 0): TokenSet{BeforePath, ChunkLine, AAEnd}
+  Parser Action Table:
+    Shifts:
+      ChunkLine -> State<10>
+  Go To Table:
+    ChunkLines -> State<9>
+  Error Recovery State: <none>
+
+State<9>:
+  Grammar Items:
+    Diff: BeforePath AfterPath ChunkHeader ChunkLines .  #(NonAssoc, 0): TokenSet{BeforePath, AAEnd}
+    ChunkLines: ChunkLines . ChunkLine #(NonAssoc, 0): TokenSet{BeforePath, ChunkLine, AAEnd}
+  Parser Action Table:
+    Shifts:
+      ChunkLine -> State<11>
+    Reductions:
+      BeforePath | AAEnd: reduce Diff: BeforePath AfterPath ChunkHeader ChunkLines #(NonAssoc, 0)
+  Go To Table:
+    <empty>
+  Error Recovery State: <none>
+
+State<10>:
+  Grammar Items:
+    ChunkLines: ChunkLine .  #(NonAssoc, 0): TokenSet{BeforePath, ChunkLine, AAEnd}
+  Parser Action Table:
+    Reductions:
+      BeforePath | ChunkLine | AAEnd: reduce ChunkLines: ChunkLine #(NonAssoc, 0)
+  Go To Table:
+    <empty>
+  Error Recovery State: <none>
+
+State<11>:
+  Grammar Items:
+    ChunkLines: ChunkLines ChunkLine .  #(NonAssoc, 0): TokenSet{BeforePath, ChunkLine, AAEnd}
+  Parser Action Table:
+    Reductions:
+      BeforePath | ChunkLine | AAEnd: reduce ChunkLines: ChunkLines ChunkLine #(NonAssoc, 0)
+  Go To Table:
+    <empty>
+  Error Recovery State: <none>
