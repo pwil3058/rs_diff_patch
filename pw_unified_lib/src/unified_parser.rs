@@ -97,13 +97,13 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffP
         return match state {
             0 => btree_set![Preamble],
             1 => btree_set![AAEnd],
-            2 => btree_set![BeforePath],
+            2 => btree_set![BeforePath, AAEnd],
             3 => btree_set![BeforePath, AAEnd],
             4 => btree_set![BeforePath, AAEnd],
             5 => btree_set![AfterPath],
             6 => btree_set![BeforePath, AAEnd],
             7 => btree_set![ChunkHeader],
-            8 => btree_set![ChunkLine],
+            8 => btree_set![BeforePath, ChunkLine, AAEnd],
             9 => btree_set![BeforePath, ChunkLine, AAEnd],
             10 => btree_set![BeforePath, ChunkLine, AAEnd],
             11 => btree_set![BeforePath, ChunkLine, AAEnd],
@@ -127,6 +127,8 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffP
             },
             2 => match aa_tag {
                 BeforePath => Action::Shift(5),
+                // DiffList: <empty> #(NonAssoc, 0)
+                AAEnd => Action::Reduce(2),
                 _ => Action::SyntaxError,
             },
             3 => match aa_tag {
@@ -137,7 +139,7 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffP
             },
             4 => match aa_tag {
                 // DiffList: Diff #(NonAssoc, 0)
-                BeforePath | AAEnd => Action::Reduce(2),
+                BeforePath | AAEnd => Action::Reduce(3),
                 _ => Action::SyntaxError,
             },
             5 => match aa_tag {
@@ -146,7 +148,7 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffP
             },
             6 => match aa_tag {
                 // DiffList: DiffList Diff #(NonAssoc, 0)
-                BeforePath | AAEnd => Action::Reduce(3),
+                BeforePath | AAEnd => Action::Reduce(4),
                 _ => Action::SyntaxError,
             },
             7 => match aa_tag {
@@ -155,22 +157,24 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffP
             },
             8 => match aa_tag {
                 ChunkLine => Action::Shift(10),
+                // ChunkLines: <empty> #(NonAssoc, 0)
+                BeforePath | AAEnd => Action::Reduce(6),
                 _ => Action::SyntaxError,
             },
             9 => match aa_tag {
                 ChunkLine => Action::Shift(11),
                 // Diff: BeforePath AfterPath ChunkHeader ChunkLines #(NonAssoc, 0)
-                BeforePath | AAEnd => Action::Reduce(4),
+                BeforePath | AAEnd => Action::Reduce(5),
                 _ => Action::SyntaxError,
             },
             10 => match aa_tag {
                 // ChunkLines: ChunkLine #(NonAssoc, 0)
-                BeforePath | ChunkLine | AAEnd => Action::Reduce(5),
+                BeforePath | ChunkLine | AAEnd => Action::Reduce(7),
                 _ => Action::SyntaxError,
             },
             11 => match aa_tag {
                 // ChunkLines: ChunkLines ChunkLine #(NonAssoc, 0)
-                BeforePath | ChunkLine | AAEnd => Action::Reduce(6),
+                BeforePath | ChunkLine | AAEnd => Action::Reduce(8),
                 _ => Action::SyntaxError,
             },
             _ => panic!("illegal state: {aa_state}"),
@@ -181,11 +185,13 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffP
         match production_id {
             0 => (AANonTerminal::AAStart, 1),
             1 => (AANonTerminal::Specification, 2),
-            2 => (AANonTerminal::DiffList, 1),
-            3 => (AANonTerminal::DiffList, 2),
-            4 => (AANonTerminal::Diff, 4),
-            5 => (AANonTerminal::ChunkLines, 1),
-            6 => (AANonTerminal::ChunkLines, 2),
+            2 => (AANonTerminal::DiffList, 0),
+            3 => (AANonTerminal::DiffList, 1),
+            4 => (AANonTerminal::DiffList, 2),
+            5 => (AANonTerminal::Diff, 4),
+            6 => (AANonTerminal::ChunkLines, 0),
+            7 => (AANonTerminal::ChunkLines, 1),
+            8 => (AANonTerminal::ChunkLines, 2),
             _ => panic!("malformed production data table"),
         }
     }
@@ -216,7 +222,7 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffP
     fn do_semantic_action<F: FnMut(String, String)>(
         &mut self,
         aa_production_id: u32,
-        aa_rhs: Vec<ParserAttributes>,
+        mut aa_rhs: Vec<ParserAttributes>,
         mut aa_inject: F,
     ) -> ParserAttributes {
         let mut aa_lhs = if let Some(a) = aa_rhs.first() {
@@ -225,26 +231,6 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffP
             ParserAttributes::default()
         };
         match aa_production_id {
-            2 => {
-                // DiffList: Diff #(NonAssoc, 0)
-
-                aa_lhs = ParserAttributes::Diffs(vec![aa_rhs[0].diff().clone()]);
-            }
-            3 => {
-                // DiffList: DiffList Diff #(NonAssoc, 0)
-
-                aa_lhs.diffs_mut().push(aa_rhs[1].diff().clone());
-            }
-            5 => {
-                // ChunkLines: ChunkLine #(NonAssoc, 0)
-
-                aa_lhs = ParserAttributes::Strings(vec![aa_rhs[0].string().clone()]);
-            }
-            6 => {
-                // ChunkLines: ChunkLines ChunkLine #(NonAssoc, 0)
-
-                aa_lhs.strings_mut().push(aa_rhs[1].string().clone());
-            }
             _ => aa_inject(String::new(), String::new()),
         };
         aa_lhs

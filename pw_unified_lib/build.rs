@@ -4,7 +4,7 @@ use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=src/unified_parser.laps");
-    fs::remove_file("src/unified_parser.rs");
+    //fs::remove_file("src/unified_parser.rs");
     match Command::new("lap_gen")
         .args([
             "-o",
@@ -21,9 +21,9 @@ fn main() {
                     .status()
                     .unwrap();
             } else {
-                panic!("failed prebuild: {status}");
+                eprintln!("failed prebuild formatting: {status}");
             };
         }
-        Err(err) => panic!("Build error: {err}"),
+        Err(err) => eprintln!("failed lap_gen: {err}: check specification"),
     }
 }

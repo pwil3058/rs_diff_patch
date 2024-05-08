@@ -7,10 +7,10 @@ use crate::unified_parser::AATerminal;
 pub enum ParserAttributes {
     String(String),
     Strings(Vec<String>),
-    Token(lexan::Token<AATerminal>),
-    Error(lalr1::Error<AATerminal>),
     Diff(UnifiedDiff),
     Diffs(Vec<UnifiedDiff>),
+    Token(lexan::Token<AATerminal>),
+    Error(lalr1::Error<AATerminal>),
     #[default]
     Default,
 }

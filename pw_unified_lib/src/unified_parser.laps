@@ -9,6 +9,7 @@ use crate::unified_diff::{UnifiedDiff, UnifiedDiffPatch};
 %attr   ParserAttributes
 %target UnifiedDiffPatch
 
+%shift_reduce 2
 %%
 
 %token  BeforePath  (^---.*\n)
@@ -19,23 +20,12 @@ use crate::unified_diff::{UnifiedDiff, UnifiedDiffPatch};
 
 %%
 Specification: Preamble DiffList.
-DiffList: Diff
-    !{
-        $$ = ParserAttributes::Diffs(vec![$1.diff().clone()]);
-    !}
-    |
-    DiffList Diff
-    !{
-        $$.diff_list_mut().push($2.diff().clone());
-    !}
+DiffList:
+    | Diff
+    | DiffList Diff
     .
 Diff: BeforePath AfterPath ChunkHeader ChunkLines.
-ChunkLines: ChunkLine
-    !{
-        $$ = ParserAttributes::Strings(vec![$1.string().clone()]);
-    !}
+ChunkLines:
+    | ChunkLine
     | ChunkLines ChunkLine
-    !{
-        $$.strings_mut().push($2.string().clone());
-    !}
     .
