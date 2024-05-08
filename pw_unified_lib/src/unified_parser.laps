@@ -2,12 +2,12 @@
 
 %{
 use crate::parser_attributes::ParserAttributes;
-use crate::unified_diff::{UnifiedDiff, UnifiedDiffPatch};
+use crate::unified_diff::UnifiedDiffs;
 
 %}
 
 %attr   ParserAttributes
-%target UnifiedDiffPatch
+%target UnifiedDiffs
 
 %shift_reduce 2
 %%
@@ -19,13 +19,20 @@ use crate::unified_diff::{UnifiedDiff, UnifiedDiffPatch};
 %token  Preamble    ([^-]{3}*)
 
 %%
-Specification: Preamble DiffList.
+Specification: DiffList
+     | Preamble DiffList
+     !{
+        self.set_preamble($2.token().lexeme());
+     !}
+    .
 DiffList:
     | Diff
     | DiffList Diff
     .
 Diff: BeforePath AfterPath ChunkHeader ChunkLines.
-ChunkLines:
-    | ChunkLine
+ChunkLines: !{ $$ = ParserAttributes::Strings(vec![]); !}
     | ChunkLines ChunkLine
+    !{
+        $$.strings_mut().push($2.token().lexeme().to_string());
+    !}
     .
