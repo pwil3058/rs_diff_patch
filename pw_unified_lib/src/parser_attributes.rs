@@ -1,17 +1,13 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::unified_diff::AATerminal;
-use crate::unified_diff::UnifiedDiff;
+use std::collections::BTreeSet;
 
 #[derive(Debug, Default, Clone)]
 pub enum ParserAttributes {
-    String(String),
-    Strings(Vec<String>),
-    Diff(UnifiedDiff),
-    Diffs(Vec<UnifiedDiff>),
     Token(lexan::Token<AATerminal>),
-    Tokens(Vec<lexan::Token<AATerminal>>),
-    Error(lalr1::Error<AATerminal>),
+    SyntaxError(lexan::Token<AATerminal>, BTreeSet<AATerminal>),
+    LexicalError(lexan::Error<AATerminal>, BTreeSet<AATerminal>),
     #[default]
     Default,
 }
@@ -22,6 +18,19 @@ impl From<lexan::Token<AATerminal>> for ParserAttributes {
     }
 }
 
+impl From<lalr1::Error<AATerminal>> for ParserAttributes {
+    fn from(error: lalr1::Error<AATerminal>) -> Self {
+        match error {
+            lalr1::Error::LexicalError(error, expected) => {
+                ParserAttributes::LexicalError(error, expected)
+            }
+            lalr1::Error::SyntaxError(token, expected) => {
+                ParserAttributes::SyntaxError(token, expected)
+            }
+        }
+    }
+}
+
 impl ParserAttributes {
     pub fn token(&self) -> &lexan::Token<AATerminal> {
         match self {
@@ -29,48 +38,20 @@ impl ParserAttributes {
             _ => panic!("invalid variant"),
         }
     }
-    pub fn tokens(&self) -> &Vec<lexan::Token<AATerminal>> {
-        match self {
-            ParserAttributes::Tokens(tokens) => tokens,
-            _ => panic!("invalid variant"),
-        }
-    }
-
-    pub fn tokens_mut(&mut self) -> &mut Vec<lexan::Token<AATerminal>> {
-        match self {
-            ParserAttributes::Tokens(tokens) => tokens,
-            _ => panic!("{self:?}: Wrong attribute variant."),
-        }
-    }
-
-    pub fn strings(&self) -> Box<[String]> {
-        match self {
-            ParserAttributes::Strings(strings) => strings.clone().into_boxed_slice(),
-            _ => panic!("invalid variant"),
-        }
-    }
-
-    pub fn strings_mut(&mut self) -> &mut Vec<String> {
-        match self {
-            ParserAttributes::Strings(strings) => strings,
-            _ => panic!("{self:?}: Wrong attribute variant."),
-        }
-    }
-    //
-    // pub fn diff(&self) -> &UnifiedDiff {
-    //     match self {
-    //         ParserAttributes::Diff(diff) => diff,
-    //         _ => panic!("{self:?}: Wrong attribute variant."),
-    //     }
-    // }
-    //
-    // pub fn diffs_mut(&mut self) -> &mut Vec<UnifiedDiff> {
-    //     match self {
-    //         ParserAttributes::Diffs(diffs) => diffs,
-    //         _ => panic!("{self:?}: Wrong attribute variant."),
-    //     }
-    // }
 }
+
+// impl From<lalr1::Error<AATerminal>> for ParserAttributes {
+//     fn from(error: lalr1::Error<AATerminal>) -> Self {
+//         match error {
+//             lalr1::Error::LexicalError(error, expected) => {
+//                 ParserAttributes::LexicalError(error, expected)
+//             }
+//             lalr1::Error::SyntaxError(token, expected) => {
+//                 ParserAttributes::SyntaxError(token, expected)
+//             }
+//         }
+//     }
+// }
 
 // impl From<lexan::Token<AATerminal>> for ParserAttributes {
 //     fn from(input: lexan::Token<AATerminal>) -> Self {
@@ -83,9 +64,3 @@ impl ParserAttributes {
 //         }
 //     }
 // }
-
-impl From<lalr1::Error<AATerminal>> for ParserAttributes {
-    fn from(error: lalr1::Error<AATerminal>) -> Self {
-        ParserAttributes::Error(error.clone())
-    }
-}

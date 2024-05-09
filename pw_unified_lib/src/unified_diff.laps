@@ -2,38 +2,60 @@
 
 %{
 use crate::parser_attributes::*;
+use lalr1::Parser;
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChunk {
-    _header: String,
-    _lines: Box<[String]>,
+    pub header: String,
+    pub lines: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedDiff {
-    _before: String,
-    _after: String,
-    _header: String,
-    _lines: Box<[UnifiedChunk]>,
+    pub before: String,
+    pub after: String,
+    pub header: String,
+    pub chunks: Vec<UnifiedChunk>,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedDiffs {
-    _preamble: Option<String>,
-    _diffs: Vec<UnifiedDiff>,
+    pub preamble: Option<String>,
+    pub diffs: Vec<UnifiedDiff>,
 }
 
-#[derive(Debug, Default, Clone)]
-struct UnifiedDiffsData {
-    preamble: Option<String>,
+impl UnifiedDiffs {
+    pub fn new(text: &str) -> Self {
+        let mut unified_diffs = UnifiedDiffs::default();
+        unified_diffs.parse_text(text, "unified_diffs");
+        unified_diffs
+    }
+
+    pub fn start_new_diff(&mut self, before: &str, after: &str) {
+        let mut diff = UnifiedDiff::default();
+        diff.before = before.to_string();
+        diff.after = after.to_string();
+        self.diffs.push(diff);
+    }
+
+    pub fn start_new_chunk(&mut self, chunk_header: &str) {
+       let mut chunk = UnifiedChunk::default();
+        chunk.header = chunk_header.to_string();
+        self.diffs.last_mut().expect("start_new_chunk").chunks.push(chunk);
+    }
+
+    pub fn add_chunk_line(&mut self, chunk_line: &str) {
+        let line = chunk_line.to_string();
+        self.diffs.last_mut().expect("add_chunk_line:1").chunks.last_mut().expect("add_chunk_line:2").lines.push(line);
+    }
 }
 
-impl lalr1::ReportError<AATerminal> for UnifiedDiffsData {}
+impl lalr1::ReportError<AATerminal> for UnifiedDiffs {}
 
 %}
 
 %attr   ParserAttributes
-%target UnifiedDiffsData
+%target UnifiedDiffs
 
 %shift_reduce 2
 %%
@@ -45,22 +67,15 @@ impl lalr1::ReportError<AATerminal> for UnifiedDiffsData {}
 %token  Preamble    ([^-]{3}*)
 
 %%
-Specification: DiffList
+Specification: DiffList !{ $$ = $1.clone(); !}
      | Preamble DiffList !{ self.preamble = Some($2.token().lexeme().to_string()); !}.
 DiffList:
     | Diff
     | DiffList Diff
     .
-Diff: BeforePath AfterPath ChunkHeader ChunkLines
-    !{  let _diff = $4.strings(); !}
+Diff: BeforePath AfterPath !{ self.start_new_diff($1.token().lexeme(), $1.token().lexeme()); !}
+    | Diff Chunk
     .
-ChunkList:
-    | ChunkList Chunk
-    .
-Chunk: ChunkHeader ChunkLines
-    !{  let _diff = $4.strings(); !}
-    .
-ChunkLines: !{ $$ = ParserAttributes::Strings(vec![]); !}
-    | ChunkLines ChunkLine
-    !{  $$.strings_mut().push($2.token().lexeme().to_string()); !}
+Chunk: ChunkHeader !{ self.start_new_chunk($1.token().lexeme()); !}
+    | Chunk ChunkLine  !{ self.add_chunk_line($2.token().lexeme()); !}
     .
