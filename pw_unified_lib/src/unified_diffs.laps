@@ -63,15 +63,16 @@ impl lalr1::ReportError<AATerminal> for UnifiedDiffs {}
 %shift_reduce 2
 %%
 
-%token  BeforePath  (^---\w*.*\n)
+%token  BeforePath  (^--- "\S*"\n)
 %token  AfterPath   (^\+\+\+\w*.*\n)
 %token  ChunkHeader (^@@.*@@.*\n)
-%token  ChunkLine   (^[\x20\+-].*\n)
+%token  ChunkLine   (^([^-]{3}|[^+]{3})[\x20\+-].*\n)
 %token  Preamble    (^[^-]{3}*\n)
 
 %%
-Specification: DiffList !{ $$ = $1.clone(); !}
-     | Preamble DiffList !{ self.preamble = Some($1.token().lexeme().to_string()); !}.
+Specification: !{ $$ = ParserAttributes::Default; !}
+    | DiffList
+    | Preamble DiffList !{ self.preamble = Some($1.token().lexeme().to_string()); !}.
 DiffList:
     | Diff
     | DiffList Diff
