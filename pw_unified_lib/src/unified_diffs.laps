@@ -4,6 +4,9 @@
 use crate::parser_attributes::*;
 use lalr1::Parser;
 
+#[cfg(test)]
+mod unified_diffs_tests;
+
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChunk {
     pub header: String,
@@ -27,7 +30,7 @@ pub struct UnifiedDiffs {
 impl UnifiedDiffs {
     pub fn new(text: &str) -> Self {
         let mut unified_diffs = UnifiedDiffs::default();
-        unified_diffs.parse_text(text, "unified_diffs");
+        unified_diffs.parse_text(text, "unified_diffs").unwrap();
         unified_diffs
     }
 
@@ -60,15 +63,15 @@ impl lalr1::ReportError<AATerminal> for UnifiedDiffs {}
 %shift_reduce 2
 %%
 
-%token  BeforePath  (^---.*\n)
-%token  AfterPath   (^\+\+\+.*\n)
+%token  BeforePath  (^---\w*.*\n)
+%token  AfterPath   (^\+\+\+\w*.*\n)
 %token  ChunkHeader (^@@.*@@.*\n)
-%token  ChunkLine   (^[ -+].*\n)
-%token  Preamble    ([^-]{3}*)
+%token  ChunkLine   (^[\x20\+-].*\n)
+%token  Preamble    (^[^-]{3}*\n)
 
 %%
 Specification: DiffList !{ $$ = $1.clone(); !}
-     | Preamble DiffList !{ self.preamble = Some($2.token().lexeme().to_string()); !}.
+     | Preamble DiffList !{ self.preamble = Some($1.token().lexeme().to_string()); !}.
 DiffList:
     | Diff
     | DiffList Diff

@@ -2,21 +2,21 @@
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rerun-if-changed=src/unified_diff.laps");
+    println!("cargo:rerun-if-changed=src/unified_diffs.laps");
     //fs::remove_file("src/unified_parser.rs");
     match Command::new("lap_gen")
         .args([
             "--ignore-sr-conflicts",
             "--ignore-rr-conflicts",
             "-f",
-            "src/unified_diff.laps",
+            "src/unified_diffs.laps",
         ])
         .status()
     {
         Ok(status) => {
             if status.success() {
                 Command::new("rustfmt")
-                    .args(["src/unified_diff.rs"])
+                    .args(["src/unified_diffs.rs"])
                     .status()
                     .unwrap();
             } else {

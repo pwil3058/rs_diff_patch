@@ -3,6 +3,9 @@
 use crate::parser_attributes::*;
 use lalr1::Parser;
 
+#[cfg(test)]
+mod unified_diffs_tests;
+
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChunk {
     pub header: String,
@@ -108,11 +111,11 @@ lazy_static::lazy_static! {
             &[
             ],
             &[
-                (Preamble, r###"([^-]{3}*)"###),
-                (BeforePath, r###"(^---.*\n)"###),
+                (BeforePath, r###"(^---\w*.*\n)"###),
                 (ChunkHeader, r###"(^@@.*@@.*\n)"###),
-                (ChunkLine, r###"(^[ -+].*\n)"###),
-                (AfterPath, r###"(^\+\+\+.*\n)"###),
+                (ChunkLine, r###"(^[\x20\+-].*\n)"###),
+                (Preamble, r###"(^[^-]{3}*\n)"###),
+                (AfterPath, r###"(^\+\+\+\w*.*\n)"###),
             ],
             &[
             ],
@@ -313,7 +316,7 @@ impl lalr1::Parser<AATerminal, AANonTerminal, ParserAttributes> for UnifiedDiffs
             }
             2 => {
                 // Specification: Preamble DiffList #(NonAssoc, 0)
-                self.preamble = Some(aa_rhs[1].token().lexeme().to_string());
+                self.preamble = Some(aa_rhs[0].token().lexeme().to_string());
             }
             6 => {
                 // Diff: BeforePath AfterPath #(NonAssoc, 0)
