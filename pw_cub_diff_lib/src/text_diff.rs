@@ -46,6 +46,19 @@ impl Error for DiffParseError {
 
 pub type DiffParseResult<T> = Result<T, DiffParseError>;
 
+pub trait CheckEndOfInput<T> {
+    fn check_end_of_input(&self) -> DiffParseResult<&T>;
+}
+
+impl<T> CheckEndOfInput<T> for Option<T> {
+    fn check_end_of_input(&self) -> DiffParseResult<&T> {
+        match self {
+            Some(t) => Ok(t),
+            None => Err(DiffParseError::UnexpectedEndOfInput),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct PathAndTimestamp {
     pub file_path: String,
