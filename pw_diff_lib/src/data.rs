@@ -199,6 +199,13 @@ pub trait DataIfce<T: PartialEq>: Len {
         self.data()[range.0..range.1].iter()
     }
 
+    fn subsequence_from<'a>(&'a self, from: usize) -> impl DoubleEndedIterator<Item = &'a T>
+    where
+        T: 'a,
+    {
+        self.data()[from..].iter()
+    }
+
     fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
         if at < self.len() && self.len() - at >= subsequence.len() {
             subsequence

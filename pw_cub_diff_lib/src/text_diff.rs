@@ -1,11 +1,13 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use regex::Captures;
 use std::error::Error;
 use std::num::ParseIntError;
 use std::slice::Iter;
-use std::sync::Arc;
 use std::{fmt, io};
+
+use pw_diff_lib::data::*;
+use pw_diff_lib::range::{Len, Range};
+use regex::Captures;
 
 use crate::git_binary_diff::git_delta::DeltaError;
 use crate::DiffFormat;
@@ -46,8 +48,20 @@ pub type DiffParseResult<T> = Result<T, DiffParseError>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct PathAndTimestamp {
-    file_path: String,
-    time_stamp: Option<String>,
+    pub file_path: String,
+    pub time_stamp: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct StartAndLength {
+    pub start: usize,
+    pub length: usize,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct StartsAndLengths {
+    pub before: StartAndLength,
+    pub after: StartAndLength,
 }
 
 #[derive(Debug)]
@@ -83,7 +97,7 @@ pub trait TextDiffParser<H: TextDiffHunk> {
     fn new() -> Self;
     fn ante_file_rec<'t>(&self, line: &'t str) -> Option<Captures<'t>>;
     fn post_file_rec<'t>(&self, line: &'t str) -> Option<Captures<'t>>;
-    fn get_hunk_at(&self, lines: &[String], index: usize) -> DiffParseResult<Option<H>>;
+    fn get_hunk_at(&self, lines: &Data<String>, index: usize) -> DiffParseResult<Option<H>>;
 
     fn _get_file_data_fm_captures(&self, captures: &Captures) -> PathAndTimestamp {
         let file_path = if let Some(path) = captures.get(2) {
@@ -100,20 +114,36 @@ pub trait TextDiffParser<H: TextDiffHunk> {
 
     fn get_text_diff_header_at(
         &self,
-        lines: &[String],
+        lines: &Data<String>,
         start_index: usize,
     ) -> DiffParseResult<Option<TextDiffHeader>> {
-        let ante_pat = if let Some(ref captures) = self.ante_file_rec(&lines[start_index]) {
-            self._get_file_data_fm_captures(captures)
-        } else {
-            return Ok(None);
+        let mut iter = lines.subsequence_from(start_index);
+        let ante_pat = {
+            if let Some(line) = iter.next() {
+                if let Some(captures) = self.ante_file_rec(line) {
+                    self._get_file_data_fm_captures(&captures)
+                } else {
+                    return Ok(None);
+                }
+            } else {
+                return Ok(None);
+            }
         };
-        let post_pat = if let Some(ref captures) = self.post_file_rec(&lines[start_index + 1]) {
-            self._get_file_data_fm_captures(captures)
-        } else {
-            return Err(DiffParseError::MissingAfterFileData(start_index));
+        let post_pat = {
+            if let Some(line) = iter.next() {
+                if let Some(captures) = self.ante_file_rec(line) {
+                    self._get_file_data_fm_captures(&captures)
+                } else {
+                    return Err(DiffParseError::MissingAfterFileData(start_index));
+                }
+            } else {
+                return Err(DiffParseError::MissingAfterFileData(start_index));
+            }
         };
-        let lines = lines[start_index..start_index + 2].to_vec();
+        let lines = lines
+            .subsequence(Range(start_index, start_index + 2))
+            .map(|s| s.to_string())
+            .collect();
         Ok(Some(TextDiffHeader {
             lines,
             ante_pat,
@@ -123,7 +153,7 @@ pub trait TextDiffParser<H: TextDiffHunk> {
 
     fn get_diff_at(
         &self,
-        lines: &[String],
+        lines: &Data<String>,
         start_index: usize,
     ) -> DiffParseResult<Option<TextDiff<H>>> {
         if lines.len() - start_index < 2 {

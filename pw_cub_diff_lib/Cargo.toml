@@ -5,3 +5,6 @@ edition = "2021"
 
 [dependencies]
 regex = "1.10.4"
+
+pw_diff_lib = { path = "../pw_diff_lib" }
+lazy_static = "1.4.0"
