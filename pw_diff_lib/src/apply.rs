@@ -209,20 +209,15 @@ where
     D: DataIfce<T> + WriteDataInto + Clone,
 {
     fn context_lengths(&self) -> (u8, u8);
-    fn before_adjusted_start(
-        &self,
-        offset: isize,
-        reductions: Option<(u8, u8)>,
+    fn before_start(&self, reverse: bool) -> usize;
+    fn before_length(&self, reverse: bool) -> usize;
+    fn before_items<'a>(
+        &'a self,
+        range: Option<Range>,
         reverse: bool,
-    ) -> isize;
-    fn before_adjusted_length(&self, reductions: Option<(u8, u8)>, reverse: bool) -> usize;
-    fn before_is_subsequence_in_at(
-        &self,
-        patchable: &D,
-        at: usize,
-        reductions: Option<(u8, u8)>,
-        reverse: bool,
-    ) -> bool;
+    ) -> impl Iterator<Item = &'a T>
+    where
+        T: 'a;
     fn before_write_into<W: io::Write>(
         &self,
         into: &mut W,
@@ -230,17 +225,19 @@ where
         reverse: bool,
     ) -> io::Result<()>;
 
-    fn after_adjusted_start(
-        &self,
-        offset: isize,
-        reductions: Option<(u8, u8)>,
-        reverse: bool,
-    ) -> isize {
-        self.before_adjusted_start(offset, reductions, !reverse)
+    fn after_start(&self, reverse: bool) -> usize {
+        self.before_start(!reverse)
     }
 
-    fn after_adjusted_length(&self, reductions: Option<(u8, u8)>, reverse: bool) -> usize {
-        self.before_adjusted_length(reductions, !reverse)
+    fn after_length(&self, reverse: bool) -> usize {
+        self.before_length(!reverse)
+    }
+
+    fn after_items<'a>(&'a self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &'a T>
+    where
+        T: 'a,
+    {
+        self.before_items(range, !reverse)
     }
 
     fn after_write_into<W: io::Write>(
@@ -258,6 +255,64 @@ where
     T: PartialEq + Clone,
     D: DataIfce<T> + WriteDataInto + Clone,
 {
+    fn before_adjusted_start(
+        &self,
+        offset: isize,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> isize {
+        if let Some((start_redn, _)) = reductions {
+            self.before_start(reverse) as isize + offset + start_redn as isize
+        } else {
+            self.before_start(reverse) as isize + offset
+        }
+    }
+    fn after_adjusted_start(
+        &self,
+        offset: isize,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> isize {
+        self.before_adjusted_start(offset, reductions, !reverse)
+    }
+
+    fn before_adjusted_length(&self, reductions: Option<(u8, u8)>, reverse: bool) -> usize {
+        if let Some((start_redn, end_redn)) = reductions {
+            self.before_length(reverse) - start_redn as usize - end_redn as usize
+        } else {
+            self.before_length(reverse)
+        }
+    }
+
+    fn after_adjusted_length(&self, reductions: Option<(u8, u8)>, reverse: bool) -> usize {
+        self.before_adjusted_length(reductions, !reverse)
+    }
+
+    fn before_is_subsequence_in_at(
+        &self,
+        patchable: &D,
+        at: usize,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> bool {
+        let length = self.before_adjusted_length(reductions, reverse);
+        let end = at + length;
+        if end > patchable.len() {
+            false
+        } else if let Some(reductions) = reductions {
+            let my_range = Range(reductions.0 as usize, length - reductions.1 as usize);
+            let other_range = Range(at, end);
+            self.before_items(Some(my_range), reverse)
+                .zip(patchable.subsequence(other_range))
+                .all(|(l, r)| l == r)
+        } else {
+            let other_range = Range(at, end);
+            self.before_items(None, reverse)
+                .zip(patchable.subsequence(other_range))
+                .all(|(l, r)| l == r)
+        }
+    }
+
     fn will_apply(&self, patchable: &D, offset: isize, reverse: bool) -> Option<WillApply> {
         let start = self.before_adjusted_start(offset, None, reverse);
         if !start.is_negative()

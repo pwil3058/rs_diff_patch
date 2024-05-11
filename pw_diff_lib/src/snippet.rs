@@ -1,6 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::range::Len;
+use crate::range::{Len, Range};
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::io::Write;
@@ -34,9 +34,9 @@ impl<T> Snippet<T> {
         }
     }
 
-    pub fn items(&self, reductions: Option<(u8, u8)>) -> impl Iterator<Item = &T> {
-        if let Some(reductions) = reductions {
-            self.items[reductions.0 as usize..self.len() - reductions.1 as usize].iter()
+    pub fn items(&self, reductions: Option<Range>) -> impl Iterator<Item = &T> {
+        if let Some(range) = reductions {
+            self.items[range.start()..self.len() - range.end()].iter()
         } else {
             self.items.iter()
         }

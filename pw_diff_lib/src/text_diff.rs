@@ -205,45 +205,23 @@ impl ApplyChunkFuzzyBasics<String, Data<String>> for TextChangeChunk {
         self.context_lengths
     }
 
-    fn before_adjusted_start(
-        &self,
-        offset: isize,
-        reductions: Option<(u8, u8)>,
-        reverse: bool,
-    ) -> isize {
-        if let Some((start_redn, _)) = reductions {
-            self.before(reverse).start as isize + offset + start_redn as isize
-        } else {
-            self.before(reverse).start as isize + offset
-        }
+    fn before_start(&self, reverse: bool) -> usize {
+        self.before(reverse).start
     }
 
-    fn before_adjusted_length(&self, reductions: Option<(u8, u8)>, reverse: bool) -> usize {
-        if let Some((start_redn, end_redn)) = reductions {
-            self.before(reverse).len() - start_redn as usize - end_redn as usize
-        } else {
-            self.before(reverse).len()
-        }
+    fn before_length(&self, reverse: bool) -> usize {
+        self.before(reverse).len()
     }
 
-    fn before_is_subsequence_in_at(
-        &self,
-        patchable: &Data<String>,
-        at: usize,
-        reductions: Option<(u8, u8)>,
+    fn before_items<'a>(
+        &'a self,
+        range: Option<Range>,
         reverse: bool,
-    ) -> bool {
-        let before = self.before(reverse);
-        let end = at + before.adj_length(reductions);
-        if end > patchable.len() {
-            false
-        } else {
-            let range = Range(at, end);
-            before
-                .items(reductions)
-                .zip(patchable.subsequence(range))
-                .all(|(l, r)| l == r)
-        }
+    ) -> impl Iterator<Item = &'a String>
+    where
+        String: 'a,
+    {
+        self.before(reverse).items(range)
     }
 
     fn before_write_into<W: io::Write>(
@@ -253,9 +231,16 @@ impl ApplyChunkFuzzyBasics<String, Data<String>> for TextChangeChunk {
         reverse: bool,
     ) -> io::Result<()> {
         let before = self.before(reverse);
-        for line in before.items(reductions) {
-            into.write_all(line.as_bytes())?;
-        }
+        if let Some(reductions) = reductions {
+            let range = Range(reductions.0 as usize, before.len() - reductions.1 as usize);
+            for line in before.items(Some(range)) {
+                into.write_all(line.as_bytes())?;
+            }
+        } else {
+            for line in before.items(None) {
+                into.write_all(line.as_bytes())?;
+            }
+        };
         Ok(())
     }
 }
