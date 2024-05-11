@@ -145,3 +145,57 @@ impl UnifiedDiffChunk {
         }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::unified_diff::UnifiedDiffChunk;
+    use pw_diff_lib::data::Data;
+    use std::fs::File;
+
+    static UNIFIED_DIFF_CHUNK: &str = "@@ -1,7 +1,6 @@
+-The Way that can be told of is not the eternal Way;
+-The name that can be named is not the eternal name.
+ The Nameless is the origin of Heaven and Earth;
+-The Named is the mother of all things.
++The named is the mother of all things.
++
+ Therefore let there always be non-being,
+   so we may see their subtlety,
+ And let there always be being,
+@@ -9,3 +8,6 @@
+ The two are the same,
+ But after they are produced,
+   they have different names.
++They both may be called deep and profound.
++Deeper and more profound,
++The door of all subtleties!
+";
+
+    #[test]
+    fn unified_diff_chunk_parse_string() {
+        let diff_lines = Data::<String>::from(UNIFIED_DIFF_CHUNK);
+        assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 0).is_ok());
+        assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 0)
+            .unwrap()
+            .is_some());
+        assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 1)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn unified_diff_chunk_parse_from_file() {
+        let file = File::open("test_diffs/test_1.diff").unwrap();
+        let lines = Data::<String>::read(file).unwrap();
+        let result = UnifiedDiffChunk::get_from_at(&lines, 0);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+
+        let result = UnifiedDiffChunk::get_from_at(&lines, 14);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_none());
+        // let diff = result.unwrap();
+        // assert!(diff.lines_consumed == diff.len());
+    }
+}
