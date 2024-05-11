@@ -33,6 +33,14 @@ impl<T> Snippet<T> {
             self.start.checked_add_signed(offset).expect("underflow")
         }
     }
+
+    pub fn items(&self, reductions: Option<(u8, u8)>) -> impl Iterator<Item = &T> {
+        if let Some(reductions) = reductions {
+            self.items[reductions.0 as usize..self.len() - reductions.1 as usize].iter()
+        } else {
+            self.items.iter()
+        }
+    }
 }
 
 pub trait SnippetWrite {

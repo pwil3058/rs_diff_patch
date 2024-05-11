@@ -5,7 +5,7 @@ use crate::apply::{
 };
 use crate::data::{Data, DataIfce};
 use crate::modifications::{ChunkIter, Modifications};
-use crate::range::Len;
+use crate::range::{Len, Range};
 use crate::snippet::{Snippet, SnippetWrite};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -13,6 +13,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::data::ExtractSnippet;
+use crate::ApplyChunkFuzzyBasics;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextChangeChunk {
@@ -196,6 +197,66 @@ impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
         into.write_all(b"=======\n")?;
         self.after(reverse).write_into(into, None)?;
         into.write_all(b">>>>>>>\n")
+    }
+}
+
+impl ApplyChunkFuzzyBasics<String, Data<String>> for TextChangeChunk {
+    fn context_lengths(&self) -> (u8, u8) {
+        self.context_lengths
+    }
+
+    fn before_adjusted_start(
+        &self,
+        offset: isize,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> isize {
+        if let Some((start_redn, _)) = reductions {
+            self.before(reverse).start as isize + offset + start_redn as isize
+        } else {
+            self.before(reverse).start as isize + offset
+        }
+    }
+
+    fn before_adjusted_length(&self, reductions: Option<(u8, u8)>, reverse: bool) -> usize {
+        if let Some((start_redn, end_redn)) = reductions {
+            self.before(reverse).len() - start_redn as usize - end_redn as usize
+        } else {
+            self.before(reverse).len()
+        }
+    }
+
+    fn before_is_subsequence_in_at(
+        &self,
+        patchable: &Data<String>,
+        at: usize,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> bool {
+        let before = self.before(reverse);
+        let end = at + before.adj_length(reductions);
+        if end > patchable.len() {
+            false
+        } else {
+            let range = Range(at, end);
+            before
+                .items(reductions)
+                .zip(patchable.subsequence(range))
+                .all(|(l, r)| l == r)
+        }
+    }
+
+    fn before_write_into<W: io::Write>(
+        &self,
+        into: &mut W,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> io::Result<()> {
+        let before = self.before(reverse);
+        for line in before.items(reductions) {
+            into.write_all(line.as_bytes())?;
+        }
+        Ok(())
     }
 }
 

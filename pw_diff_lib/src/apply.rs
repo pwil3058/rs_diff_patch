@@ -203,6 +203,187 @@ where
     fn write_failure_data_into<W: io::Write>(&self, into: &mut W, reverse: bool) -> io::Result<()>;
 }
 
+pub trait ApplyChunkFuzzyBasics<T, D>
+where
+    T: PartialEq + Clone,
+    D: DataIfce<T> + WriteDataInto + Clone,
+{
+    fn context_lengths(&self) -> (u8, u8);
+    fn before_adjusted_start(
+        &self,
+        offset: isize,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> isize;
+    fn before_adjusted_length(&self, reductions: Option<(u8, u8)>, reverse: bool) -> usize;
+    fn before_is_subsequence_in_at(
+        &self,
+        patchable: &D,
+        at: usize,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> bool;
+    fn before_write_into<W: io::Write>(
+        &self,
+        into: &mut W,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> io::Result<()>;
+
+    fn after_adjusted_start(
+        &self,
+        offset: isize,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> isize {
+        self.before_adjusted_start(offset, reductions, !reverse)
+    }
+
+    fn after_adjusted_length(&self, reductions: Option<(u8, u8)>, reverse: bool) -> usize {
+        self.before_adjusted_length(reductions, !reverse)
+    }
+
+    fn after_write_into<W: io::Write>(
+        &self,
+        into: &mut W,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> io::Result<()> {
+        self.before_write_into(into, reductions, !reverse)
+    }
+}
+
+pub trait ApplyChunkFuzzy2<T, D>: ApplyChunkFuzzyBasics<T, D>
+where
+    T: PartialEq + Clone,
+    D: DataIfce<T> + WriteDataInto + Clone,
+{
+    fn will_apply(&self, patchable: &D, offset: isize, reverse: bool) -> Option<WillApply> {
+        let start = self.before_adjusted_start(offset, None, reverse);
+        if !start.is_negative()
+            && self.before_is_subsequence_in_at(patchable, start as usize, None, reverse)
+        {
+            Some(WillApply::Cleanly)
+        } else {
+            let (start_context_len, end_context_len) = self.context_lengths();
+            let max_reduction = start_context_len.max(end_context_len);
+            for redn in 1..max_reduction {
+                let start_redn = redn.min(start_context_len);
+                let end_redn = redn.min(end_context_len);
+                let adj_start = start + start_redn as isize;
+                if !adj_start.is_negative()
+                    && self.before_is_subsequence_in_at(
+                        patchable,
+                        adj_start as usize,
+                        Some((start_redn, end_redn)),
+                        reverse,
+                    )
+                {
+                    return Some(WillApply::WithReductions((start_redn, end_redn)));
+                }
+            }
+            None
+        }
+    }
+
+    fn apply_into<W: io::Write>(
+        &self,
+        into: &mut W,
+        pd: &mut PatchableData<T, D>,
+        offset: isize,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> io::Result<()> {
+        let end = self.before_adjusted_start(offset, reductions, reverse) as usize;
+        pd.write_into_upto(into, end)?;
+        self.after_write_into(into, reductions, reverse)?;
+        pd.advance_consumed_by(self.before_adjusted_length(reductions, reverse));
+        Ok(())
+    }
+
+    fn will_apply_nearby(
+        &self,
+        pd: &PatchableData<T, D>,
+        next_chunk: Option<&Self>,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<(isize, WillApply)> {
+        let not_after = if let Some(next_chunk) = next_chunk {
+            next_chunk.before_adjusted_start(offset, None, reverse) as usize
+                - self.before_adjusted_length(None, reverse)
+        } else {
+            pd.data().len() - self.before_adjusted_length(None, reverse)
+        };
+        let mut backward_done = false;
+        let mut forward_done = false;
+        for i in 1isize.. {
+            if !backward_done {
+                let adjusted_offset = offset - i;
+                if self.before_adjusted_start(adjusted_offset, None, reverse)
+                    < pd.consumed() as isize
+                {
+                    backward_done = true;
+                } else {
+                    if let Some(will_apply) = self.will_apply(pd.data(), adjusted_offset, reverse) {
+                        return Some((-i, will_apply));
+                    }
+                }
+            }
+            if !forward_done {
+                let adjusted_offset = offset + i;
+                if self.before_adjusted_start(adjusted_offset, None, reverse) < not_after as isize {
+                    if let Some(will_apply) = self.will_apply(pd.data(), adjusted_offset, reverse) {
+                        return Some((i, will_apply));
+                    }
+                } else {
+                    forward_done = true
+                }
+            }
+            if forward_done && backward_done {
+                break;
+            }
+        }
+        None
+    }
+
+    fn is_already_applied(&self, patchable: &D, offset: isize, reverse: bool) -> Option<WillApply> {
+        self.will_apply(patchable, offset, !reverse)
+    }
+
+    fn is_already_applied_nearby(
+        &self,
+        pd: &PatchableData<T, D>,
+        next_chunk: Option<&Self>,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<(isize, WillApply)> {
+        self.will_apply_nearby(pd, next_chunk, offset, !reverse)
+    }
+
+    fn already_applied_into<W: io::Write>(
+        &self,
+        into: &mut W,
+        pd: &mut PatchableData<T, D>,
+        offset: isize,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> io::Result<()> {
+        let end = self.after_adjusted_start(offset, reductions, reverse) as usize
+            + self.after_adjusted_length(reductions, reverse);
+        let ok = pd.write_into_upto(into, end)?;
+        debug_assert!(ok);
+        Ok(())
+    }
+
+    fn write_failure_data_into<W: io::Write>(&self, into: &mut W, reverse: bool) -> io::Result<()> {
+        into.write_all(b"<<<<<<<\n")?;
+        self.before_write_into(into, None, reverse)?;
+        into.write_all(b"=======\n")?;
+        self.after_write_into(into, None, reverse)?;
+        into.write_all(b">>>>>>>\n")
+    }
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WillApply {
     Cleanly,
