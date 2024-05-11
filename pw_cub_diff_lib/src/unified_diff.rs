@@ -1,6 +1,7 @@
 use regex::{Captures, Regex};
 use std::str::FromStr;
 
+use pw_diff_lib::range::Range;
 use pw_diff_lib::{Data, DataIfce};
 
 use crate::text_diff::{
@@ -78,7 +79,7 @@ pub fn starts_and_lengths(
 }
 
 pub struct UnifiedDiffChunk {
-    pub lines: Vec<String>,
+    pub lines: Box<[String]>,
     pub starts_and_lengths: StartsAndLengths,
     pub context_lengths: (u8, u8),
     pub lines_consumed: usize,
@@ -130,14 +131,20 @@ impl UnifiedDiffChunk {
                 ));
             }
         }
+        let mut lines = lines
+            .subsequence(Range(start_index, start_index))
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>();
         if let Some(line) = iter.next() {
             if line.starts_with("\\") {
                 lines_consumed += 1;
                 no_final_newline = true;
+                let line = lines.pop().unwrap();
+                lines.push(line.trim_end().to_string())
             }
         }
         Ok(Some(Self {
-            lines: vec![],
+            lines: lines.into_boxed_slice(),
             starts_and_lengths,
             context_lengths: (start_context_length, end_context_length),
             lines_consumed,
@@ -152,7 +159,9 @@ mod tests {
     use pw_diff_lib::data::Data;
     use std::fs::File;
 
-    static UNIFIED_DIFF_CHUNK: &str = "@@ -1,7 +1,6 @@
+    static UNIFIED_DIFF_CHUNK: &str = "--- lao	2002-02-21 23:30:39.942229878 -0800
++++ tzu	2002-02-21 23:30:50.442260588 -0800
+@@ -1,7 +1,6 @@
 -The Way that can be told of is not the eternal Way;
 -The name that can be named is not the eternal name.
  The Nameless is the origin of Heaven and Earth;
@@ -174,8 +183,8 @@ mod tests {
     #[test]
     fn unified_diff_chunk_parse_string() {
         let diff_lines = Data::<String>::from(UNIFIED_DIFF_CHUNK);
-        assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 0).is_ok());
-        assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 0)
+        assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 2).is_ok());
+        assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 2)
             .unwrap()
             .is_some());
         assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 1)
