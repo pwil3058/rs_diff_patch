@@ -1,36 +1,42 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::data::{ConsumableData, ConsumableDataIfce, DataIfce, WriteDataInto};
-use crate::range::Range;
+use crate::data::{ConsumableData, ConsumableDataIfce, Data, DataIfce};
+use crate::range::{Len, Range};
 use std::io;
 
 use log;
 
-pub trait ApplyChunkFuzzy<T, D>
-where
-    T: PartialEq + Clone,
-    D: DataIfce<T> + WriteDataInto + Clone,
-{
-    fn will_apply(&self, patchable: &D, offset: isize, reverse: bool) -> Option<WillApply>;
+pub trait ApplyChunkFuzzy {
+    fn will_apply(
+        &self,
+        patchable: &Data<String>,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<WillApply>;
     fn apply_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut ConsumableData<T, D>,
+        pd: &mut ConsumableData<String, Data<String>>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> io::Result<()>;
     fn will_apply_nearby(
         &self,
-        pd: &ConsumableData<T, D>,
+        pd: &ConsumableData<String, Data<String>>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
     ) -> Option<(isize, WillApply)>;
-    fn is_already_applied(&self, patchable: &D, offset: isize, reverse: bool) -> Option<WillApply>;
+    fn is_already_applied(
+        &self,
+        patchable: &Data<String>,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<WillApply>;
     fn is_already_applied_nearby(
         &self,
-        pd: &ConsumableData<T, D>,
+        pd: &ConsumableData<String, Data<String>>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -38,7 +44,7 @@ where
     fn already_applied_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut ConsumableData<T, D>,
+        pd: &mut ConsumableData<String, Data<String>>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
@@ -46,11 +52,7 @@ where
     fn write_failure_data_into<W: io::Write>(&self, into: &mut W, reverse: bool) -> io::Result<()>;
 }
 
-pub trait ApplyChunkFuzzyBasics<T, D>
-where
-    T: PartialEq + Clone,
-    D: DataIfce<T> + WriteDataInto + Clone,
-{
+pub trait ApplyChunkFuzzyBasics {
     fn context_lengths(&self) -> (u8, u8);
     fn before_start(&self, reverse: bool) -> usize;
     fn before_length(&self, reverse: bool) -> usize;
@@ -58,9 +60,7 @@ where
         &'a self,
         range: Option<Range>,
         reverse: bool,
-    ) -> impl Iterator<Item = &'a T>
-    where
-        T: 'a;
+    ) -> impl Iterator<Item = &'a String>;
     fn before_write_into<W: io::Write>(
         &self,
         into: &mut W,
@@ -76,10 +76,11 @@ where
         self.before_length(!reverse)
     }
 
-    fn after_items<'a>(&'a self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &'a T>
-    where
-        T: 'a,
-    {
+    fn after_items<'a>(
+        &'a self,
+        range: Option<Range>,
+        reverse: bool,
+    ) -> impl Iterator<Item = &'a String> {
         self.before_items(range, !reverse)
     }
 
@@ -93,11 +94,7 @@ where
     }
 }
 
-pub trait ApplyChunkFuzzy2<T, D>: ApplyChunkFuzzyBasics<T, D>
-where
-    T: PartialEq + Clone,
-    D: DataIfce<T> + WriteDataInto + Clone,
-{
+pub trait ApplyChunkFuzzy2: ApplyChunkFuzzyBasics {
     fn before_adjusted_start(
         &self,
         offset: isize,
@@ -133,7 +130,7 @@ where
 
     fn before_is_subsequence_in_at(
         &self,
-        patchable: &D,
+        patchable: &Data<String>,
         at: usize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
@@ -156,7 +153,12 @@ where
         }
     }
 
-    fn will_apply(&self, patchable: &D, offset: isize, reverse: bool) -> Option<WillApply> {
+    fn will_apply(
+        &self,
+        patchable: &Data<String>,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<WillApply> {
         let start = self.before_adjusted_start(offset, None, reverse);
         if !start.is_negative()
             && self.before_is_subsequence_in_at(patchable, start as usize, None, reverse)
@@ -187,7 +189,7 @@ where
     fn apply_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut ConsumableData<T, D>,
+        pd: &mut ConsumableData<String, Data<String>>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
@@ -201,7 +203,7 @@ where
 
     fn will_apply_nearby(
         &self,
-        pd: &ConsumableData<T, D>,
+        pd: &ConsumableData<String, Data<String>>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -244,13 +246,18 @@ where
         None
     }
 
-    fn is_already_applied(&self, patchable: &D, offset: isize, reverse: bool) -> Option<WillApply> {
+    fn is_already_applied(
+        &self,
+        patchable: &Data<String>,
+        offset: isize,
+        reverse: bool,
+    ) -> Option<WillApply> {
         self.will_apply(patchable, offset, !reverse)
     }
 
     fn is_already_applied_nearby(
         &self,
-        pd: &ConsumableData<T, D>,
+        pd: &ConsumableData<String, Data<String>>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -261,7 +268,7 @@ where
     fn already_applied_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut ConsumableData<T, D>,
+        pd: &mut ConsumableData<String, Data<String>>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
@@ -297,11 +304,9 @@ pub struct Statistics {
     pub failed: usize,
 }
 
-pub trait ApplyChunksFuzzy<T, D, C>
+pub trait ApplyChunksFuzzy<C>
 where
-    T: PartialEq + Clone,
-    D: DataIfce<T> + WriteDataInto + Clone,
-    C: ApplyChunkFuzzy<T, D>,
+    C: ApplyChunkFuzzy,
 {
     fn chunks<'b>(&'b self) -> impl Iterator<Item = &'b C>
     where
@@ -309,11 +314,11 @@ where
 
     fn apply_into<W: io::Write>(
         &self,
-        patchable: &D,
+        patchable: &Data<String>,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<Statistics> {
-        let mut pd = ConsumableData::<T, D>::new(patchable);
+        let mut pd = ConsumableData::<String, Data<String>>::new(patchable);
         let mut stats = Statistics::default();
         let mut iter = self.chunks().peekable();
         let mut chunk_num = 0;
@@ -403,8 +408,8 @@ where
         Ok(stats)
     }
 
-    fn is_already_applied(&self, patchable: &D, reverse: bool) -> bool {
-        let pd = ConsumableData::<T, D>::new(patchable);
+    fn is_already_applied(&self, patchable: &Data<String>, reverse: bool) -> bool {
+        let pd = ConsumableData::<String, Data<String>>::new(patchable);
         let mut iter = self.chunks().peekable();
         let mut chunk_num = 0;
         let mut offset: isize = 0;

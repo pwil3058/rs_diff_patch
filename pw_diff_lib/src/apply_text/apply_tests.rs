@@ -11,7 +11,7 @@ use std::ops::{Deref, DerefMut};
 #[derive(Serialize, Deserialize)]
 struct WrappedDiffChunks(pub Vec<TextChangeChunk>);
 
-impl ApplyChunksFuzzy<String, Data<String>, TextChangeChunk> for WrappedDiffChunks {
+impl ApplyChunksFuzzy<TextChangeChunk> for WrappedDiffChunks {
     fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s TextChangeChunk>
     where
         TextChangeChunk: 's,

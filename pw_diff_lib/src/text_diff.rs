@@ -56,7 +56,7 @@ impl TextChangeChunk {
     }
 }
 
-impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
+impl ApplyChunkFuzzy for TextChangeChunk {
     fn will_apply(
         &self,
         patchable: &Data<String>,
@@ -198,7 +198,7 @@ impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
     }
 }
 
-impl ApplyChunkFuzzyBasics<String, Data<String>> for TextChangeChunk {
+impl ApplyChunkFuzzyBasics for TextChangeChunk {
     fn context_lengths(&self) -> (u8, u8) {
         self.context_lengths
     }
@@ -215,10 +215,7 @@ impl ApplyChunkFuzzyBasics<String, Data<String>> for TextChangeChunk {
         &'a self,
         range: Option<Range>,
         reverse: bool,
-    ) -> impl Iterator<Item = &'a String>
-    where
-        String: 'a,
-    {
+    ) -> impl Iterator<Item = &'a String> {
         self.before(reverse).items(range)
     }
 
@@ -280,7 +277,7 @@ impl TextChangeDiff {
     }
 }
 
-impl ApplyChunksFuzzy<String, Data<String>, TextChangeChunk> for TextChangeDiff {
+impl ApplyChunksFuzzy<TextChangeChunk> for TextChangeDiff {
     fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s TextChangeChunk>
     where
         TextChangeChunk: 's,
