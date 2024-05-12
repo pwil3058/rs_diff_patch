@@ -107,6 +107,7 @@ pub trait ApplyChunkFuzzy2: ApplyChunkFuzzyBasics {
             self.before_start(reverse) as isize + offset
         }
     }
+
     fn after_adjusted_start(
         &self,
         offset: isize,
