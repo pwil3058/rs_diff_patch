@@ -211,11 +211,7 @@ impl ApplyChunkFuzzyBasics for TextChangeChunk {
         self.before(reverse).len()
     }
 
-    fn before_items<'a>(
-        &'a self,
-        range: Option<Range>,
-        reverse: bool,
-    ) -> impl Iterator<Item = &'a String> {
+    fn before_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String> {
         self.before(reverse).items(range)
     }
 

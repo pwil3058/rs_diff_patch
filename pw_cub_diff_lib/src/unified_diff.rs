@@ -1,10 +1,9 @@
 use regex::{Captures, Regex};
 use std::fmt::{Display, Formatter};
 use std::io;
-use std::slice::Iter;
 use std::str::FromStr;
 
-use pw_diff_lib::range::{Len, Range};
+use pw_diff_lib::range::Range;
 use pw_diff_lib::{ApplyChunkFuzzyBasics, Data, DataIfce};
 
 use crate::text_diff::{
@@ -115,13 +114,11 @@ pub fn starts_and_lengths(
 }
 
 pub struct UnifiedDiffChunk {
-    pub lines: Box<[String]>,
-    pub before_indices: Box<[usize]>,
-    pub after_indices: Box<[usize]>,
     pub starts_and_lengths: StartsAndLengths,
+    pub before_lines: Box<[String]>,
+    pub after_lines: Box<[String]>,
     pub context_lengths: (u8, u8),
     pub lines_consumed: usize,
-    pub no_final_newline: bool,
 }
 
 impl UnifiedDiffChunk {
@@ -135,75 +132,66 @@ impl UnifiedDiffChunk {
             Some(sal) => sal,
             None => return Ok(None),
         };
-        let mut no_final_newline = false;
         let mut start_context_length = 0u8;
         let mut end_context_length = 0u8;
         let mut at_the_front = true;
-        let mut before_indices = vec![];
-        let mut after_indices = vec![];
+        let mut before_lines = vec![];
+        let mut after_lines = vec![];
         let mut index = 0usize;
-        while before_indices.len() < starts_and_lengths.before.length
-            || after_indices.len() < starts_and_lengths.after.length
+        let mut last_line_type = "X";
+        while before_lines.len() < starts_and_lengths.before.length
+            || after_lines.len() < starts_and_lengths.after.length
         {
             let line = *iter.next().check_end_of_input()?;
             if line.starts_with('-') {
-                before_indices.push(index);
+                before_lines.push(line.as_str().to_string());
                 end_context_length = 0;
                 at_the_front = false;
+                last_line_type = "-";
             } else if line.starts_with('+') {
-                after_indices.push(index);
+                after_lines.push(line.as_str().to_string());
                 end_context_length = 0;
                 at_the_front = false;
+                last_line_type = "+";
             } else if line.starts_with(' ') {
-                before_indices.push(index);
-                after_indices.push(index);
+                before_lines.push(line.as_str().to_string());
+                after_lines.push(line.as_str().to_string());
                 if at_the_front {
                     start_context_length += 1
                 } else {
                     end_context_length += 1
                 }
+                last_line_type = "-";
             } else {
                 return Err(DiffParseError::UnexpectedEndChunk(start_index + index + 1));
             }
             index += 1;
         }
         let mut lines_consumed = index + 1;
-        let mut lines = lines
-            .subsequence(Range(start_index + 1, start_index + lines_consumed))
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
         if let Some(line) = iter.next() {
             if line.starts_with("\\") {
                 lines_consumed += 1;
-                no_final_newline = true;
-                let line = lines.pop().unwrap();
-                lines.push(line.trim_end().to_string())
+                if last_line_type == "-" {
+                    let line = before_lines.pop().unwrap();
+                    before_lines.push(line.trim_end().to_string())
+                } else if last_line_type == "+" {
+                    let line = after_lines.pop().unwrap();
+                    after_lines.push(line.trim_end().to_string())
+                } else {
+                    let line = before_lines.pop().unwrap();
+                    before_lines.push(line.trim_end().to_string());
+                    let line = after_lines.pop().unwrap();
+                    after_lines.push(line.trim_end().to_string())
+                }
             }
         }
         Ok(Some(Self {
-            lines: lines.into_boxed_slice(),
-            before_indices: before_indices.into_boxed_slice(),
-            after_indices: after_indices.into_boxed_slice(),
+            lines_consumed,
+            before_lines: before_lines.into_boxed_slice(),
+            after_lines: after_lines.into_boxed_slice(),
             starts_and_lengths,
             context_lengths: (start_context_length, end_context_length),
-            lines_consumed,
-            no_final_newline,
         }))
-    }
-}
-
-pub struct UnifiedLineIter<'a> {
-    lines: &'a Box<[String]>,
-    indices: Iter<'a, usize>,
-}
-
-impl<'a> Iterator for UnifiedLineIter<'a> {
-    type Item = &'a String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let index = self.indices.next()?;
-        // TODO: figure out how to remove front char and still have &String
-        Some(&self.lines[*index])
     }
 }
 
@@ -228,42 +216,20 @@ impl ApplyChunkFuzzyBasics for UnifiedDiffChunk {
         }
     }
 
-    fn before_items<'a>(
-        &'a self,
-        range: Option<Range>,
-        reverse: bool,
-    ) -> impl Iterator<Item = &'a String> {
+    fn before_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String> {
         if let Some(range) = range {
             if reverse {
-                UnifiedLineIter {
-                    lines: &self.lines,
-                    indices: self.after_indices[range.start()..range.end()].iter(),
-                }
+                self.after_lines[range.start()..range.end()].iter()
             } else {
-                UnifiedLineIter {
-                    lines: &self.lines,
-                    indices: self.before_indices[range.start()..range.end()].iter(),
-                }
+                self.before_lines[range.start()..range.end()].iter()
             }
         } else {
             if reverse {
-                UnifiedLineIter {
-                    lines: &self.lines,
-                    indices: self.after_indices.iter(),
-                }
+                self.after_lines.iter()
             } else {
-                UnifiedLineIter {
-                    lines: &self.lines,
-                    indices: self.before_indices.iter(),
-                }
+                self.before_lines.iter()
             }
         }
-        // if let Some(range) = range {
-        //     iter.skip(range.start())
-        //         .take(self.before_length(reverse) - range.len())
-        // } else {
-        //     iter.skip(0).take(self.before_length(reverse))
-        // }
     }
 
     fn before_write_into<W: io::Write>(
@@ -277,11 +243,11 @@ impl ApplyChunkFuzzyBasics for UnifiedDiffChunk {
                 reductions.0 as usize,
                 self.before_length(reverse) - reductions.1 as usize,
             );
-            for line in self.before_items(Some(range), reverse) {
+            for line in self.before_lines(Some(range), reverse) {
                 into.write_all(line.as_bytes())?;
             }
         } else {
-            for line in self.before_items(None, reverse) {
+            for line in self.before_lines(None, reverse) {
                 into.write_all(line.as_bytes())?;
             }
         };
