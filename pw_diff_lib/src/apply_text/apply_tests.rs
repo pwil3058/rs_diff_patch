@@ -1,6 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::apply::ApplyChunksFuzzy;
+use crate::apply_text::ApplyChunksFuzzy;
 use crate::data::Data;
 use crate::modifications::Modifications;
 use crate::text_diff::TextChangeChunk;

@@ -1,6 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::apply::{ApplyChunkFuzzy, ApplyChunksFuzzy, WillApply};
+use crate::apply_text::{ApplyChunkFuzzy, ApplyChunksFuzzy, WillApply};
 use crate::data::{ConsumableData, ConsumableDataIfce, Data, DataIfce};
 use crate::modifications::{ChunkIter, Modifications};
 use crate::range::{Len, Range};
