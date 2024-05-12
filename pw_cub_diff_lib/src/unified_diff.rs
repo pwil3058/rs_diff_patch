@@ -1,10 +1,9 @@
 use regex::{Captures, Regex};
 use std::fmt::{Display, Formatter};
-use std::io;
 use std::slice::Iter;
 use std::str::FromStr;
 
-use pw_diff_lib::range::{Len, Range};
+use pw_diff_lib::range::Range;
 use pw_diff_lib::{ApplyChunkFuzzyBasics, Data, DataIfce};
 
 use crate::text_diff::{
@@ -261,34 +260,6 @@ impl ApplyChunkFuzzyBasics for UnifiedDiffChunk {
                 }
             }
         }
-        // if let Some(range) = range {
-        //     iter.skip(range.start())
-        //         .take(self.before_length(reverse) - range.len())
-        // } else {
-        //     iter.skip(0).take(self.before_length(reverse))
-        // }
-    }
-
-    fn before_write_into<W: io::Write>(
-        &self,
-        into: &mut W,
-        reductions: Option<(u8, u8)>,
-        reverse: bool,
-    ) -> io::Result<()> {
-        if let Some(reductions) = reductions {
-            let range = Range(
-                reductions.0 as usize,
-                self.before_length(reverse) - reductions.1 as usize,
-            );
-            for line in self.before_items(Some(range), reverse) {
-                into.write_all(line.as_bytes())?;
-            }
-        } else {
-            for line in self.before_items(None, reverse) {
-                into.write_all(line.as_bytes())?;
-            }
-        };
-        Ok(())
     }
 }
 

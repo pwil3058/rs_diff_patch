@@ -218,26 +218,6 @@ impl ApplyChunkFuzzyBasics for TextChangeChunk {
     ) -> impl Iterator<Item = &'a String> {
         self.before(reverse).items(range)
     }
-
-    fn before_write_into<W: io::Write>(
-        &self,
-        into: &mut W,
-        reductions: Option<(u8, u8)>,
-        reverse: bool,
-    ) -> io::Result<()> {
-        let before = self.before(reverse);
-        if let Some(reductions) = reductions {
-            let range = Range(reductions.0 as usize, before.len() - reductions.1 as usize);
-            for line in before.items(Some(range)) {
-                into.write_all(line.as_bytes())?;
-            }
-        } else {
-            for line in before.items(None) {
-                into.write_all(line.as_bytes())?;
-            }
-        };
-        Ok(())
-    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

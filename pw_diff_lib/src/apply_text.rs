@@ -61,12 +61,6 @@ pub trait ApplyChunkFuzzyBasics {
         range: Option<Range>,
         reverse: bool,
     ) -> impl Iterator<Item = &'a String>;
-    fn before_write_into<W: io::Write>(
-        &self,
-        into: &mut W,
-        reductions: Option<(u8, u8)>,
-        reverse: bool,
-    ) -> io::Result<()>;
 
     fn after_start(&self, reverse: bool) -> usize {
         self.before_start(!reverse)
@@ -82,15 +76,6 @@ pub trait ApplyChunkFuzzyBasics {
         reverse: bool,
     ) -> impl Iterator<Item = &'a String> {
         self.before_items(range, !reverse)
-    }
-
-    fn after_write_into<W: io::Write>(
-        &self,
-        into: &mut W,
-        reductions: Option<(u8, u8)>,
-        reverse: bool,
-    ) -> io::Result<()> {
-        self.before_write_into(into, reductions, !reverse)
     }
 }
 
@@ -152,6 +137,37 @@ pub trait ApplyChunkFuzzy2: ApplyChunkFuzzyBasics {
                 .zip(patchable.subsequence(other_range))
                 .all(|(l, r)| l == r)
         }
+    }
+
+    fn before_write_into<W: io::Write>(
+        &self,
+        into: &mut W,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> io::Result<()> {
+        if let Some(reductions) = reductions {
+            let range = Range(
+                reductions.0 as usize,
+                self.before_length(reverse) - reductions.1 as usize,
+            );
+            for line in self.before_items(Some(range), reverse) {
+                into.write_all(line.as_bytes())?;
+            }
+        } else {
+            for line in self.before_items(None, reverse) {
+                into.write_all(line.as_bytes())?;
+            }
+        };
+        Ok(())
+    }
+
+    fn after_write_into<W: io::Write>(
+        &self,
+        into: &mut W,
+        reductions: Option<(u8, u8)>,
+        reverse: bool,
+    ) -> io::Result<()> {
+        self.before_write_into(into, reductions, !reverse)
     }
 
     fn will_apply(
