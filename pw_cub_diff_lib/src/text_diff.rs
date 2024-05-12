@@ -47,9 +47,3 @@ pub struct StartAndLength {
     pub start: usize,
     pub length: usize,
 }
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct StartsAndLengths {
-    pub before: StartAndLength,
-    pub after: StartAndLength,
-}

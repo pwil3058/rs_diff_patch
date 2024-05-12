@@ -1,4 +1,5 @@
 use regex::{Captures, Regex};
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use pw_diff_lib::range::Range;
@@ -6,7 +7,6 @@ use pw_diff_lib::{Data, DataIfce};
 
 use crate::text_diff::{
     CheckEndOfInput, DiffParseError, DiffParseResult, PathAndTimestamp, StartAndLength,
-    StartsAndLengths,
 };
 use crate::{ALT_TIMESTAMP_RE_STR, PATH_RE_STR, TIMESTAMP_RE_STR};
 
@@ -62,6 +62,40 @@ fn start_and_length_from_captures(
         1
     };
     Ok(StartAndLength { start, length })
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct StartsAndLengths {
+    pub before: StartAndLength,
+    pub after: StartAndLength,
+}
+
+impl Display for StartsAndLengths {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.before.length == 1 {
+            if self.after.length == 1 {
+                write!(f, "@@ -{} +{} @@", self.before.start, self.after.start)
+            } else {
+                write!(
+                    f,
+                    "@@ -{} +{},{} @@",
+                    self.before.start, self.after.start, self.after.length
+                )
+            }
+        } else if self.after.length == 1 {
+            write!(
+                f,
+                "@@ -{},{} +{} @@",
+                self.before.start, self.before.length, self.after.start
+            )
+        } else {
+            write!(
+                f,
+                "@@ -{},{} +{},{} @@",
+                self.before.start, self.before.length, self.after.start, self.after.length
+            )
+        }
+    }
 }
 
 pub fn starts_and_lengths(
