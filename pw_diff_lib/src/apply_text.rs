@@ -6,7 +6,7 @@ use std::io;
 
 use log;
 
-pub trait ApplyChunkFuzzy {
+pub trait ApplyChunkFuzzyOld {
     fn will_apply(
         &self,
         patchable: &Data<String>,
@@ -52,7 +52,7 @@ pub trait ApplyChunkFuzzy {
     fn write_failure_data_into<W: io::Write>(&self, into: &mut W, reverse: bool) -> io::Result<()>;
 }
 
-pub trait ApplyChunkFuzzyBasics {
+pub trait TextChunkBasics {
     fn context_lengths(&self) -> (u8, u8);
     fn before_start(&self, reverse: bool) -> usize;
     fn before_length(&self, reverse: bool) -> usize;
@@ -79,7 +79,7 @@ pub trait ApplyChunkFuzzyBasics {
     }
 }
 
-pub trait ApplyChunkFuzzy2: ApplyChunkFuzzyBasics {
+pub trait ApplyChunkFuzzy: TextChunkBasics {
     fn before_adjusted_start(
         &self,
         offset: isize,

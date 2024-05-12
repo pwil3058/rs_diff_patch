@@ -4,7 +4,7 @@ use std::slice::Iter;
 use std::str::FromStr;
 
 use pw_diff_lib::range::Range;
-use pw_diff_lib::{ApplyChunkFuzzyBasics, Data, DataIfce};
+use pw_diff_lib::{Data, DataIfce, TextChunkBasics};
 
 use crate::text_diff::{
     CheckEndOfInput, DiffParseError, DiffParseResult, PathAndTimestamp, StartAndLength,
@@ -209,7 +209,7 @@ impl<'a> Iterator for UnifiedLineIter<'a> {
     }
 }
 
-impl ApplyChunkFuzzyBasics for UnifiedDiffChunk {
+impl TextChunkBasics for UnifiedDiffChunk {
     fn context_lengths(&self) -> (u8, u8) {
         self.context_lengths
     }

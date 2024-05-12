@@ -11,7 +11,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::data::ExtractSnippet;
-use crate::ApplyChunkFuzzyBasics;
+use crate::TextChunkBasics;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextChangeChunk {
@@ -198,7 +198,7 @@ impl ApplyChunkFuzzy for TextChangeChunk {
     }
 }
 
-impl ApplyChunkFuzzyBasics for TextChangeChunk {
+impl TextChunkBasics for TextChangeChunk {
     fn context_lengths(&self) -> (u8, u8) {
         self.context_lengths
     }
