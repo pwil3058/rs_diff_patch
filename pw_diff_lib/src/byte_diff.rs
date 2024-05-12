@@ -55,7 +55,7 @@ impl ByteChangeChunk {
     }
 }
 
-impl<'a> ApplyChunkClean<u8, Data<u8>> for ByteChangeChunk {
+impl<'a> ApplyChunkClean for ByteChangeChunk {
     fn will_apply(&self, data: &Data<u8>, reverse: bool) -> bool {
         let before = self.before(reverse);
         data.has_subsequence_at(&before.items, before.start)
@@ -132,7 +132,7 @@ impl ByteChangeDiff {
     }
 }
 
-impl<'a> ApplyChunksClean<'a, u8, Data<u8>, ByteChangeChunk> for ByteChangeDiff {
+impl ApplyChunksClean<'_, ByteChangeChunk> for ByteChangeDiff {
     fn chunks<'b>(&'b self) -> impl Iterator<Item = &'b ByteChangeChunk>
     where
         ByteChangeChunk: 'b,

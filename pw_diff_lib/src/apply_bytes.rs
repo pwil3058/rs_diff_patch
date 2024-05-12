@@ -1,36 +1,30 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::data::{ConsumableData, ConsumableDataIfce, DataIfce, WriteDataInto};
+use crate::data::{ConsumableData, ConsumableDataIfce, Data};
 use std::io;
 
 use log;
 
-pub trait ApplyChunkClean<T, D>
-where
-    T: PartialEq + Clone,
-    D: DataIfce<T> + WriteDataInto + Clone,
-{
-    fn will_apply(&self, data: &D, reverse: bool) -> bool;
-    fn is_already_applied(&self, data: &D, reverse: bool) -> bool;
+pub trait ApplyChunkClean {
+    fn will_apply(&self, data: &Data<u8>, reverse: bool) -> bool;
+    fn is_already_applied(&self, data: &Data<u8>, reverse: bool) -> bool;
     fn apply_into<W: io::Write>(
         &self,
-        pd: &mut ConsumableData<T, D>,
+        pd: &mut ConsumableData<u8, Data<u8>>,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<bool>;
     fn already_applied_into<W: io::Write>(
         &self,
-        pd: &mut ConsumableData<T, D>,
+        pd: &mut ConsumableData<u8, Data<u8>>,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<bool>;
 }
 
-pub trait ApplyChunksClean<'a, T, D, C>
+pub trait ApplyChunksClean<'a, C>
 where
-    T: 'a + PartialEq + Clone,
-    D: DataIfce<T> + WriteDataInto + Clone,
-    C: ApplyChunkClean<T, D>,
+    C: ApplyChunkClean,
 {
     fn chunks<'b>(&'b self) -> impl Iterator<Item = &'b C>
     where
@@ -38,11 +32,11 @@ where
 
     fn apply_into<W: io::Write>(
         &self,
-        patchable: &'a D,
+        patchable: &'a Data<u8>,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<bool> {
-        let mut pd = ConsumableData::<T, D>::new(patchable);
+        let mut pd = ConsumableData::<u8, Data<u8>>::new(patchable);
         let mut iter = self.chunks();
         let mut chunk_num = 0;
         let mut success = true;
@@ -63,7 +57,7 @@ where
         Ok(success)
     }
 
-    fn already_applied(&self, patchable: &D, reverse: bool) -> bool {
+    fn already_applied(&self, patchable: &Data<u8>, reverse: bool) -> bool {
         let mut chunk_num = 0;
         let mut iter = self.chunks().peekable();
         while let Some(chunk) = iter.next() {
