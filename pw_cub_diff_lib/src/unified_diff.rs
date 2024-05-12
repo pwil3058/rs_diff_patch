@@ -170,7 +170,11 @@ impl UnifiedDiffChunk {
         let mut lines_consumed = index + 1;
         let mut lines = lines
             .subsequence(Range(start_index + 1, start_index + lines_consumed))
-            .map(|s| s.to_string())
+            .map(|s| {
+                s.strip_prefix(&[' ', '-', '+'])
+                    .expect("should be OK")
+                    .to_string()
+            })
             .collect::<Vec<String>>();
         if let Some(line) = iter.next() {
             if line.starts_with("\\") {
@@ -202,7 +206,6 @@ impl<'a> Iterator for UnifiedLineIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.indices.next()?;
-        // TODO: figure out how to remove front char and still have &String
         Some(&self.lines[*index])
     }
 }
