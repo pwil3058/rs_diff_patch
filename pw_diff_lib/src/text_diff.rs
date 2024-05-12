@@ -1,9 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::apply::{
-    ApplyChunkFuzzy, ApplyChunksFuzzy, PatchableData, PatchableDataIfce, WillApply,
-};
-use crate::data::{Data, DataIfce};
+use crate::apply::{ApplyChunkFuzzy, ApplyChunksFuzzy, WillApply};
+use crate::data::{ConsumableData, ConsumableDataIfce, Data, DataIfce};
 use crate::modifications::{ChunkIter, Modifications};
 use crate::range::{Len, Range};
 use crate::snippet::{Snippet, SnippetWrite};
@@ -92,7 +90,7 @@ impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
     fn apply_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut PatchableData<String, Data<String>>,
+        pd: &mut ConsumableData<String, Data<String>>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
@@ -107,7 +105,7 @@ impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
 
     fn will_apply_nearby(
         &self,
-        pd: &PatchableData<String, Data<String>>,
+        pd: &ConsumableData<String, Data<String>>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -168,7 +166,7 @@ impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
 
     fn is_already_applied_nearby(
         &self,
-        pd: &PatchableData<String, Data<String>>,
+        pd: &ConsumableData<String, Data<String>>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -179,7 +177,7 @@ impl ApplyChunkFuzzy<String, Data<String>> for TextChangeChunk {
     fn already_applied_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut PatchableData<String, Data<String>>,
+        pd: &mut ConsumableData<String, Data<String>>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,

@@ -1,93 +1,10 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::data::{DataIfce, WriteDataInto};
+use crate::data::{ConsumableData, ConsumableDataIfce, DataIfce, WriteDataInto};
 use crate::range::Range;
-use std::cmp::Ordering;
 use std::io;
-use std::marker::PhantomData;
 
 use log;
-
-#[derive(Debug, Clone)]
-pub struct PatchableData<'a, T, D>
-where
-    T: PartialEq + Clone,
-    D: DataIfce<T> + WriteDataInto + Clone,
-{
-    data: &'a D,
-    consumed: usize,
-    phantom_data: PhantomData<&'a T>,
-}
-
-pub trait PatchableDataIfce<'a, T: PartialEq, D: DataIfce<T>>
-where
-    D: WriteDataInto,
-{
-    fn new(data: &'a D) -> Self;
-    fn data(&self) -> &D;
-    fn consumed(&self) -> usize;
-    fn range_from(&self, from: usize) -> Range;
-    fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool;
-    fn advance_consumed_by(&mut self, increment: usize);
-    fn write_into_upto<W: io::Write>(&mut self, writer: &mut W, upto: usize) -> io::Result<bool>;
-    fn write_remainder<W: io::Write>(&mut self, writer: &mut W) -> io::Result<bool>;
-}
-
-impl<'a, T: PartialEq + Clone, D: DataIfce<T> + WriteDataInto + Clone> PatchableDataIfce<'a, T, D>
-    for PatchableData<'a, T, D>
-{
-    fn new(data: &'a D) -> Self {
-        Self {
-            data,
-            consumed: 0,
-            phantom_data: PhantomData,
-        }
-    }
-
-    #[inline]
-    fn data(&self) -> &D {
-        self.data
-    }
-
-    #[inline]
-    fn consumed(&self) -> usize {
-        self.consumed
-    }
-
-    fn range_from(&self, from: usize) -> Range {
-        Range(from, self.data.len())
-    }
-
-    #[inline]
-    fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
-        self.data.has_subsequence_at(subsequence, at)
-    }
-
-    fn advance_consumed_by(&mut self, increment: usize) {
-        self.consumed += increment
-    }
-
-    fn write_into_upto<W: io::Write>(&mut self, writer: &mut W, upto: usize) -> io::Result<bool> {
-        if upto <= self.data.len() {
-            match self.consumed.cmp(&upto) {
-                Ordering::Less => {
-                    let range = Range(self.consumed, upto);
-                    self.consumed = upto;
-                    self.data.write_into(writer, range)
-                }
-                Ordering::Equal => Ok(true),
-                Ordering::Greater => Ok(false),
-            }
-        } else {
-            Ok(false)
-        }
-    }
-    fn write_remainder<W: io::Write>(&mut self, writer: &mut W) -> io::Result<bool> {
-        let range = self.range_from(self.consumed);
-        self.consumed = self.data.len();
-        self.data.write_into(writer, range)
-    }
-}
 
 pub trait ApplyChunkClean<T, D>
 where
@@ -98,13 +15,13 @@ where
     fn is_already_applied(&self, data: &D, reverse: bool) -> bool;
     fn apply_into<W: io::Write>(
         &self,
-        pd: &mut PatchableData<T, D>,
+        pd: &mut ConsumableData<T, D>,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<bool>;
     fn already_applied_into<W: io::Write>(
         &self,
-        pd: &mut PatchableData<T, D>,
+        pd: &mut ConsumableData<T, D>,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<bool>;
@@ -126,7 +43,7 @@ where
         into: &mut W,
         reverse: bool,
     ) -> io::Result<bool> {
-        let mut pd = PatchableData::<T, D>::new(patchable);
+        let mut pd = ConsumableData::<T, D>::new(patchable);
         let mut iter = self.chunks();
         let mut chunk_num = 0;
         let mut success = true;
@@ -172,14 +89,14 @@ where
     fn apply_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut PatchableData<T, D>,
+        pd: &mut ConsumableData<T, D>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> io::Result<()>;
     fn will_apply_nearby(
         &self,
-        pd: &PatchableData<T, D>,
+        pd: &ConsumableData<T, D>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -187,7 +104,7 @@ where
     fn is_already_applied(&self, patchable: &D, offset: isize, reverse: bool) -> Option<WillApply>;
     fn is_already_applied_nearby(
         &self,
-        pd: &PatchableData<T, D>,
+        pd: &ConsumableData<T, D>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -195,7 +112,7 @@ where
     fn already_applied_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut PatchableData<T, D>,
+        pd: &mut ConsumableData<T, D>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
@@ -344,7 +261,7 @@ where
     fn apply_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut PatchableData<T, D>,
+        pd: &mut ConsumableData<T, D>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
@@ -358,7 +275,7 @@ where
 
     fn will_apply_nearby(
         &self,
-        pd: &PatchableData<T, D>,
+        pd: &ConsumableData<T, D>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -407,7 +324,7 @@ where
 
     fn is_already_applied_nearby(
         &self,
-        pd: &PatchableData<T, D>,
+        pd: &ConsumableData<T, D>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -418,7 +335,7 @@ where
     fn already_applied_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut PatchableData<T, D>,
+        pd: &mut ConsumableData<T, D>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
@@ -470,7 +387,7 @@ where
         into: &mut W,
         reverse: bool,
     ) -> io::Result<Statistics> {
-        let mut pd = PatchableData::<T, D>::new(patchable);
+        let mut pd = ConsumableData::<T, D>::new(patchable);
         let mut stats = Statistics::default();
         let mut iter = self.chunks().peekable();
         let mut chunk_num = 0;
@@ -561,7 +478,7 @@ where
     }
 
     fn is_already_applied(&self, patchable: &D, reverse: bool) -> bool {
-        let pd = PatchableData::<T, D>::new(patchable);
+        let pd = ConsumableData::<T, D>::new(patchable);
         let mut iter = self.chunks().peekable();
         let mut chunk_num = 0;
         let mut offset: isize = 0;

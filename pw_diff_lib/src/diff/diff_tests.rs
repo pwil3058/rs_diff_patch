@@ -86,7 +86,7 @@ fn find_compromise() {
     );
     let diff_chunks: Vec<TextChangeChunk> = modifications.chunks::<TextChangeChunk>(2).collect();
     let lines = Data::<String>::from(before_lines);
-    let mut pd = PatchableData::new(&lines);
+    let mut pd = ConsumableData::new(&lines);
     pd.advance_consumed_by(2);
 
     assert_eq!(
@@ -120,7 +120,7 @@ fn find_compromise_edges() {
     assert_eq!(diff_chunks.len(), 3);
 
     let lines = Data::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n");
-    let pd = PatchableData::new(&lines);
+    let pd = ConsumableData::new(&lines);
     assert_eq!(
         diff_chunks
             .first()
@@ -130,7 +130,7 @@ fn find_compromise_edges() {
     );
 
     let lines = Data::<String>::from("B\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\n");
-    let mut pd = PatchableData::new(&lines);
+    let mut pd = ConsumableData::new(&lines);
     pd.advance_consumed_by(8);
     assert_eq!(
         diff_chunks

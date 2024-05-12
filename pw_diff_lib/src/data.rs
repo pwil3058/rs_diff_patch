@@ -2,9 +2,11 @@
 
 use crate::range::{Len, Range};
 use crate::snippet::Snippet;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::io;
 use std::io::{BufRead, BufReader, Read, Write};
+use std::marker::PhantomData;
 
 pub trait ContentIndices<T> {
     fn indices(&self, key: &T) -> Option<&Vec<usize>>;
@@ -246,5 +248,86 @@ impl Data<u8> {
         let mut bytes = vec![];
         reader.read_to_end(&mut bytes)?;
         Ok(Self(bytes.into_boxed_slice()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConsumableData<'a, T, D>
+where
+    T: PartialEq + Clone,
+    D: DataIfce<T> + WriteDataInto + Clone,
+{
+    data: &'a D,
+    consumed: usize,
+    phantom_data: PhantomData<&'a T>,
+}
+
+pub trait ConsumableDataIfce<'a, T: PartialEq, D: DataIfce<T>>
+where
+    D: WriteDataInto,
+{
+    fn new(data: &'a D) -> Self;
+    fn data(&self) -> &D;
+    fn consumed(&self) -> usize;
+    fn range_from(&self, from: usize) -> Range;
+    fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool;
+    fn advance_consumed_by(&mut self, increment: usize);
+    fn write_into_upto<W: io::Write>(&mut self, writer: &mut W, upto: usize) -> io::Result<bool>;
+    fn write_remainder<W: io::Write>(&mut self, writer: &mut W) -> io::Result<bool>;
+}
+
+impl<'a, T: PartialEq + Clone, D: DataIfce<T> + WriteDataInto + Clone> ConsumableDataIfce<'a, T, D>
+    for ConsumableData<'a, T, D>
+{
+    fn new(data: &'a D) -> Self {
+        Self {
+            data,
+            consumed: 0,
+            phantom_data: PhantomData,
+        }
+    }
+
+    #[inline]
+    fn data(&self) -> &D {
+        self.data
+    }
+
+    #[inline]
+    fn consumed(&self) -> usize {
+        self.consumed
+    }
+
+    fn range_from(&self, from: usize) -> Range {
+        Range(from, self.data.len())
+    }
+
+    #[inline]
+    fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
+        self.data.has_subsequence_at(subsequence, at)
+    }
+
+    fn advance_consumed_by(&mut self, increment: usize) {
+        self.consumed += increment
+    }
+
+    fn write_into_upto<W: io::Write>(&mut self, writer: &mut W, upto: usize) -> io::Result<bool> {
+        if upto <= self.data.len() {
+            match self.consumed.cmp(&upto) {
+                Ordering::Less => {
+                    let range = Range(self.consumed, upto);
+                    self.consumed = upto;
+                    self.data.write_into(writer, range)
+                }
+                Ordering::Equal => Ok(true),
+                Ordering::Greater => Ok(false),
+            }
+        } else {
+            Ok(false)
+        }
+    }
+    fn write_remainder<W: io::Write>(&mut self, writer: &mut W) -> io::Result<bool> {
+        let range = self.range_from(self.consumed);
+        self.consumed = self.data.len();
+        self.data.write_into(writer, range)
     }
 }

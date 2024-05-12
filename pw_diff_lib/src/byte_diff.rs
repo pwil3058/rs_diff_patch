@@ -1,7 +1,7 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::apply::{ApplyChunkClean, ApplyChunksClean, PatchableData, PatchableDataIfce};
-use crate::data::{Data, DataIfce};
+use crate::apply::{ApplyChunkClean, ApplyChunksClean};
+use crate::data::{ConsumableData, ConsumableDataIfce, Data, DataIfce};
 use crate::modifications::{ChunkIter, Modifications};
 use crate::range::Len;
 use crate::snippet::{Snippet, SnippetWrite};
@@ -68,7 +68,7 @@ impl<'a> ApplyChunkClean<u8, Data<u8>> for ByteChangeChunk {
 
     fn apply_into<W: io::Write>(
         &self,
-        pd: &mut PatchableData<u8, Data<u8>>,
+        pd: &mut ConsumableData<u8, Data<u8>>,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<bool> {
@@ -84,7 +84,7 @@ impl<'a> ApplyChunkClean<u8, Data<u8>> for ByteChangeChunk {
 
     fn already_applied_into<W: io::Write>(
         &self,
-        pd: &mut PatchableData<u8, Data<u8>>,
+        pd: &mut ConsumableData<u8, Data<u8>>,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<bool> {
