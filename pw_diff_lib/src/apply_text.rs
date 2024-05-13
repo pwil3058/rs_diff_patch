@@ -6,52 +6,6 @@ use std::io;
 
 use log;
 
-pub trait ApplyChunkFuzzyOld {
-    fn will_apply(
-        &self,
-        patchable: &Data<String>,
-        offset: isize,
-        reverse: bool,
-    ) -> Option<WillApply>;
-    fn apply_into<W: io::Write>(
-        &self,
-        into: &mut W,
-        pd: &mut ConsumableData<String, Data<String>>,
-        offset: isize,
-        reductions: Option<(u8, u8)>,
-        reverse: bool,
-    ) -> io::Result<()>;
-    fn will_apply_nearby(
-        &self,
-        pd: &ConsumableData<String, Data<String>>,
-        next_chunk: Option<&Self>,
-        offset: isize,
-        reverse: bool,
-    ) -> Option<(isize, WillApply)>;
-    fn is_already_applied(
-        &self,
-        patchable: &Data<String>,
-        offset: isize,
-        reverse: bool,
-    ) -> Option<WillApply>;
-    fn is_already_applied_nearby(
-        &self,
-        pd: &ConsumableData<String, Data<String>>,
-        next_chunk: Option<&Self>,
-        offset: isize,
-        reverse: bool,
-    ) -> Option<(isize, WillApply)>;
-    fn already_applied_into<W: io::Write>(
-        &self,
-        into: &mut W,
-        pd: &mut ConsumableData<String, Data<String>>,
-        offset: isize,
-        reductions: Option<(u8, u8)>,
-        reverse: bool,
-    ) -> io::Result<()>;
-    fn write_failure_data_into<W: io::Write>(&self, into: &mut W, reverse: bool) -> io::Result<()>;
-}
-
 pub trait TextChunkBasics {
     fn context_lengths(&self) -> (u8, u8);
     fn before_start(&self, reverse: bool) -> usize;
