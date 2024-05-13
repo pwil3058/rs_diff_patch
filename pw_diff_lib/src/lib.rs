@@ -3,11 +3,13 @@
 pub mod apply_bytes;
 pub mod apply_text;
 pub mod byte_diff;
+pub mod changes;
 pub mod common_subsequence;
 pub mod data;
 pub mod diff;
 pub mod modifications;
 pub mod range;
+pub mod sequence;
 pub mod snippet;
 pub mod text_diff;
 
