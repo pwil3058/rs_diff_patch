@@ -258,9 +258,9 @@ impl<'a, T: PartialEq, D: DataIfce<T> + GenerateContentIndices<T>, I: ContentInd
 
 #[derive(Debug, Default)]
 pub struct Modifications<T: PartialEq> {
-    before: Data<T>,
-    after: Data<T>,
-    mods: Vec<Modification>,
+    pub before: Data<T>,
+    pub after: Data<T>,
+    pub mods: Vec<Modification>,
 }
 
 impl Modifications<String> {
@@ -306,7 +306,7 @@ impl DerefMut for ModificationChunk {
 }
 
 impl ModificationChunk {
-    fn starts(&self) -> (usize, usize) {
+    pub fn starts(&self) -> (usize, usize) {
         use Modification::*;
         if let Some(modn) = self.0.first() {
             match modn {
@@ -320,7 +320,7 @@ impl ModificationChunk {
         }
     }
 
-    fn ends(&self) -> (usize, usize) {
+    pub fn ends(&self) -> (usize, usize) {
         use Modification::*;
         if let Some(op_code) = self.0.last() {
             match op_code {

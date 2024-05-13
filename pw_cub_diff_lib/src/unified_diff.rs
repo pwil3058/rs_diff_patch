@@ -2,8 +2,9 @@ use regex::{Captures, Regex};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-use pw_diff_lib::range::Range;
-use pw_diff_lib::{Data, DataIfce, TextChunkBasics};
+use pw_diff_lib::modifications::{ChunkIter, Modification, ModificationChunkIter, Modifications};
+use pw_diff_lib::range::{Len, Range};
+use pw_diff_lib::{Data, DataIfce, ExtractSnippet, TextChunkBasics};
 
 use crate::text_diff::{
     CheckEndOfInput, DiffParseError, DiffParseResult, PathAndTimestamp, StartAndLength,
@@ -228,6 +229,106 @@ impl TextChunkBasics for UnifiedDiffChunk {
             } else {
                 self.before_lines.iter()
             }
+        }
+    }
+}
+
+pub struct UnifiedChunkText {
+    pub header: String,
+    pub lines: Vec<String>,
+}
+
+pub struct UnifiedChunkIter<'a> {
+    pub before: &'a Data<String>,
+    pub after: &'a Data<String>,
+    pub iter: ModificationChunkIter<'a>,
+}
+
+impl<'a> Iterator for UnifiedChunkIter<'a>
+where
+    Data<String>: ExtractSnippet<String>,
+{
+    type Item = UnifiedChunkText;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let modn_chunk = self.iter.next()?;
+
+        let starts = modn_chunk.starts();
+        let ends = modn_chunk.ends();
+        let before_start_and_end = StartAndLength {
+            start: starts.0,
+            length: ends.0 - starts.0,
+        };
+        let after_start_and_end = StartAndLength {
+            start: starts.1,
+            length: ends.1 - starts.1,
+        };
+        let starts_and_lengths = StartsAndLengths {
+            before: before_start_and_end,
+            after: after_start_and_end,
+        };
+        let header = format!("{starts_and_lengths}");
+
+        let mut lines = vec![];
+        for modn in modn_chunk.iter() {
+            use Modification::*;
+            match modn {
+                NoChange(common_subsequence) => {
+                    for line in self.before.subsequence(common_subsequence.before_range()) {
+                        lines.push(format!(" {line}"));
+                    }
+                }
+                Delete(before_range, _) => {
+                    for line in self.before.subsequence(*before_range) {
+                        lines.push(format!("-{line}"));
+                    }
+                }
+                Insert(_, after_range) => {
+                    for line in self.after.subsequence(*after_range) {
+                        lines.push(format!("+{line}"));
+                    }
+                }
+                Replace(before_range, after_range) => {
+                    if before_range.len() < after_range.len() {
+                        for line in self.before.subsequence(*before_range) {
+                            lines.push(format!("-{line}"));
+                        }
+                        for line in self.after.subsequence(*after_range) {
+                            lines.push(format!("+{line}"));
+                        }
+                    } else {
+                        for line in self.after.subsequence(*after_range) {
+                            lines.push(format!("+{line}"));
+                        }
+                        for line in self.before.subsequence(*before_range) {
+                            lines.push(format!("-{line}"));
+                        }
+                    }
+                }
+            }
+        }
+        if !lines
+            .last()
+            .expect("impl Iterator for UnifiedChunkIter")
+            .ends_with("\n")
+        {
+            lines.push("\n\\\n".to_string());
+        }
+
+        Some(UnifiedChunkText { header, lines })
+    }
+}
+
+pub trait ModificationsUnifiedChunks {
+    fn unified_chunks<'a, I>(&'a self, context: u8) -> ChunkIter<String>;
+}
+
+impl ModificationsUnifiedChunks for Modifications<String> {
+    fn unified_chunks<'a, I>(&'a self, context: u8) -> ChunkIter<String> {
+        ChunkIter {
+            before: &self.before,
+            after: &self.after,
+            iter: self.modification_chunks(context),
         }
     }
 }
