@@ -1,8 +1,10 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
+use crate::range::Range;
 use std::collections::HashMap;
 use std::ops::Deref;
 
+#[derive(Debug, Default)]
 pub struct Seq<T: PartialEq>(Box<[T]>);
 
 impl<T: PartialEq> Deref for Seq<T> {
@@ -10,6 +12,16 @@ impl<T: PartialEq> Deref for Seq<T> {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<T: PartialEq> Seq<T> {
+    pub fn range_from(&self, from: usize) -> Range {
+        Range(from, self.len())
+    }
+
+    pub fn subsequence(&self, range: Range) -> impl DoubleEndedIterator<Item = &T> {
+        self.0[range.0..range.1].iter()
     }
 }
 
@@ -42,7 +54,9 @@ impl From<&[u8]> for Seq<u8> {
 }
 
 pub trait ContentItemIndices<T: PartialEq> {
-    fn from(sequence: &Seq<T>) -> Self;
+    fn generate_from(sequence: &Seq<T>) -> Self
+    where
+        Self: Sized;
     fn indices(&self, item: &T) -> Option<&Vec<usize>>;
 }
 
@@ -50,7 +64,7 @@ pub trait ContentItemIndices<T: PartialEq> {
 pub struct StringItemIndices(HashMap<String, Vec<usize>>);
 
 impl ContentItemIndices<String> for StringItemIndices {
-    fn from(sequence: &Seq<String>) -> Self {
+    fn generate_from(sequence: &Seq<String>) -> Self {
         let mut map = HashMap::<String, Vec<usize>>::new();
         for (index, line) in sequence.iter().enumerate() {
             if let Some(vec) = map.get_mut(line) {
@@ -83,7 +97,7 @@ impl ContentItemIndices<u8> for ByteItemIndices {
     /// assert_eq!(indices.indices(&16u8),Some( &vec![16usize,33]));
     /// assert_eq!(indices.indices(&17u8),None);
     /// ```
-    fn from(sequence: &Seq<u8>) -> Self {
+    fn generate_from(sequence: &Seq<u8>) -> Self {
         const ARRAY_REPEAT_VALUE: Vec<usize> = Vec::<usize>::new();
         let mut indices = [ARRAY_REPEAT_VALUE; 256];
         for (index, byte) in sequence.iter().enumerate() {

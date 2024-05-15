@@ -1,17 +1,15 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::common_subsequence::*;
-use crate::data::{
-    ByteIndices, ContentIndices, Data, DataIfce, GenerateContentIndices, LineIndices,
-};
 use crate::range::*;
 use std::collections::HashMap;
 use std::iter::Peekable;
-use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::slice::Iter;
 
 use rayon::prelude::ParallelSliceMut;
+
+use crate::sequence::{ByteItemIndices, ContentItemIndices, Seq, StringItemIndices};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Modification {
@@ -22,40 +20,24 @@ pub enum Modification {
 }
 
 #[derive(Debug)]
-pub struct ModificationsGenerator<'a, T: PartialEq, D: DataIfce<T>, I: ContentIndices<T>> {
-    before: &'a D,
-    after: &'a D,
+pub struct ModificationsGenerator<'a, T: PartialEq, I: ContentItemIndices<T>> {
+    before: &'a Seq<T>,
+    after: &'a Seq<T>,
     before_content_indices: I,
-    phantom_data: PhantomData<&'a T>,
 }
 
-impl<'a> ModificationsGenerator<'a, String, Data<String>, LineIndices> {
-    pub fn new(before: &'a Data<String>, after: &'a Data<String>) -> Self {
-        let before_content_indices = before.generate_content_indices();
+impl<'a, T: PartialEq, I: ContentItemIndices<T>> ModificationsGenerator<'a, T, I> {
+    pub fn new(before: &'a Seq<T>, after: &'a Seq<T>) -> Self {
+        let before_content_indices = ContentItemIndices::<T>::generate_from(before);
         Self {
             before,
             after,
             before_content_indices,
-            phantom_data: PhantomData,
         }
     }
 }
 
-impl<'a> ModificationsGenerator<'a, u8, Data<u8>, ByteIndices> {
-    pub fn new(before: &'a Data<u8>, after: &'a Data<u8>) -> Self {
-        let before_content_indices = before.generate_content_indices();
-        Self {
-            before,
-            after,
-            before_content_indices,
-            phantom_data: PhantomData,
-        }
-    }
-}
-
-impl<'a, T: PartialEq, D: DataIfce<T> + GenerateContentIndices<T>, I: ContentIndices<T>>
-    ModificationsGenerator<'a, T, D, I>
-{
+impl<'a, T: PartialEq, I: ContentItemIndices<T>> ModificationsGenerator<'a, T, I> {
     /// Find the longest common subsequences in the given subsequences
     ///
     /// Example:
@@ -258,16 +240,15 @@ impl<'a, T: PartialEq, D: DataIfce<T> + GenerateContentIndices<T>, I: ContentInd
 
 #[derive(Debug, Default)]
 pub struct Modifications<T: PartialEq> {
-    pub before: Data<T>,
-    pub after: Data<T>,
+    pub before: Seq<T>,
+    pub after: Seq<T>,
     pub mods: Vec<Modification>,
 }
 
 impl Modifications<String> {
-    pub fn new(before: Data<String>, after: Data<String>) -> Self {
+    pub fn new(before: Seq<String>, after: Seq<String>) -> Self {
         let mods =
-            ModificationsGenerator::<String, Data<String>, LineIndices>::new(&before, &after)
-                .generate();
+            ModificationsGenerator::<String, StringItemIndices>::new(&before, &after).generate();
         Self {
             before,
             after,
@@ -277,9 +258,8 @@ impl Modifications<String> {
 }
 
 impl Modifications<u8> {
-    pub fn new(before: Data<u8>, after: Data<u8>) -> Self {
-        let mods =
-            ModificationsGenerator::<u8, Data<u8>, ByteIndices>::new(&before, &after).generate();
+    pub fn new(before: Seq<u8>, after: Seq<u8>) -> Self {
+        let mods = ModificationsGenerator::<u8, ByteItemIndices>::new(&before, &after).generate();
         Self {
             before,
             after,
@@ -457,8 +437,8 @@ impl<T: PartialEq> Modifications<T> {
 }
 
 pub struct ChunkIter<'a, T: PartialEq> {
-    pub before: &'a Data<T>,
-    pub after: &'a Data<T>,
+    pub before: &'a Seq<T>,
+    pub after: &'a Seq<T>,
     pub iter: ModificationChunkIter<'a>,
 }
 
