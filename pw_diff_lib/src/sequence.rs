@@ -1,7 +1,10 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
 use crate::range::Range;
+//use crate::{DataIfce, WriteDataInto};
+use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::io;
 use std::ops::Deref;
 
 #[derive(Debug, Default)]
@@ -22,6 +25,24 @@ impl<T: PartialEq> Seq<T> {
 
     pub fn subsequence(&self, range: Range) -> impl DoubleEndedIterator<Item = &T> {
         self.0[range.0..range.1].iter()
+    }
+
+    pub fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
+        if at < self.len() && self.len() - at >= subsequence.len() {
+            subsequence
+                .iter()
+                .zip(self.0[at..].iter())
+                .all(|(b, a)| a == b)
+        } else {
+            false
+        }
+    }
+    pub fn write_into<W: io::Write>(&self, _into: &mut W, _range: Range) -> io::Result<bool> {
+        Ok(true)
+    }
+
+    pub fn write_into_all_from<W: io::Write>(&self, _into: &mut W, _from: usize) -> io::Result<()> {
+        Ok(())
     }
 }
 
@@ -113,5 +134,78 @@ impl ContentItemIndices<u8> for ByteItemIndices {
         } else {
             Some(result)
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConsumableSeq<'a, T>
+where
+    T: PartialEq + Clone,
+{
+    sequence: &'a Seq<T>,
+    consumed: usize,
+}
+
+pub trait ConsumableSeqfce<'a, T: PartialEq> {
+    fn new(data: &'a Seq<T>) -> Self;
+    fn data(&self) -> &Seq<T>;
+    fn consumed(&self) -> usize;
+    fn range_from(&self, from: usize) -> Range;
+    fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool;
+    fn advance_consumed_by(&mut self, increment: usize);
+    fn write_into_upto<W: io::Write>(&mut self, writer: &mut W, upto: usize) -> io::Result<bool>;
+    fn write_remainder<W: io::Write>(&mut self, writer: &mut W) -> io::Result<bool>;
+}
+
+impl<'a, T: PartialEq + Clone> ConsumableSeqfce<'a, T> for ConsumableSeq<'a, T> {
+    fn new(sequence: &'a Seq<T>) -> Self {
+        Self {
+            sequence,
+            consumed: 0,
+        }
+    }
+
+    #[inline]
+    fn data(&self) -> &Seq<T> {
+        self.sequence
+    }
+
+    #[inline]
+    fn consumed(&self) -> usize {
+        self.consumed
+    }
+
+    fn range_from(&self, from: usize) -> Range {
+        Range(from, self.sequence.len())
+    }
+
+    #[inline]
+    fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
+        self.sequence.has_subsequence_at(subsequence, at)
+    }
+
+    fn advance_consumed_by(&mut self, increment: usize) {
+        self.consumed += increment
+    }
+
+    fn write_into_upto<W: io::Write>(&mut self, writer: &mut W, upto: usize) -> io::Result<bool> {
+        if upto <= self.sequence.len() {
+            match self.consumed.cmp(&upto) {
+                Ordering::Less => {
+                    let range = Range(self.consumed, upto);
+                    self.consumed = upto;
+                    self.sequence.write_into(writer, range)
+                }
+                Ordering::Equal => Ok(true),
+                Ordering::Greater => Ok(false),
+            }
+        } else {
+            Ok(false)
+        }
+    }
+    fn write_remainder<W: io::Write>(&mut self, writer: &mut W) -> io::Result<bool> {
+        let range = self.range_from(self.consumed);
+        self.consumed = self.sequence.len();
+        self.sequence.write_into(writer, range)
     }
 }
