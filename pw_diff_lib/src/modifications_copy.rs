@@ -4,12 +4,14 @@ use crate::common_subsequence::*;
 use crate::range::*;
 use std::collections::HashMap;
 use std::iter::Peekable;
+use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::slice::Iter;
 
 use rayon::prelude::ParallelSliceMut;
 
 use crate::sequence::{ByteItemIndices, ContentItemIndices, Seq, StringItemIndices};
+use crate::snippet::Snippet;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Modification {
@@ -19,14 +21,81 @@ pub enum Modification {
     Replace(Range, Range),
 }
 
-#[derive(Debug)]
-pub struct ModificationsGenerator<'a, T: PartialEq, I: ContentItemIndices<T>> {
-    before: &'a Seq<T>,
-    after: &'a Seq<T>,
-    before_content_indices: I,
+pub trait ModificationBasics {
+    fn before_start(&self, reverse: bool) -> usize;
+    fn before_end(&self, reverse: bool) -> usize;
+
+    fn before_length(&self, reverse: bool) -> usize {
+        self.before_end(reverse) - self.before_end(reverse)
+    }
+
+    fn before_range(&self, reverse: bool) -> Range {
+        Range(self.before_start(reverse), self.before_end(reverse))
+    }
+
+    fn after_start(&self, reverse: bool) -> usize {
+        self.before_start(!reverse)
+    }
+
+    fn after_end(&self, reverse: bool) -> usize {
+        self.before_end(!reverse)
+    }
+
+    fn after_length(&self, reverse: bool) -> usize {
+        self.before_start(!reverse)
+    }
+
+    fn after_range(&self, reverse: bool) -> Range {
+        self.before_range(!reverse)
+    }
 }
 
-impl<'a, T: PartialEq, I: ContentItemIndices<T>> ModificationsGenerator<'a, T, I> {
+impl ModificationBasics for Modification {
+    fn before_start(&self, reverse: bool) -> usize {
+        if reverse {
+            match self {
+                Modification::NoChange(common_subsequence) => common_subsequence.after_start(),
+                Modification::Delete(before_range, start) => *start,
+                Modification::Insert(start, after_range) => after_range.start(),
+                Modification::Replace(before_range, after_range) => after_range.start(),
+            }
+        } else {
+            match self {
+                Modification::NoChange(common_subsequence) => common_subsequence.before_start(),
+                Modification::Delete(before_range, start) => before_range.start(),
+                Modification::Insert(start, after_range) => *start,
+                Modification::Replace(before_range, after_range) => before_range.start(),
+            }
+        }
+    }
+
+    fn before_end(&self, reverse: bool) -> usize {
+        if reverse {
+            match self {
+                Modification::NoChange(common_subsequence) => common_subsequence.after_end(),
+                Modification::Delete(before_range, end) => *end,
+                Modification::Insert(start, after_range) => after_range.end(),
+                Modification::Replace(before_range, after_range) => after_range.end(),
+            }
+        } else {
+            match self {
+                Modification::NoChange(common_subsequence) => common_subsequence.before_end(),
+                Modification::Delete(before_range, start) => before_range.end(),
+                Modification::Insert(end, after_range) => *end,
+                Modification::Replace(before_range, after_range) => before_range.end(),
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ModificationsGenerator<'a, T: PartialEq + Clone, I: ContentItemIndices<T>> {
+    before: &'a Seq<T>,
+    after: &'a Seq<T>,
+    before_content_indices: Box<I>,
+}
+
+impl<'a, T: PartialEq + Clone, I: ContentItemIndices<T>> ModificationsGenerator<'a, T, I> {
     pub fn new(before: &'a Seq<T>, after: &'a Seq<T>) -> Self {
         let before_content_indices = ContentItemIndices::<T>::generate_from(before);
         Self {
@@ -37,7 +106,7 @@ impl<'a, T: PartialEq, I: ContentItemIndices<T>> ModificationsGenerator<'a, T, I
     }
 }
 
-impl<'a, T: PartialEq, I: ContentItemIndices<T>> ModificationsGenerator<'a, T, I> {
+impl<'a, T: PartialEq + Clone, I: ContentItemIndices<T>> ModificationsGenerator<'a, T, I> {
     /// Find the longest common subsequences in the given subsequences
     ///
     /// Example:
@@ -239,7 +308,7 @@ impl<'a, T: PartialEq, I: ContentItemIndices<T>> ModificationsGenerator<'a, T, I
 }
 
 #[derive(Debug, Default)]
-pub struct Modifications<T: PartialEq> {
+pub struct Modifications<T: PartialEq + Clone> {
     pub before: Seq<T>,
     pub after: Seq<T>,
     pub mods: Vec<Modification>,
@@ -268,27 +337,49 @@ impl Modifications<u8> {
     }
 }
 
-#[derive(Debug, Default, PartialEq)]
-pub struct ModificationChunk(pub Vec<Modification>);
+#[derive(Debug, PartialEq)]
+pub struct ModificationChunk<'a, T: PartialEq + Clone> {
+    pub before: &'a Seq<T>,
+    pub after: &'a Seq<T>,
+    pub modns: Vec<Modification>,
+}
 
-impl Deref for ModificationChunk {
+impl<'a, T: PartialEq + Clone> Deref for ModificationChunk<'a, T> {
     type Target = Vec<Modification>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.modns
     }
 }
 
-impl DerefMut for ModificationChunk {
+impl<'a, T: PartialEq + Clone> DerefMut for ModificationChunk<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.modns
     }
 }
 
-impl ModificationChunk {
+impl<'a, T: PartialEq + Clone> ModificationBasics for ModificationChunk<'a, T> {
+    fn before_start(&self, reverse: bool) -> usize {
+        if let Some(modn) = self.modns.first() {
+            modn.before_start(reverse)
+        } else {
+            0
+        }
+    }
+
+    fn before_end(&self, reverse: bool) -> usize {
+        if let Some(modn) = self.modns.first() {
+            modn.before_end(reverse)
+        } else {
+            0
+        }
+    }
+}
+
+impl<'a, T: PartialEq + Clone> ModificationChunk<'a, T> {
     pub fn starts(&self) -> (usize, usize) {
         use Modification::*;
-        if let Some(modn) = self.0.first() {
+        if let Some(modn) = self.modns.first() {
             match modn {
                 Delete(range, after_start) => (range.start(), *after_start),
                 NoChange(match_) => (match_.before_start(), match_.after_start()),
@@ -302,7 +393,7 @@ impl ModificationChunk {
 
     pub fn ends(&self) -> (usize, usize) {
         use Modification::*;
-        if let Some(op_code) = self.0.last() {
+        if let Some(op_code) = self.modns.last() {
             match op_code {
                 Delete(range, after_start) => (range.end(), *after_start),
                 NoChange(match_) => (match_.before_end(), match_.after_end()),
@@ -346,54 +437,60 @@ impl ModificationChunk {
     }
 }
 
-pub struct ModificationChunkIter<'a> {
+pub struct ModificationChunkIter<'a, T: PartialEq + Clone> {
+    pub before: &'a Seq<T>,
+    pub after: &'a Seq<T>,
     iter: Peekable<Iter<'a, Modification>>,
     context: u8,
     stash: Option<CommonSubsequence>,
 }
 
-impl<'a> Iterator for ModificationChunkIter<'a> {
-    type Item = ModificationChunk;
+impl<'a, T: PartialEq + Clone> Iterator for ModificationChunkIter<'a, T> {
+    type Item = ModificationChunk<'a, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         use Modification::NoChange;
-        let mut chunk = ModificationChunk::default();
+        let mut modns = vec![];
         if let Some(stashed) = self.stash {
-            chunk.push(NoChange(stashed));
+            modns.push(NoChange(stashed));
             self.stash = None;
         }
         while let Some(modn) = self.iter.next() {
             match modn {
                 NoChange(common_sequence) => {
-                    if chunk.is_empty() {
+                    if modns.is_empty() {
                         if self.iter.peek().is_some() {
-                            chunk.push(NoChange(common_sequence.starts_trimmed(self.context)));
+                            modns.push(NoChange(common_sequence.starts_trimmed(self.context)));
                         }
                     } else if self.iter.peek().is_none() {
-                        chunk.push(NoChange(common_sequence.ends_trimmed(self.context)));
+                        modns.push(NoChange(common_sequence.ends_trimmed(self.context)));
                         break;
                     } else if let Some((head, tail)) = common_sequence.split(self.context) {
                         self.stash = Some(tail);
-                        chunk.push(NoChange(head));
+                        modns.push(NoChange(head));
                         break;
                     } else {
-                        chunk.push(*modn)
+                        modns.push(*modn)
                     }
                 }
                 _ => {
-                    chunk.push(*modn);
+                    modns.push(*modn);
                 }
             }
         }
-        if chunk.is_empty() {
+        if modns.is_empty() {
             None
         } else {
-            Some(chunk)
+            Some(ModificationChunk {
+                before: self.before,
+                after: self.after,
+                modns,
+            })
         }
     }
 }
 
-impl<T: PartialEq> Modifications<T> {
+impl<T: PartialEq + Clone> Modifications<T> {
     /// Return an iterator over ModificationChunks generated with the given `context` size.
     ///
     /// Example:
@@ -427,8 +524,10 @@ impl<T: PartialEq> Modifications<T> {
     ///     ]
     /// );
     /// ```
-    pub fn modification_chunks<'a>(&'a self, context: u8) -> ModificationChunkIter<'a> {
+    pub fn modification_chunks<'a>(&'a self, context: u8) -> ModificationChunkIter<'a, T> {
         ModificationChunkIter {
+            before: &self.before,
+            after: &self.after,
             iter: self.mods.iter().peekable(),
             context,
             stash: None,
@@ -436,13 +535,13 @@ impl<T: PartialEq> Modifications<T> {
     }
 }
 
-pub struct ChunkIter<'a, T: PartialEq> {
+pub struct ChunkIter<'a, T: PartialEq + Clone> {
     pub before: &'a Seq<T>,
     pub after: &'a Seq<T>,
-    pub iter: ModificationChunkIter<'a>,
+    pub iter: ModificationChunkIter<'a, T>,
 }
 
-impl<T: PartialEq> Modifications<T> {
+impl<T: PartialEq + Clone> Modifications<T> {
     pub fn chunks<'a, I>(&'a self, context: u8) -> ChunkIter<'a, T> {
         ChunkIter {
             before: &self.before,
