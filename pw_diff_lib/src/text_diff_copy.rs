@@ -1,17 +1,15 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
-
-use crate::apply_text::{ApplyChunkFuzzy, ApplyChunksFuzzy, WillApply};
-use crate::data::{ConsumableData, ConsumableDataIfce, Data, DataIfce};
-use crate::modifications::{ChunkIter, Modifications};
-use crate::range::{Len, Range};
-use crate::snippet::{Snippet, SnippetWrite};
-use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::data::ExtractSnippet;
-use crate::TextChunkBasics;
+use serde::{Deserialize, Serialize};
+
+use crate::apply_text_copy::*;
+use crate::modifications_copy::*;
+use crate::range::Range;
+use crate::sequence::*;
+use crate::snippet::{Snippet, SnippetWrite};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextChangeChunk {
@@ -20,21 +18,47 @@ pub struct TextChangeChunk {
     after: Snippet<String>,
 }
 
-impl<'a> Iterator for ChunkIter<'a, String>
-where
-    Data<String>: ExtractSnippet<String>,
-{
-    type Item = TextChangeChunk;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let modn_chunk = self.iter.next()?;
+impl From<ModificationChunk<'_, String>> for TextChangeChunk {
+    fn from(modn_chunk: ModificationChunk<String>) -> Self {
         let (before_range, after_range) = modn_chunk.ranges();
 
-        Some(TextChangeChunk {
+        TextChangeChunk {
             context_lengths: modn_chunk.context_lengths(),
-            before: self.before.extract_snippet(before_range),
-            after: self.after.extract_snippet(after_range),
-        })
+            before: modn_chunk.before.extract_snippet(before_range),
+            after: modn_chunk.after.extract_snippet(after_range),
+        }
+    }
+}
+
+impl ModificationBasics for TextChangeChunk {
+    fn before_start(&self, reverse: bool) -> usize {
+        if reverse {
+            self.after.start
+        } else {
+            self.before.start
+        }
+    }
+
+    fn before_end(&self, reverse: bool) -> usize {
+        if reverse {
+            self.after.start + self.after.items.len()
+        } else {
+            self.before.start + self.before.items.len()
+        }
+    }
+}
+
+impl TextChunkBasics for TextChangeChunk {
+    fn context_lengths(&self) -> (u8, u8) {
+        self.context_lengths
+    }
+
+    fn before_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String> {
+        if reverse {
+            self.after.items(range)
+        } else {
+            self.before.items(range)
+        }
     }
 }
 
@@ -56,10 +80,12 @@ impl TextChangeChunk {
     }
 }
 
+// impl ApplyChunkFuzzy for TextChangeChunk {}
+
 impl ApplyChunkFuzzy for TextChangeChunk {
     fn will_apply(
         &self,
-        patchable: &Data<String>,
+        patchable: &Seq<String>,
         offset: isize,
         reverse: bool,
     ) -> Option<WillApply> {
@@ -90,7 +116,7 @@ impl ApplyChunkFuzzy for TextChangeChunk {
     fn apply_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut ConsumableData<String, Data<String>>,
+        pd: &mut ConsumableSeq<String>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
@@ -105,7 +131,7 @@ impl ApplyChunkFuzzy for TextChangeChunk {
 
     fn will_apply_nearby(
         &self,
-        pd: &ConsumableData<String, Data<String>>,
+        pd: &ConsumableSeq<String>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -157,7 +183,7 @@ impl ApplyChunkFuzzy for TextChangeChunk {
 
     fn is_already_applied(
         &self,
-        patchable: &Data<String>,
+        patchable: &Seq<String>,
         offset: isize,
         reverse: bool,
     ) -> Option<WillApply> {
@@ -166,7 +192,7 @@ impl ApplyChunkFuzzy for TextChangeChunk {
 
     fn is_already_applied_nearby(
         &self,
-        pd: &ConsumableData<String, Data<String>>,
+        pd: &ConsumableSeq<String>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -177,16 +203,14 @@ impl ApplyChunkFuzzy for TextChangeChunk {
     fn already_applied_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut ConsumableData<String, Data<String>>,
+        pd: &mut ConsumableSeq<String>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> io::Result<()> {
         let after = self.after(reverse);
         let end = after.adj_start(offset, reductions) + after.adj_length(reductions);
-        let ok = pd.write_into_upto(into, end)?;
-        debug_assert!(ok);
-        Ok(())
+        pd.write_into_upto(into, end)
     }
 
     fn write_failure_data_into<W: io::Write>(&self, into: &mut W, reverse: bool) -> io::Result<()> {
@@ -195,24 +219,6 @@ impl ApplyChunkFuzzy for TextChangeChunk {
         into.write_all(b"=======\n")?;
         self.after(reverse).write_into(into, None)?;
         into.write_all(b">>>>>>>\n")
-    }
-}
-
-impl TextChunkBasics for TextChangeChunk {
-    fn context_lengths(&self) -> (u8, u8) {
-        self.context_lengths
-    }
-
-    fn before_start(&self, reverse: bool) -> usize {
-        self.before(reverse).start
-    }
-
-    fn before_length(&self, reverse: bool) -> usize {
-        self.before(reverse).len()
-    }
-
-    fn before_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String> {
-        self.before(reverse).items(range)
     }
 }
 
@@ -225,14 +231,17 @@ pub struct TextChangeDiff {
 
 impl TextChangeDiff {
     pub fn new(before_file_path: &Path, after_file_path: &Path, context: u8) -> io::Result<Self> {
-        let before_lines = Data::<String>::read(File::open(before_file_path)?)?;
-        let after_lines = Data::<String>::read(File::open(after_file_path)?)?;
+        let before_lines = Seq::<String>::read(File::open(before_file_path)?)?;
+        let after_lines = Seq::<String>::read(File::open(after_file_path)?)?;
         let modifications = Modifications::<String>::new(before_lines, after_lines);
 
         Ok(Self {
             before_path: before_file_path.to_path_buf(),
             after_path: after_file_path.to_path_buf(),
-            chunks: modifications.chunks::<TextChangeChunk>(context).collect(),
+            chunks: modifications
+                .modification_chunks(context)
+                .map(|c| TextChangeChunk::from(c))
+                .collect(),
         })
     }
 

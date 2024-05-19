@@ -4,14 +4,12 @@ use crate::common_subsequence::*;
 use crate::range::*;
 use std::collections::HashMap;
 use std::iter::Peekable;
-use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::slice::Iter;
 
 use rayon::prelude::ParallelSliceMut;
 
 use crate::sequence::{ByteItemIndices, ContentItemIndices, Seq, StringItemIndices};
-use crate::snippet::Snippet;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Modification {
@@ -26,7 +24,7 @@ pub trait ModificationBasics {
     fn before_end(&self, reverse: bool) -> usize;
 
     fn before_length(&self, reverse: bool) -> usize {
-        self.before_end(reverse) - self.before_end(reverse)
+        self.before_end(reverse) - self.before_start(reverse)
     }
 
     fn before_range(&self, reverse: bool) -> Range {
@@ -42,7 +40,7 @@ pub trait ModificationBasics {
     }
 
     fn after_length(&self, reverse: bool) -> usize {
-        self.before_start(!reverse)
+        self.before_length(!reverse)
     }
 
     fn after_range(&self, reverse: bool) -> Range {
@@ -55,16 +53,16 @@ impl ModificationBasics for Modification {
         if reverse {
             match self {
                 Modification::NoChange(common_subsequence) => common_subsequence.after_start(),
-                Modification::Delete(before_range, start) => *start,
-                Modification::Insert(start, after_range) => after_range.start(),
-                Modification::Replace(before_range, after_range) => after_range.start(),
+                Modification::Delete(_, start) => *start,
+                Modification::Insert(_, after_range) => after_range.start(),
+                Modification::Replace(_, after_range) => after_range.start(),
             }
         } else {
             match self {
                 Modification::NoChange(common_subsequence) => common_subsequence.before_start(),
-                Modification::Delete(before_range, start) => before_range.start(),
-                Modification::Insert(start, after_range) => *start,
-                Modification::Replace(before_range, after_range) => before_range.start(),
+                Modification::Delete(before_range, _) => before_range.start(),
+                Modification::Insert(start, _) => *start,
+                Modification::Replace(before_range, _) => before_range.start(),
             }
         }
     }
@@ -73,16 +71,16 @@ impl ModificationBasics for Modification {
         if reverse {
             match self {
                 Modification::NoChange(common_subsequence) => common_subsequence.after_end(),
-                Modification::Delete(before_range, end) => *end,
-                Modification::Insert(start, after_range) => after_range.end(),
-                Modification::Replace(before_range, after_range) => after_range.end(),
+                Modification::Delete(_, end) => *end,
+                Modification::Insert(_, after_range) => after_range.end(),
+                Modification::Replace(_, after_range) => after_range.end(),
             }
         } else {
             match self {
                 Modification::NoChange(common_subsequence) => common_subsequence.before_end(),
-                Modification::Delete(before_range, start) => before_range.end(),
-                Modification::Insert(end, after_range) => *end,
-                Modification::Replace(before_range, after_range) => before_range.end(),
+                Modification::Delete(before_range, _) => before_range.end(),
+                Modification::Insert(end, _) => *end,
+                Modification::Replace(before_range, _) => before_range.end(),
             }
         }
     }
@@ -531,22 +529,6 @@ impl<T: PartialEq + Clone> Modifications<T> {
             iter: self.mods.iter().peekable(),
             context,
             stash: None,
-        }
-    }
-}
-
-pub struct ChunkIter<'a, T: PartialEq + Clone> {
-    pub before: &'a Seq<T>,
-    pub after: &'a Seq<T>,
-    pub iter: ModificationChunkIter<'a, T>,
-}
-
-impl<T: PartialEq + Clone> Modifications<T> {
-    pub fn chunks<'a, I>(&'a self, context: u8) -> ChunkIter<'a, T> {
-        ChunkIter {
-            before: &self.before,
-            after: &self.after,
-            iter: self.modification_chunks(context),
         }
     }
 }

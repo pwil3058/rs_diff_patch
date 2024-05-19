@@ -31,10 +31,19 @@ impl Range {
     pub fn end(&self) -> usize {
         self.1
     }
+
+    pub fn is_valid(&self) -> bool {
+        self.0 <= self.1
+    }
+
+    pub fn is_valid_for_max_end(&self, max_end: usize) -> bool {
+        self.is_valid() && self.1 <= max_end
+    }
 }
 
 #[cfg(test)]
 mod crange_tests {
+    use super::*;
 
     #[test]
     fn crange() {
@@ -43,5 +52,12 @@ mod crange_tests {
         assert_eq!(crange.end(), 5);
         assert_eq!(crange.len(), 2);
     }
-    use super::*;
+
+    #[test]
+    fn valid() {
+        assert!(Range(2, 3).is_valid());
+        assert!(!Range(3, 10).is_valid_for_max_end(9));
+        assert!(Range(3, 10).is_valid_for_max_end(10));
+        assert!(Range(3, 10).is_valid_for_max_end(11));
+    }
 }
