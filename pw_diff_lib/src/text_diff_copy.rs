@@ -9,7 +9,7 @@ use crate::apply_text_copy::*;
 use crate::modifications_copy::*;
 use crate::range::Range;
 use crate::sequence::*;
-use crate::snippet::{Snippet, SnippetWrite};
+use crate::snippet::Snippet;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextChangeChunk {
@@ -80,147 +80,7 @@ impl TextChangeChunk {
     }
 }
 
-// impl ApplyChunkFuzzy for TextChangeChunk {}
-
-impl ApplyChunkFuzzy for TextChangeChunk {
-    fn will_apply(
-        &self,
-        patchable: &Seq<String>,
-        offset: isize,
-        reverse: bool,
-    ) -> Option<WillApply> {
-        let before = self.before(reverse);
-        let start = before.start as isize + offset;
-        if !start.is_negative() && patchable.has_subsequence_at(&before.items, start as usize) {
-            Some(WillApply::Cleanly)
-        } else {
-            let max_reduction = self.context_lengths.0.max(self.context_lengths.1);
-            for redn in 1..max_reduction {
-                let start_redn = redn.min(self.context_lengths.0);
-                let end_redn = redn.min(self.context_lengths.1);
-                let adj_start = start + start_redn as isize;
-                if !adj_start.is_negative()
-                    && patchable.has_subsequence_at(
-                        &before.items
-                            [start_redn as usize..before.adj_length(None) - end_redn as usize],
-                        adj_start as usize,
-                    )
-                {
-                    return Some(WillApply::WithReductions((start_redn, end_redn)));
-                }
-            }
-            None
-        }
-    }
-
-    fn apply_into<W: io::Write>(
-        &self,
-        into: &mut W,
-        pd: &mut ConsumableSeq<String>,
-        offset: isize,
-        reductions: Option<(u8, u8)>,
-        reverse: bool,
-    ) -> io::Result<()> {
-        let before = self.before(reverse);
-        let end = before.adj_start(offset, reductions);
-        pd.write_into_upto(into, end)?;
-        self.after(reverse).write_into(into, reductions)?;
-        pd.advance_consumed_by(before.adj_length(reductions));
-        Ok(())
-    }
-
-    fn will_apply_nearby(
-        &self,
-        pd: &ConsumableSeq<String>,
-        next_chunk: Option<&Self>,
-        offset: isize,
-        reverse: bool,
-    ) -> Option<(isize, WillApply)> {
-        let before = self.before(reverse);
-        let not_after = if let Some(next_chunk) = next_chunk {
-            let next_chunk_before = if reverse {
-                &next_chunk.after
-            } else {
-                &next_chunk.before
-            };
-            next_chunk_before
-                .start
-                .checked_add_signed(offset)
-                .expect("overflow")
-                - before.adj_length(Some(self.context_lengths))
-        } else {
-            pd.data().len() - before.adj_length(Some(self.context_lengths))
-        };
-        let mut backward_done = false;
-        let mut forward_done = false;
-        for i in 1isize.. {
-            if !backward_done {
-                let adjusted_offset = offset - i;
-                if before.start as isize + adjusted_offset < pd.consumed() as isize {
-                    backward_done = true;
-                } else {
-                    if let Some(will_apply) = self.will_apply(pd.data(), adjusted_offset, reverse) {
-                        return Some((-i, will_apply));
-                    }
-                }
-            }
-            if !forward_done {
-                let adjusted_offset = offset + i;
-                if before.start as isize + adjusted_offset < not_after as isize {
-                    if let Some(will_apply) = self.will_apply(pd.data(), adjusted_offset, reverse) {
-                        return Some((i, will_apply));
-                    }
-                } else {
-                    forward_done = true
-                }
-            }
-            if forward_done && backward_done {
-                break;
-            }
-        }
-        None
-    }
-
-    fn is_already_applied(
-        &self,
-        patchable: &Seq<String>,
-        offset: isize,
-        reverse: bool,
-    ) -> Option<WillApply> {
-        self.will_apply(patchable, offset, !reverse)
-    }
-
-    fn is_already_applied_nearby(
-        &self,
-        pd: &ConsumableSeq<String>,
-        next_chunk: Option<&Self>,
-        offset: isize,
-        reverse: bool,
-    ) -> Option<(isize, WillApply)> {
-        self.will_apply_nearby(pd, next_chunk, offset, !reverse)
-    }
-
-    fn already_applied_into<W: io::Write>(
-        &self,
-        into: &mut W,
-        pd: &mut ConsumableSeq<String>,
-        offset: isize,
-        reductions: Option<(u8, u8)>,
-        reverse: bool,
-    ) -> io::Result<()> {
-        let after = self.after(reverse);
-        let end = after.adj_start(offset, reductions) + after.adj_length(reductions);
-        pd.write_into_upto(into, end)
-    }
-
-    fn write_failure_data_into<W: io::Write>(&self, into: &mut W, reverse: bool) -> io::Result<()> {
-        into.write_all(b"<<<<<<<\n")?;
-        self.before(reverse).write_into(into, None)?;
-        into.write_all(b"=======\n")?;
-        self.after(reverse).write_into(into, None)?;
-        into.write_all(b">>>>>>>\n")
-    }
-}
+impl ApplyChunkFuzzy for TextChangeChunk {}
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TextChangeDiff {

@@ -18,6 +18,17 @@ impl<T> Len for Snippet<T> {
 }
 
 impl<T> Snippet<T> {
+    pub fn range(&self, reductions: Option<(u8, u8)>) -> Range {
+        if let Some((start_reduction, end_reduction)) = reductions {
+            Range(
+                start_reduction as usize,
+                self.items.len() - end_reduction as usize,
+            )
+        } else {
+            Range(0, self.items.len())
+        }
+    }
+
     pub fn adj_length(&self, reductions: Option<(u8, u8)>) -> usize {
         if let Some((start_reduction, end_reduction)) = reductions {
             self.items.len() - start_reduction as usize - end_reduction as usize
@@ -34,9 +45,10 @@ impl<T> Snippet<T> {
         }
     }
 
-    pub fn items(&self, reductions: Option<Range>) -> impl Iterator<Item = &T> {
-        if let Some(range) = reductions {
-            self.items[range.start()..self.len() - range.end()].iter()
+    pub fn items(&self, range: Option<Range>) -> impl Iterator<Item = &T> {
+        if let Some(range) = range {
+            debug_assert!(range.is_valid_for_max_end(self.len() + self.start));
+            self.items[range.0..range.1].iter()
         } else {
             self.items.iter()
         }

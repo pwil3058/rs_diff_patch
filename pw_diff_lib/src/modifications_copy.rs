@@ -27,8 +27,23 @@ pub trait ModificationBasics {
         self.before_end(reverse) - self.before_start(reverse)
     }
 
-    fn before_range(&self, reverse: bool) -> Range {
-        Range(self.before_start(reverse), self.before_end(reverse))
+    fn before_range(&self, reductions: Option<(u8, u8)>, reverse: bool) -> Range {
+        if let Some(reductions) = reductions {
+            Range(
+                self.before_start(reverse) + reductions.0 as usize,
+                self.before_end(reverse) - reductions.1 as usize,
+            )
+        } else {
+            Range(self.before_start(reverse), self.before_end(reverse))
+        }
+    }
+    fn my_before_range(&self, reductions: Option<(u8, u8)>, reverse: bool) -> Range {
+        let length = self.before_length(reverse);
+        if let Some(reductions) = reductions {
+            Range(reductions.0 as usize, length - reductions.1 as usize)
+        } else {
+            Range(0, length)
+        }
     }
 
     fn after_start(&self, reverse: bool) -> usize {
@@ -43,8 +58,12 @@ pub trait ModificationBasics {
         self.before_length(!reverse)
     }
 
-    fn after_range(&self, reverse: bool) -> Range {
-        self.before_range(!reverse)
+    fn after_range(&self, reductions: Option<(u8, u8)>, reverse: bool) -> Range {
+        self.before_range(reductions, !reverse)
+    }
+
+    fn my_after_range(&self, reductions: Option<(u8, u8)>, reverse: bool) -> Range {
+        self.my_before_range(reductions, !reverse)
     }
 }
 

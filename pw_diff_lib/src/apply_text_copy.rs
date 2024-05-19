@@ -1,6 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::range::Range;
+use crate::range::{Len, Range};
 use std::io;
 
 use crate::modifications_copy::ModificationBasics;
@@ -57,19 +57,13 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
         reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> bool {
-        let length = self.before_adjusted_length(reductions, reverse);
-        let end = at + length;
+        let my_range = self.my_before_range(reductions, reverse);
+        let end = at + my_range.len();
         if end > patchable.len() {
             false
-        } else if let Some(reductions) = reductions {
-            let my_range = Range(reductions.0 as usize, length - reductions.1 as usize);
-            let other_range = Range(at, end);
-            self.before_lines(Some(my_range), reverse)
-                .zip(patchable.subsequence(other_range))
-                .all(|(l, r)| l == r)
         } else {
             let other_range = Range(at, end);
-            self.before_lines(None, reverse)
+            self.before_lines(Some(my_range), reverse)
                 .zip(patchable.subsequence(other_range))
                 .all(|(l, r)| l == r)
         }
@@ -81,11 +75,8 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
         reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> io::Result<()> {
-        if let Some(reductions) = reductions {
-            let range = Range(
-                reductions.0 as usize,
-                self.before_length(reverse) - reductions.1 as usize,
-            );
+        if reductions.is_some() {
+            let range = self.before_range(reductions, reverse);
             for line in self.before_lines(Some(range), reverse) {
                 into.write_all(line.as_bytes())?;
             }
@@ -162,10 +153,10 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
         reverse: bool,
     ) -> Option<(isize, WillApply)> {
         let not_after = if let Some(next_chunk) = next_chunk {
-            next_chunk.before_adjusted_start(offset, None, reverse) as usize
-                - self.before_adjusted_length(None, reverse)
+            next_chunk.before_adjusted_start(offset, Some(self.context_lengths()), reverse) as usize
+                - self.before_adjusted_length(Some(self.context_lengths()), reverse)
         } else {
-            pd.data().len() - self.before_adjusted_length(None, reverse)
+            pd.data().len() - self.before_adjusted_length(Some(self.context_lengths()), reverse)
         };
         let mut backward_done = false;
         let mut forward_done = false;
