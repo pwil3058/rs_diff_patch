@@ -5,8 +5,7 @@ use crate::modifications_copy::*;
 use crate::sequence::*;
 use crate::text_diff_copy::*;
 use serde::{Deserialize, Serialize};
-use std::io::{BufWriter, Cursor, Write};
-use std::ops::{Deref, DerefMut};
+use std::io::BufWriter;
 
 #[derive(Serialize, Deserialize)]
 struct WrappedDiffChunks(pub Vec<TextChangeChunk>);
@@ -17,39 +16,6 @@ impl ApplyChunksFuzzy<TextChangeChunk> for WrappedDiffChunks {
         TextChangeChunk: 's,
     {
         self.0.iter()
-    }
-}
-
-#[derive(Debug, Default)]
-struct WriteableString(Cursor<Vec<u8>>);
-
-impl Deref for WriteableString {
-    type Target = Cursor<Vec<u8>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for WriteableString {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Write for WriteableString {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.0.write(buf)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.0.flush()
-    }
-}
-
-impl PartialEq<String> for WriteableString {
-    fn eq(&self, other: &String) -> bool {
-        &String::from_utf8(self.get_ref().clone()).unwrap() == other
     }
 }
 
