@@ -1,9 +1,10 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
 use std::io;
 
 use log;
+
+use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
 
 pub trait ApplyChunkClean {
     fn will_apply(&self, se: &Seq<u8>, reverse: bool) -> bool;

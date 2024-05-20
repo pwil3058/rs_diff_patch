@@ -1,11 +1,12 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::range::{Len, Range};
 use std::io;
 
-use crate::modifications_copy::ModificationBasics;
-use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
 use log;
+
+use crate::modifications_copy::ModificationBasics;
+use crate::range::{Len, Range};
+use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
 
 pub trait TextChunkBasics: ModificationBasics {
     fn context_lengths(&self) -> (u8, u8);

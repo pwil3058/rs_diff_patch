@@ -1,8 +1,11 @@
-use regex::{Captures, Regex};
+// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use pw_diff_lib::apply_text_copy::TextChunkBasics;
 
+use regex::{Captures, Regex};
+
+use pw_diff_lib::apply_text_copy::TextChunkBasics;
 use pw_diff_lib::modifications_copy::{Modification, ModificationBasics, ModificationChunkIter};
 use pw_diff_lib::range::{Len, Range};
 use pw_diff_lib::sequence::Seq;
@@ -223,7 +226,7 @@ impl TextChunkBasics for UnifiedDiffChunk {
         self.context_lengths
     }
 
-     fn before_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String> {
+    fn before_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String> {
         if let Some(range) = range {
             if reverse {
                 self.after_lines[range.start()..range.end()].iter()
@@ -329,8 +332,8 @@ impl<'a> Iterator for UnifiedChunkIter<'a>
 #[cfg(test)]
 mod tests {
     use crate::unified_diff_copy::UnifiedDiffChunk;
-    use std::fs::File;
     use pw_diff_lib::sequence::*;
+    use std::fs::File;
 
     static UNIFIED_DIFF_CHUNK: &str = "--- lao	2002-02-21 23:30:39.942229878 -0800
 +++ tzu	2002-02-21 23:30:50.442260588 -0800
@@ -355,7 +358,10 @@ mod tests {
 
     #[test]
     fn unified_diff_chunk_parse_string() {
-        let diff_lines =    Seq(UNIFIED_DIFF_CHUNK.split_inclusive('\n').map(|s| s.to_string()).collect());
+        let diff_lines = Seq(UNIFIED_DIFF_CHUNK
+            .split_inclusive('\n')
+            .map(|s| s.to_string())
+            .collect());
         // TODO: find out why from doesn't work here
         // let diff_lines = Seq::<String>::from(UNIFIED_DIFF_CHUNK);
         assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 2).is_ok());

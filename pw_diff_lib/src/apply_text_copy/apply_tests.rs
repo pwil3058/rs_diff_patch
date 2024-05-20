@@ -1,11 +1,13 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
+use std::io::BufWriter;
+
+use serde::{Deserialize, Serialize};
+
 use crate::apply_text_copy::*;
 use crate::modifications_copy::*;
 use crate::sequence::*;
 use crate::text_diff_copy::*;
-use serde::{Deserialize, Serialize};
-use std::io::BufWriter;
 
 #[derive(Serialize, Deserialize)]
 struct WrappedDiffChunks(pub Vec<TextChangeChunk>);

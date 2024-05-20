@@ -1,13 +1,15 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::apply_bytes_copy::{ApplyChunkClean, ApplyChunksClean};
-use crate::modifications_copy::{Modifications,ModificationChunk};
-use crate::range::Len;
-use crate::snippet::{Snippet, SnippetWrite};
-use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+use crate::apply_bytes_copy::{ApplyChunkClean, ApplyChunksClean};
+use crate::modifications_copy::{ModificationChunk, Modifications};
+use crate::range::Len;
+use crate::snippet::{Snippet, SnippetWrite};
 
 use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
 
@@ -67,8 +69,8 @@ impl<'a> ApplyChunkClean for ByteChangeChunk {
     ) -> io::Result<()> {
         let before = self.before(reverse);
         pd.write_into_upto(into, before.start)?;
-            self.after(reverse).write_into(into, None)?;
-            pd.advance_consumed_by(before.len());
+        self.after(reverse).write_into(into, None)?;
+        pd.advance_consumed_by(before.len());
         Ok(())
     }
 
@@ -101,7 +103,10 @@ impl ByteChangeDiff {
             before_path: before_file_path.to_path_buf(),
             after_path: after_file_path.to_path_buf(),
             compressed: false,
-            chunks: modifications.modification_chunks(context).map(|c| ByteChangeChunk::from(c)).collect(),
+            chunks: modifications
+                .modification_chunks(context)
+                .map(|c| ByteChangeChunk::from(c))
+                .collect(),
         })
     }
 

@@ -1,7 +1,5 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::common_subsequence::*;
-use crate::range::*;
 use std::collections::HashMap;
 use std::iter::Peekable;
 use std::ops::{Deref, DerefMut};
@@ -9,6 +7,8 @@ use std::slice::Iter;
 
 use rayon::prelude::ParallelSliceMut;
 
+use crate::common_subsequence::*;
+use crate::range::*;
 use crate::sequence::{ByteItemIndices, ContentItemIndices, Seq, StringItemIndices};
 
 #[derive(Debug, PartialEq, Clone, Copy)]

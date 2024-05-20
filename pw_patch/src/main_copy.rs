@@ -1,13 +1,18 @@
-use clap::Parser;
+// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+
 use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
 
+use clap::Parser;
 use log;
 use stderrlog;
 use stderrlog::LogLevelNum;
 
-use pw_diff_lib::{apply_bytes_copy::ApplyChunksClean, apply_text_copy::ApplyChunksFuzzy, sequence::Seq, diff_copy::Diff};
+use pw_diff_lib::{
+    apply_bytes_copy::ApplyChunksClean, apply_text_copy::ApplyChunksFuzzy, diff_copy::Diff,
+    sequence::Seq,
+};
 
 #[derive(Debug, Parser)]
 struct Cli {
