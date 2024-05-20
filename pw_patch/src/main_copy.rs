@@ -1,5 +1,3 @@
-mod main_copy;
-
 use clap::Parser;
 use std::fs;
 use std::fs::File;
@@ -9,7 +7,7 @@ use log;
 use stderrlog;
 use stderrlog::LogLevelNum;
 
-use pw_diff_lib::{apply_bytes::ApplyChunksClean, apply_text::ApplyChunksFuzzy, data::Data, diff::Diff};
+use pw_diff_lib::{apply_bytes_copy::ApplyChunksClean, apply_text_copy::ApplyChunksFuzzy, sequence::Seq, diff_copy::Diff};
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -21,7 +19,7 @@ struct Cli {
     patch_path: PathBuf,
 }
 
-fn main() {
+fn _main_copy() {
     let args = Cli::parse();
 
     stderrlog::new()
@@ -56,7 +54,7 @@ fn main() {
                     std::process::exit(1);
                 }
             };
-            let patchable_lines = match Data::<String>::read(patchable_file) {
+            let patchable_lines = match Seq::<String>::read(patchable_file) {
                 Ok(lines) => lines,
                 Err(err) => {
                     log::error!("Error reading {patchable_path:?}: {err}");
@@ -152,7 +150,7 @@ fn main() {
                     std::process::exit(1);
                 }
             };
-            let patchable_bytes = match Data::<u8>::read(patchable_file) {
+            let patchable_bytes = match Seq::<u8>::read(patchable_file) {
                 Ok(lines) => lines,
                 Err(err) => {
                     log::error!("Error reading {patchable_path:?}: {err}");

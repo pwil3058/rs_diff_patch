@@ -9,7 +9,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::ops::Deref;
 
 #[derive(Debug, Default, PartialEq)]
-pub struct Seq<T: PartialEq + Clone>(Box<[T]>);
+pub struct Seq<T: PartialEq + Clone>(pub Box<[T]>);
 
 impl<T: PartialEq + Clone> Deref for Seq<T> {
     type Target = Box<[T]>;

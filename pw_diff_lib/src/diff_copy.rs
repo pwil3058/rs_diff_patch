@@ -1,6 +1,6 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::byte_diff::{ByteChangeDiff, PathAndBytes};
+use crate::byte_diff_copy::{ByteChangeDiff, PathAndBytes};
 use crate::text_diff_copy::{PathAndLines, TextChangeDiff};
 use serde::{Deserialize, Serialize};
 use std::io;

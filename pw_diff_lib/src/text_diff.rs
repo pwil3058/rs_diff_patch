@@ -11,7 +11,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::data::ExtractSnippet;
-use crate::TextChunkBasics;
+use crate::apply_text::TextChunkBasics;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextChangeChunk {

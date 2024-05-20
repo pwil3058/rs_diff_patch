@@ -1,5 +1,3 @@
-mod main_copy;
-
 use clap::Parser;
 use std::io;
 use std::path::PathBuf;
@@ -8,7 +6,7 @@ use log;
 use stderrlog;
 use stderrlog::LogLevelNum;
 
-use pw_diff_lib::diff_copy::Diff;
+use pw_diff_lib::diff::Diff;
 
 #[derive(Parser)]
 struct Cli {
@@ -52,5 +50,3 @@ fn _main_copy() {
         }
     }
 }
-
-fn main() {}
