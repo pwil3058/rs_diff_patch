@@ -7,6 +7,7 @@ pub mod byte_diff;
 pub mod common_subsequence;
 pub mod data;
 pub mod diff;
+pub mod diff_copy;
 pub mod modifications;
 pub mod modifications_copy;
 pub mod range;
