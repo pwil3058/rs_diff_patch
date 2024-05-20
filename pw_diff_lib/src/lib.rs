@@ -15,6 +15,8 @@ pub mod sequence;
 pub mod snippet;
 pub mod text_diff;
 pub mod text_diff_copy;
+pub mod apply_bytes_copy;
+pub mod byte_diff_copy;
 
 pub use apply_bytes::*;
 pub use apply_text::*;

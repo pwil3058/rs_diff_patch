@@ -62,6 +62,15 @@ impl Seq<String> {
     }
 }
 
+impl Seq<u8> {
+    pub fn read<R: Read>(read: R) -> io::Result<Self> {
+        let mut reader = BufReader::new(read);
+        let mut bytes = vec![];
+        reader.read_to_end(&mut bytes)?;
+        Ok(Self(bytes.into_boxed_slice()))
+    }
+}
+
 #[cfg(test)]
 impl From<String> for Seq<String> {
     fn from(text: String) -> Self {
