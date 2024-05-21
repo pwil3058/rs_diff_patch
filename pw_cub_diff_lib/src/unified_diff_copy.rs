@@ -5,8 +5,8 @@ use std::str::FromStr;
 
 use regex::{Captures, Regex};
 
-use pw_diff_lib::apply_text_copy::TextChunkBasics;
-use pw_diff_lib::modifications_copy::{Modification, ModificationBasics, ModificationChunkIter};
+use pw_diff_lib::apply_text::TextChunkBasics;
+use pw_diff_lib::modifications::{Modification, ModificationBasics, ModificationChunkIter};
 use pw_diff_lib::range::{Len, Range};
 use pw_diff_lib::sequence::Seq;
 
