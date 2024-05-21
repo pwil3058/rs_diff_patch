@@ -10,7 +10,7 @@ use stderrlog;
 use stderrlog::LogLevelNum;
 
 use pw_diff_lib::{
-    apply_bytes::ApplyChunksClean, apply_text::ApplyChunksFuzzy, diff::Diff, sequence::Seq,
+    apply_bytes::ApplyClumpsClean, apply_text::ApplyClumpsFuzzy, diff::Diff, sequence::Seq,
 };
 
 #[derive(Debug, Parser)]

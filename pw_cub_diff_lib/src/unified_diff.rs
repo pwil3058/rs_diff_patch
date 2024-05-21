@@ -5,8 +5,8 @@ use std::str::FromStr;
 
 use regex::{Captures, Regex};
 
-use pw_diff_lib::apply_text::TextChunkBasics;
-use pw_diff_lib::modifications::{Modification, ModificationBasics, ModificationChunkIter};
+use pw_diff_lib::apply_text::TextClumpBasics;
+use pw_diff_lib::changes::{Change, ChangeBasics, ChangeClumpIter};
 use pw_diff_lib::range::{Len, Range};
 use pw_diff_lib::sequence::Seq;
 
@@ -23,7 +23,7 @@ lazy_static::lazy_static! {
     pub static ref AFTER_PATH_REGEX: Regex =
         Regex::new(&format!(r"^\+\+\+ ({PATH_RE_STR})\s+({TIMESTAMP_RE_STR}|{ALT_TIMESTAMP_RE_STR})?(.*)(\n)?$")).unwrap();
 
-    pub static ref CHUNK_HEADER_REGEX: Regex =
+    pub static ref CLUMP_HEADER_REGEX: Regex =
         Regex::new(r"^@@\s+-(\d+)(,(\d+))?\s+\+(\d+)(,(\d+))?\s+@@\s*(.*)(\n)?$").unwrap();
 }
 
@@ -107,7 +107,7 @@ pub fn starts_and_lengths(
     line: &str,
     line_number: usize,
 ) -> DiffParseResult<Option<StartsAndLengths>> {
-    match CHUNK_HEADER_REGEX.captures(line) {
+    match CLUMP_HEADER_REGEX.captures(line) {
         Some(captures) => {
             let before = start_and_length_from_captures(&captures, 1, 3, line_number)?;
             let after = start_and_length_from_captures(&captures, 4, 6, line_number)?;
@@ -117,7 +117,7 @@ pub fn starts_and_lengths(
     }
 }
 
-pub struct UnifiedDiffChunk {
+pub struct UnifiedDiffClump {
     pub starts_and_lengths: StartsAndLengths,
     pub before_lines: Box<[String]>,
     pub after_lines: Box<[String]>,
@@ -125,7 +125,7 @@ pub struct UnifiedDiffChunk {
     pub lines_consumed: usize,
 }
 
-impl UnifiedDiffChunk {
+impl UnifiedDiffClump {
     pub fn get_from_at(lines: &Seq<String>, start_index: usize) -> DiffParseResult<Option<Self>> {
         let mut iter = lines.subsequence(lines.range_from(start_index));
         let line = match iter.next() {
@@ -167,7 +167,7 @@ impl UnifiedDiffChunk {
                 }
                 last_line_type = "-";
             } else {
-                return Err(DiffParseError::UnexpectedEndChunk(start_index + index + 1));
+                return Err(DiffParseError::UnexpectedEndClump(start_index + index + 1));
             }
             index += 1;
         }
@@ -199,7 +199,7 @@ impl UnifiedDiffChunk {
     }
 }
 
-impl ModificationBasics for UnifiedDiffChunk {
+impl ChangeBasics for UnifiedDiffClump {
     fn before_start(&self, reverse: bool) -> usize {
         if reverse {
             self.starts_and_lengths.after.start
@@ -221,7 +221,7 @@ impl ModificationBasics for UnifiedDiffChunk {
     }
 }
 
-impl TextChunkBasics for UnifiedDiffChunk {
+impl TextClumpBasics for UnifiedDiffClump {
     fn context_lengths(&self) -> (u8, u8) {
         self.context_lengths
     }
@@ -243,25 +243,25 @@ impl TextChunkBasics for UnifiedDiffChunk {
     }
 }
 
-pub struct UnifiedChunkText {
+pub struct UnifiedClumpText {
     pub header: String,
     pub lines: Vec<String>,
 }
 
-pub struct UnifiedChunkIter<'a> {
+pub struct UnifiedClumpIter<'a> {
     pub before: &'a Seq<String>,
     pub after: &'a Seq<String>,
-    pub iter: ModificationChunkIter<'a, String>,
+    pub iter: ChangeClumpIter<'a, String>,
 }
 
-impl<'a> Iterator for UnifiedChunkIter<'a> {
-    type Item = UnifiedChunkText;
+impl<'a> Iterator for UnifiedClumpIter<'a> {
+    type Item = UnifiedClumpText;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let modn_chunk = self.iter.next()?;
+        let change_clump = self.iter.next()?;
 
-        let starts = modn_chunk.starts();
-        let ends = modn_chunk.ends();
+        let starts = change_clump.starts();
+        let ends = change_clump.ends();
         let before_start_and_end = StartAndLength {
             start: starts.0,
             length: ends.0 - starts.0,
@@ -277,9 +277,9 @@ impl<'a> Iterator for UnifiedChunkIter<'a> {
         let header = format!("{starts_and_lengths}");
 
         let mut lines = vec![];
-        for modn in modn_chunk.iter() {
-            use Modification::*;
-            match modn {
+        for change in change_clump.iter() {
+            use Change::*;
+            match change {
                 NoChange(common_subsequence) => {
                     for line in self.before.subsequence(common_subsequence.before_range()) {
                         lines.push(format!(" {line}"));
@@ -316,13 +316,13 @@ impl<'a> Iterator for UnifiedChunkIter<'a> {
         }
         if !lines
             .last()
-            .expect("impl Iterator for UnifiedChunkIter")
+            .expect("impl Iterator for UnifiedClumpIter")
             .ends_with("\n")
         {
             lines.push("\n\\\n".to_string());
         }
 
-        Some(UnifiedChunkText { header, lines })
+        Some(UnifiedClumpText { header, lines })
     }
 }
 
@@ -332,9 +332,9 @@ mod tests {
 
     use pw_diff_lib::sequence::*;
 
-    use crate::unified_diff::UnifiedDiffChunk;
+    use crate::unified_diff::UnifiedDiffClump;
 
-    static UNIFIED_DIFF_CHUNK: &str = "--- lao	2002-02-21 23:30:39.942229878 -0800
+    static UNIFIED_DIFF_CLUMP: &str = "--- lao	2002-02-21 23:30:39.942229878 -0800
 +++ tzu	2002-02-21 23:30:50.442260588 -0800
 @@ -1,7 +1,6 @@
 -The Way that can be told of is not the eternal Way;
@@ -356,26 +356,26 @@ mod tests {
 ";
 
     #[test]
-    fn unified_diff_chunk_parse_string() {
-        let diff_lines = Seq::<String>::from(UNIFIED_DIFF_CHUNK);
-        assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 2).is_ok());
-        assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 2)
+    fn unified_diff_clump_parse_string() {
+        let diff_lines = Seq::<String>::from(UNIFIED_DIFF_CLUMP);
+        assert!(UnifiedDiffClump::get_from_at(&diff_lines, 2).is_ok());
+        assert!(UnifiedDiffClump::get_from_at(&diff_lines, 2)
             .unwrap()
             .is_some());
-        assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 1)
+        assert!(UnifiedDiffClump::get_from_at(&diff_lines, 1)
             .unwrap()
             .is_none());
     }
 
     #[test]
-    fn unified_diff_chunk_parse_from_file() {
+    fn unified_diff_clump_parse_from_file() {
         let file = File::open("test_diffs/test_1.diff").unwrap();
         let lines = Seq::<String>::read(file).unwrap();
-        let result = UnifiedDiffChunk::get_from_at(&lines, 0);
+        let result = UnifiedDiffClump::get_from_at(&lines, 0);
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
 
-        let result = UnifiedDiffChunk::get_from_at(&lines, 14);
+        let result = UnifiedDiffClump::get_from_at(&lines, 14);
         assert!(result.is_ok());
         let result = result.unwrap();
         assert!(result.is_none());

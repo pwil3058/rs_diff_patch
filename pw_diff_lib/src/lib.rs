@@ -10,7 +10,7 @@ pub mod common_subsequence;
 // pub mod byte_diff_copy;
 pub mod diff;
 // pub mod diff_copy;
-pub mod modifications;
+pub mod changes;
 // pub mod modifications_copy;
 pub mod range;
 pub mod sequence;

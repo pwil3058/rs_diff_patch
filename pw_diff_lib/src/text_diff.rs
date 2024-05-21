@@ -6,31 +6,31 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::apply_text::*;
-use crate::modifications::*;
+use crate::changes::*;
 use crate::range::Range;
 use crate::sequence::*;
 use crate::snippet::Snippet;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TextChangeChunk {
+pub struct TextChangeClump {
     context_lengths: (u8, u8),
     before: Snippet<String>,
     after: Snippet<String>,
 }
 
-impl From<ModificationChunk<'_, String>> for TextChangeChunk {
-    fn from(modn_chunk: ModificationChunk<String>) -> Self {
-        let (before_range, after_range) = modn_chunk.ranges();
+impl From<ChangeClump<'_, String>> for TextChangeClump {
+    fn from(change_clump: ChangeClump<String>) -> Self {
+        let (before_range, after_range) = change_clump.ranges();
 
-        TextChangeChunk {
-            context_lengths: modn_chunk.context_lengths(),
-            before: modn_chunk.before.extract_snippet(before_range),
-            after: modn_chunk.after.extract_snippet(after_range),
+        TextChangeClump {
+            context_lengths: change_clump.context_lengths(),
+            before: change_clump.before.extract_snippet(before_range),
+            after: change_clump.after.extract_snippet(after_range),
         }
     }
 }
 
-impl ModificationBasics for TextChangeChunk {
+impl ChangeBasics for TextChangeClump {
     fn before_start(&self, reverse: bool) -> usize {
         if reverse {
             self.after.start
@@ -48,7 +48,7 @@ impl ModificationBasics for TextChangeChunk {
     }
 }
 
-impl TextChunkBasics for TextChangeChunk {
+impl TextClumpBasics for TextChangeClump {
     fn context_lengths(&self) -> (u8, u8) {
         self.context_lengths
     }
@@ -62,7 +62,7 @@ impl TextChunkBasics for TextChangeChunk {
     }
 }
 
-impl TextChangeChunk {
+impl TextChangeClump {
     pub fn before(&self, reverse: bool) -> &Snippet<String> {
         if reverse {
             &self.after
@@ -80,27 +80,27 @@ impl TextChangeChunk {
     }
 }
 
-impl ApplyChunkFuzzy for TextChangeChunk {}
+impl ApplyClumpFuzzy for TextChangeClump {}
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TextChangeDiff {
     before_path: PathBuf,
     after_path: PathBuf,
-    chunks: Vec<TextChangeChunk>,
+    clumps: Vec<TextChangeClump>,
 }
 
 impl TextChangeDiff {
     pub fn new(before_file_path: &Path, after_file_path: &Path, context: u8) -> io::Result<Self> {
         let before_lines = Seq::<String>::read(File::open(before_file_path)?)?;
         let after_lines = Seq::<String>::read(File::open(after_file_path)?)?;
-        let modifications = Modifications::<String>::new(before_lines, after_lines);
+        let modifications = Changes::<String>::new(before_lines, after_lines);
 
         Ok(Self {
             before_path: before_file_path.to_path_buf(),
             after_path: after_file_path.to_path_buf(),
-            chunks: modifications
-                .modification_chunks(context)
-                .map(|c| TextChangeChunk::from(c))
+            clumps: modifications
+                .change_clumps(context)
+                .map(|c| TextChangeClump::from(c))
                 .collect(),
         })
     }
@@ -122,12 +122,12 @@ impl TextChangeDiff {
     }
 }
 
-impl ApplyChunksFuzzy<TextChangeChunk> for TextChangeDiff {
-    fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s TextChangeChunk>
+impl ApplyClumpsFuzzy<TextChangeClump> for TextChangeDiff {
+    fn clumps<'s>(&'s self) -> impl Iterator<Item = &'s TextChangeClump>
     where
-        TextChangeChunk: 's,
+        TextChangeClump: 's,
     {
-        self.chunks.iter()
+        self.clumps.iter()
     }
 }
 

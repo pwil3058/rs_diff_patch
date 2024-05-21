@@ -8,7 +8,7 @@ use std::num::ParseIntError;
 pub enum DiffParseError {
     ParseNumberError(ParseIntError, usize),
     UnexpectedEndOfInput,
-    UnexpectedEndChunk(usize),
+    UnexpectedEndClump(usize),
     SyntaxError(usize),
 }
 

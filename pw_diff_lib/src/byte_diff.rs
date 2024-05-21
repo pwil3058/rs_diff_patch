@@ -6,33 +6,33 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::apply_bytes::{ApplyChunkClean, ApplyChunksClean};
-use crate::modifications::{ModificationChunk, Modifications};
+use crate::apply_bytes::{ApplyClumpClean, ApplyClumpsClean};
+use crate::changes::{ChangeClump, Changes};
 use crate::range::Len;
 use crate::snippet::{Snippet, SnippetWrite};
 
 use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ByteChangeChunk {
+pub struct ByteChangeClump {
     context_lengths: (u8, u8),
     before: Snippet<u8>,
     after: Snippet<u8>,
 }
 
-impl From<ModificationChunk<'_, u8>> for ByteChangeChunk {
-    fn from(modn_chunk: ModificationChunk<'_, u8>) -> Self {
-        let (before_range, after_range) = modn_chunk.ranges();
+impl From<ChangeClump<'_, u8>> for ByteChangeClump {
+    fn from(change_clump: ChangeClump<'_, u8>) -> Self {
+        let (before_range, after_range) = change_clump.ranges();
 
-        ByteChangeChunk {
-            context_lengths: modn_chunk.context_lengths(),
-            before: modn_chunk.before.extract_snippet(before_range),
-            after: modn_chunk.after.extract_snippet(after_range),
+        ByteChangeClump {
+            context_lengths: change_clump.context_lengths(),
+            before: change_clump.before.extract_snippet(before_range),
+            after: change_clump.after.extract_snippet(after_range),
         }
     }
 }
 
-impl ByteChangeChunk {
+impl ByteChangeClump {
     pub fn before(&self, reverse: bool) -> &Snippet<u8> {
         if reverse {
             &self.after
@@ -50,7 +50,7 @@ impl ByteChangeChunk {
     }
 }
 
-impl<'a> ApplyChunkClean for ByteChangeChunk {
+impl<'a> ApplyClumpClean for ByteChangeClump {
     fn will_apply(&self, data: &Seq<u8>, reverse: bool) -> bool {
         let before = self.before(reverse);
         data.has_subsequence_at(&before.items, before.start)
@@ -90,22 +90,22 @@ pub struct ByteChangeDiff {
     before_path: PathBuf,
     after_path: PathBuf,
     compressed: bool,
-    chunks: Box<[ByteChangeChunk]>,
+    clumps: Box<[ByteChangeClump]>,
 }
 
 impl ByteChangeDiff {
     pub fn new(before_file_path: &Path, after_file_path: &Path, context: u8) -> io::Result<Self> {
         let before_bytes = Seq::<u8>::read(File::open(before_file_path)?)?;
         let after_bytes = Seq::<u8>::read(File::open(after_file_path)?)?;
-        let modifications = Modifications::<u8>::new(before_bytes, after_bytes);
+        let modifications = Changes::<u8>::new(before_bytes, after_bytes);
 
         Ok(Self {
             before_path: before_file_path.to_path_buf(),
             after_path: after_file_path.to_path_buf(),
             compressed: false,
-            chunks: modifications
-                .modification_chunks(context)
-                .map(|c| ByteChangeChunk::from(c))
+            clumps: modifications
+                .change_clumps(context)
+                .map(|c| ByteChangeClump::from(c))
                 .collect(),
         })
     }
@@ -127,12 +127,12 @@ impl ByteChangeDiff {
     }
 }
 
-impl ApplyChunksClean<'_, ByteChangeChunk> for ByteChangeDiff {
-    fn chunks<'b>(&'b self) -> impl Iterator<Item = &'b ByteChangeChunk>
+impl ApplyClumpsClean<'_, ByteChangeClump> for ByteChangeDiff {
+    fn clumps<'b>(&'b self) -> impl Iterator<Item = &'b ByteChangeClump>
     where
-        ByteChangeChunk: 'b,
+        ByteChangeClump: 'b,
     {
-        self.chunks.iter()
+        self.clumps.iter()
     }
 }
 

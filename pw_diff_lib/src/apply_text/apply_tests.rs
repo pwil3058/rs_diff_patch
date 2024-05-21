@@ -5,17 +5,17 @@ use std::io::BufWriter;
 use serde::{Deserialize, Serialize};
 
 use crate::apply_text::*;
-use crate::modifications::*;
+use crate::changes::*;
 use crate::sequence::*;
 use crate::text_diff::*;
 
 #[derive(Serialize, Deserialize)]
-struct WrappedDiffChunks(pub Vec<TextChangeChunk>);
+struct WrappedDiffClumps(pub Vec<TextChangeClump>);
 
-impl ApplyChunksFuzzy<TextChangeChunk> for WrappedDiffChunks {
-    fn chunks<'s>(&'s self) -> impl Iterator<Item = &'s TextChangeChunk>
+impl ApplyClumpsFuzzy<TextChangeClump> for WrappedDiffClumps {
+    fn clumps<'s>(&'s self) -> impl Iterator<Item = &'s TextChangeClump>
     where
-        TextChangeChunk: 's,
+        TextChangeClump: 's,
     {
         self.0.iter()
     }
@@ -36,12 +36,12 @@ fn clean_patch() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
     let after_lines = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
     let modifications =
-        Modifications::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
-    let diff_chunks: Vec<TextChangeChunk> = modifications
-        .modification_chunks(2)
-        .map(|c| TextChangeChunk::from(c))
+        Changes::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
+    let diff_clumps: Vec<TextChangeClump> = modifications
+        .change_clumps(2)
+        .map(|c| TextChangeClump::from(c))
         .collect();
-    let patch = WrappedDiffChunks(diff_chunks);
+    let patch = WrappedDiffClumps(diff_clumps);
     let mut patched = BufWriter::new(vec![]);
 
     let stats = patch
@@ -60,12 +60,12 @@ fn clean_patch_in_middle() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications =
-        Modifications::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
-    let diff_chunks: Vec<TextChangeChunk> = modifications
-        .modification_chunks(2)
-        .map(|c| TextChangeChunk::from(c))
+        Changes::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
+    let diff_lumps: Vec<TextChangeClump> = modifications
+        .change_clumps(2)
+        .map(|c| TextChangeClump::from(c))
         .collect();
-    let patch = WrappedDiffChunks(diff_chunks);
+    let patch = WrappedDiffClumps(diff_lumps);
     let mut patched = BufWriter::new(vec![]);
     let stats = patch
         .apply_into(&Seq::from(before_lines), &mut patched, false)
@@ -83,12 +83,12 @@ fn already_fully_applied() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications =
-        Modifications::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
-    let diff_chunks: Vec<TextChangeChunk> = modifications
-        .modification_chunks(2)
-        .map(|c| TextChangeChunk::from(c))
+        Changes::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
+    let diff_clumps: Vec<TextChangeClump> = modifications
+        .change_clumps(2)
+        .map(|c| TextChangeClump::from(c))
         .collect();
-    let patch = WrappedDiffChunks(diff_chunks);
+    let patch = WrappedDiffClumps(diff_clumps);
     let mut patched = BufWriter::new(vec![]);
     let stats = patch
         .apply_into(&Seq::from(after_lines), &mut patched, false)
@@ -106,12 +106,12 @@ fn clean_patch_reverse() {
     let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications =
-        Modifications::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
-    let diff_chunks: Vec<TextChangeChunk> = modifications
-        .modification_chunks(2)
-        .map(|c| TextChangeChunk::from(c))
+        Changes::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
+    let diff_clumps: Vec<TextChangeClump> = modifications
+        .change_clumps(2)
+        .map(|c| TextChangeClump::from(c))
         .collect();
-    let patch = WrappedDiffChunks(diff_chunks);
+    let patch = WrappedDiffClumps(diff_clumps);
     let mut patched = BufWriter::new(vec![]);
     let stats = patch
         .apply_into(&Seq::from(after_lines), &mut patched, true)
@@ -129,12 +129,12 @@ fn displaced() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications =
-        Modifications::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
-    let diff_chunks: Vec<TextChangeChunk> = modifications
-        .modification_chunks(2)
-        .map(|c| TextChangeChunk::from(c))
+        Changes::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
+    let diff_clumps: Vec<TextChangeClump> = modifications
+        .change_clumps(2)
+        .map(|c| TextChangeClump::from(c))
         .collect();
-    let patch = WrappedDiffChunks(diff_chunks);
+    let patch = WrappedDiffClumps(diff_clumps);
     let mut patched = BufWriter::new(vec![]);
     let stats = patch
         .apply_into(
@@ -156,12 +156,12 @@ fn displaced_no_final_eol_1() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\n";
     let modifications =
-        Modifications::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
-    let diff_chunks: Vec<TextChangeChunk> = modifications
-        .modification_chunks(2)
-        .map(|c| TextChangeChunk::from(c))
+        Changes::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
+    let diff_clumps: Vec<TextChangeClump> = modifications
+        .change_clumps(2)
+        .map(|c| TextChangeClump::from(c))
         .collect();
-    let patch = WrappedDiffChunks(diff_chunks);
+    let patch = WrappedDiffClumps(diff_clumps);
     let mut patched = BufWriter::new(vec![]);
     let stats = patch
         .apply_into(
@@ -183,12 +183,12 @@ fn displaced_no_final_eol_2() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz\na";
     let modifications =
-        Modifications::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
-    let diff_chunks: Vec<TextChangeChunk> = modifications
-        .modification_chunks(2)
-        .map(|c| TextChangeChunk::from(c))
+        Changes::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
+    let diff_clumps: Vec<TextChangeClump> = modifications
+        .change_clumps(2)
+        .map(|c| TextChangeClump::from(c))
         .collect();
-    let patch = WrappedDiffChunks(diff_chunks);
+    let patch = WrappedDiffClumps(diff_clumps);
     let mut patched = BufWriter::new(vec![]);
     let stats = patch
         .apply_into(
@@ -210,12 +210,12 @@ fn displaced_no_final_eol_3() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz";
     let modifications =
-        Modifications::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
-    let diff_chunks: Vec<TextChangeChunk> = modifications
-        .modification_chunks(2)
-        .map(|c| TextChangeChunk::from(c))
+        Changes::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
+    let diff_clumps: Vec<TextChangeClump> = modifications
+        .change_clumps(2)
+        .map(|c| TextChangeClump::from(c))
         .collect();
-    let patch = WrappedDiffChunks(diff_chunks);
+    let patch = WrappedDiffClumps(diff_clumps);
     let mut patched = BufWriter::new(vec![]);
     let stats = patch
         .apply_into(
@@ -237,12 +237,12 @@ fn already_applied() {
     let before_lines = "a\nb\nc\nd\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nx\ny\nz\n";
     let after_lines = "a\nb\nc\nd\nA\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\nx\ny\nz";
     let modifications =
-        Modifications::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
-    let diff_chunks: Vec<TextChangeChunk> = modifications
-        .modification_chunks(2)
-        .map(|c| TextChangeChunk::from(c))
+        Changes::<String>::new(Seq::from(before_lines), Seq::from(after_lines));
+    let diff_clumps: Vec<TextChangeClump> = modifications
+        .change_clumps(2)
+        .map(|c| TextChangeClump::from(c))
         .collect();
-    let patch = WrappedDiffChunks(diff_chunks);
+    let patch = WrappedDiffClumps(diff_clumps);
     assert!(patch.is_already_applied(&Seq::from(after_lines), false));
     assert!(!patch.is_already_applied(&Seq::from(before_lines), false));
     assert!(patch.is_already_applied(&Seq::from("x\ny\nz\n".to_owned() + after_lines), false));

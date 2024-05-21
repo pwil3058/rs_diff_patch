@@ -4,11 +4,11 @@ use std::io;
 
 use log;
 
-use crate::modifications::ModificationBasics;
+use crate::changes::ChangeBasics;
 use crate::range::{Len, Range};
 use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
 
-pub trait TextChunkBasics: ModificationBasics {
+pub trait TextClumpBasics: ChangeBasics {
     fn context_lengths(&self) -> (u8, u8);
     fn before_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String>;
     fn after_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String> {
@@ -16,7 +16,7 @@ pub trait TextChunkBasics: ModificationBasics {
     }
 }
 
-pub trait ApplyChunkFuzzy: TextChunkBasics {
+pub trait ApplyClumpFuzzy: TextClumpBasics {
     fn before_adjusted_start(
         &self,
         offset: isize,
@@ -149,12 +149,12 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
     fn will_apply_nearby(
         &self,
         pd: &ConsumableSeq<String>,
-        next_chunk: Option<&Self>,
+        next_clump: Option<&Self>,
         offset: isize,
         reverse: bool,
     ) -> Option<(isize, WillApply)> {
-        let not_after = if let Some(next_chunk) = next_chunk {
-            next_chunk.before_adjusted_start(offset, Some(self.context_lengths()), reverse) as usize
+        let not_after = if let Some(next_clump) = next_clump {
+            next_clump.before_adjusted_start(offset, Some(self.context_lengths()), reverse) as usize
                 - self.before_adjusted_length(Some(self.context_lengths()), reverse)
         } else {
             pd.data().len() - self.before_adjusted_length(Some(self.context_lengths()), reverse)
@@ -203,11 +203,11 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
     fn is_already_applied_nearby(
         &self,
         pd: &ConsumableSeq<String>,
-        next_chunk: Option<&Self>,
+        next_clump: Option<&Self>,
         offset: isize,
         reverse: bool,
     ) -> Option<(isize, WillApply)> {
-        self.will_apply_nearby(pd, next_chunk, offset, !reverse)
+        self.will_apply_nearby(pd, next_clump, offset, !reverse)
     }
 
     fn already_applied_into<W: io::Write>(
@@ -247,11 +247,11 @@ pub struct Statistics {
     pub failed: usize,
 }
 
-pub trait ApplyChunksFuzzy<C>
+pub trait ApplyClumpsFuzzy<C>
 where
-    C: ApplyChunkFuzzy,
+    C: ApplyClumpFuzzy,
 {
-    fn chunks<'b>(&'b self) -> impl Iterator<Item = &'b C>
+    fn clumps<'b>(&'b self) -> impl Iterator<Item = &'b C>
     where
         C: 'b;
 
@@ -263,49 +263,49 @@ where
     ) -> io::Result<Statistics> {
         let mut pd = ConsumableSeq::<String>::new(patchable);
         let mut stats = Statistics::default();
-        let mut iter = self.chunks().peekable();
-        let mut chunk_num = 0;
+        let mut iter = self.clumps().peekable();
+        let mut clump_num = 0;
         let mut offset: isize = 0;
-        while let Some(chunk) = iter.next() {
-            chunk_num += 1; // for human consumption
-            if let Some(will_apply) = chunk.will_apply(patchable, offset, reverse) {
+        while let Some(clump) = iter.next() {
+            clump_num += 1; // for human consumption
+            if let Some(will_apply) = clump.will_apply(patchable, offset, reverse) {
                 match will_apply {
                     WillApply::Cleanly => {
-                        chunk.apply_into(into, &mut pd, offset, None, reverse)?;
+                        clump.apply_into(into, &mut pd, offset, None, reverse)?;
                         stats.clean += 1;
-                        log::info!("Chunk #{chunk_num} applies cleanly.");
+                        log::info!("Clump #{clump_num} applies cleanly.");
                     }
                     WillApply::WithReductions(reductions) => {
-                        chunk.apply_into(into, &mut pd, offset, Some(reductions), reverse)?;
+                        clump.apply_into(into, &mut pd, offset, Some(reductions), reverse)?;
                         stats.fuzzy += 1;
-                        log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions.");
+                        log::warn!("Clump #{clump_num} applies with {reductions:?} reductions.");
                     }
                 }
             } else if let Some((offset_adj, will_apply)) =
-                chunk.will_apply_nearby(&pd, iter.peek().copied(), offset, reverse)
+                clump.will_apply_nearby(&pd, iter.peek().copied(), offset, reverse)
             {
                 offset += offset_adj;
                 match will_apply {
                     WillApply::Cleanly => {
-                        chunk.apply_into(into, &mut pd, offset, None, reverse)?;
+                        clump.apply_into(into, &mut pd, offset, None, reverse)?;
                         stats.fuzzy += 1;
-                        log::warn!("Chunk #{chunk_num} applies with offset {offset_adj}.");
+                        log::warn!("Clump #{clump_num} applies with offset {offset_adj}.");
                     }
                     WillApply::WithReductions(reductions) => {
-                        chunk.apply_into(into, &mut pd, offset, Some(reductions), reverse)?;
+                        clump.apply_into(into, &mut pd, offset, Some(reductions), reverse)?;
                         stats.fuzzy += 1;
-                        log::warn!("Chunk #{chunk_num} applies with {reductions:?} reductions and offset {offset_adj}.");
+                        log::warn!("Clump #{clump_num} applies with {reductions:?} reductions and offset {offset_adj}.");
                     }
                 }
-            } else if let Some(appplied) = chunk.is_already_applied(patchable, offset, reverse) {
+            } else if let Some(appplied) = clump.is_already_applied(patchable, offset, reverse) {
                 match appplied {
                     WillApply::Cleanly => {
-                        chunk.already_applied_into(into, &mut pd, offset, None, reverse)?;
+                        clump.already_applied_into(into, &mut pd, offset, None, reverse)?;
                         stats.already_applied += 1;
-                        log::warn!("Chunk #{chunk_num} already applied")
+                        log::warn!("Clump #{clump_num} already applied")
                     }
                     WillApply::WithReductions(reductions) => {
-                        chunk.already_applied_into(
+                        clump.already_applied_into(
                             into,
                             &mut pd,
                             offset,
@@ -314,22 +314,22 @@ where
                         )?;
                         stats.already_applied_fuzzy += 1;
                         log::warn!(
-                            "Chunk #{chunk_num} already applied with {reductions:?} reductions."
+                            "Clump #{clump_num} already applied with {reductions:?} reductions."
                         );
                     }
                 }
             } else if let Some((offset_adj, applied)) =
-                chunk.is_already_applied_nearby(&pd, iter.peek().copied(), offset, reverse)
+                clump.is_already_applied_nearby(&pd, iter.peek().copied(), offset, reverse)
             {
                 offset += offset_adj;
                 match applied {
                     WillApply::Cleanly => {
-                        chunk.already_applied_into(into, &mut pd, offset, None, reverse)?;
+                        clump.already_applied_into(into, &mut pd, offset, None, reverse)?;
                         stats.already_applied_fuzzy += 1;
-                        log::warn!("Chunk #{chunk_num} already applied with offset {offset_adj}")
+                        log::warn!("Clump #{clump_num} already applied with offset {offset_adj}")
                     }
                     WillApply::WithReductions(reductions) => {
-                        chunk.already_applied_into(
+                        clump.already_applied_into(
                             into,
                             &mut pd,
                             offset,
@@ -337,13 +337,13 @@ where
                             reverse,
                         )?;
                         stats.already_applied_fuzzy += 1;
-                        log::warn!("Chunk #{chunk_num} already applied with {reductions:?} reductions and offset {offset_adj}.")
+                        log::warn!("Clump #{clump_num} already applied with {reductions:?} reductions and offset {offset_adj}.")
                     }
                 }
             } else {
                 stats.failed += 1;
-                chunk.write_failure_data_into(into, reverse)?;
-                log::error!("Chunk #{chunk_num} could NOT be applied!");
+                clump.write_failure_data_into(into, reverse)?;
+                log::error!("Clump #{clump_num} could NOT be applied!");
             }
         }
         pd.write_remainder(into)?;
@@ -352,36 +352,36 @@ where
 
     fn is_already_applied(&self, patchable: &Seq<String>, reverse: bool) -> bool {
         let pd = ConsumableSeq::<String>::new(patchable);
-        let mut iter = self.chunks().peekable();
-        let mut chunk_num = 0;
+        let mut iter = self.clumps().peekable();
+        let mut clump_num = 0;
         let mut offset: isize = 0;
-        while let Some(chunk) = iter.next() {
-            chunk_num += 1; // for human consumption
-            if let Some(applied) = chunk.is_already_applied(patchable, offset, reverse) {
+        while let Some(clump) = iter.next() {
+            clump_num += 1; // for human consumption
+            if let Some(applied) = clump.is_already_applied(patchable, offset, reverse) {
                 match applied {
                     WillApply::Cleanly => {
-                        log::info!("Chunk #{chunk_num} already applied")
+                        log::info!("Clump #{clump_num} already applied")
                     }
                     WillApply::WithReductions(reductions) => {
                         log::warn!(
-                            "Chunk #{chunk_num} already applied with {reductions:?} reductions."
+                            "Clump #{clump_num} already applied with {reductions:?} reductions."
                         );
                     }
                 }
             } else if let Some((offset_adj, applied)) =
-                chunk.is_already_applied_nearby(&pd, iter.peek().copied(), offset, reverse)
+                clump.is_already_applied_nearby(&pd, iter.peek().copied(), offset, reverse)
             {
                 offset += offset_adj;
                 match applied {
                     WillApply::Cleanly => {
-                        log::warn!("Chunk #{chunk_num} already applied with offset {offset_adj}")
+                        log::warn!("Clump #{clump_num} already applied with offset {offset_adj}")
                     }
                     WillApply::WithReductions(reductions) => {
-                        log::warn!("Chunk #{chunk_num} already applied with {reductions:?} reductions and offset {offset_adj}.")
+                        log::warn!("Clump #{clump_num} already applied with {reductions:?} reductions and offset {offset_adj}.")
                     }
                 }
             } else {
-                log::error!("Chunk #{chunk_num} NOT already applied!");
+                log::error!("Clump #{clump_num} NOT already applied!");
                 return false;
             }
         }
