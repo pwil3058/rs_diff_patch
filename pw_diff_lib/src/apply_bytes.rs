@@ -1,25 +1,26 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::data::{ConsumableData, ConsumableDataIfce, Data};
 use std::io;
 
 use log;
 
+use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
+
 pub trait ApplyChunkClean {
-    fn will_apply(&self, data: &Data<u8>, reverse: bool) -> bool;
-    fn is_already_applied(&self, data: &Data<u8>, reverse: bool) -> bool;
+    fn will_apply(&self, se: &Seq<u8>, reverse: bool) -> bool;
+    fn is_already_applied(&self, se: &Seq<u8>, reverse: bool) -> bool;
     fn apply_into<W: io::Write>(
         &self,
-        pd: &mut ConsumableData<u8, Data<u8>>,
+        pd: &mut ConsumableSeq<u8>,
         into: &mut W,
         reverse: bool,
-    ) -> io::Result<bool>;
+    ) -> io::Result<()>;
     fn already_applied_into<W: io::Write>(
         &self,
-        pd: &mut ConsumableData<u8, Data<u8>>,
+        pd: &mut ConsumableSeq<u8>,
         into: &mut W,
         reverse: bool,
-    ) -> io::Result<bool>;
+    ) -> io::Result<()>;
 }
 
 pub trait ApplyChunksClean<'a, C>
@@ -32,14 +33,13 @@ where
 
     fn apply_into<W: io::Write>(
         &self,
-        patchable: &'a Data<u8>,
+        patchable: &'a Seq<u8>,
         into: &mut W,
         reverse: bool,
-    ) -> io::Result<bool> {
-        let mut pd = ConsumableData::<u8, Data<u8>>::new(patchable);
+    ) -> io::Result<()> {
+        let mut pd = ConsumableSeq::<u8>::new(patchable);
         let mut iter = self.chunks();
         let mut chunk_num = 0;
-        let mut success = true;
         while let Some(chunk) = iter.next() {
             chunk_num += 1; // for human consumption
             if chunk.will_apply(patchable, reverse) {
@@ -49,15 +49,13 @@ where
                 chunk.already_applied_into(&mut pd, into, reverse)?;
                 log::warn!("Chunk #{chunk_num} already applied");
             } else {
-                success = false;
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }
         }
-        success &= pd.write_remainder(into)?;
-        Ok(success)
+        pd.write_remainder(into)
     }
 
-    fn already_applied(&self, patchable: &Data<u8>, reverse: bool) -> bool {
+    fn already_applied(&self, patchable: &Seq<u8>, reverse: bool) -> bool {
         let mut chunk_num = 0;
         let mut iter = self.chunks().peekable();
         while let Some(chunk) = iter.next() {

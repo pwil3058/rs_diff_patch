@@ -1,11 +1,13 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::byte_diff::{ByteChangeDiff, PathAndBytes};
-use crate::text_diff::{PathAndLines, TextChangeDiff};
-use serde::{Deserialize, Serialize};
 use std::io;
 use std::io::ErrorKind;
 use std::path::Path;
+
+use serde::{Deserialize, Serialize};
+
+use crate::byte_diff::{ByteChangeDiff, PathAndBytes};
+use crate::text_diff::{PathAndLines, TextChangeDiff};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Diff {

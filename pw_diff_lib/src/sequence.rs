@@ -71,28 +71,24 @@ impl Seq<u8> {
     }
 }
 
-#[cfg(test)]
 impl From<String> for Seq<String> {
     fn from(text: String) -> Self {
         Self(text.split_inclusive('\n').map(|s| s.to_string()).collect())
     }
 }
 
-#[cfg(test)]
 impl From<&str> for Seq<String> {
     fn from(arg: &str) -> Self {
         Self::from(arg.to_string())
     }
 }
 
-#[cfg(test)]
 impl From<Vec<u8>> for Seq<u8> {
     fn from(bytes: Vec<u8>) -> Self {
         Self(bytes.into_boxed_slice())
     }
 }
 
-#[cfg(test)]
 impl From<&[u8]> for Seq<u8> {
     fn from(bytes: &[u8]) -> Self {
         Self::from(bytes.to_vec())

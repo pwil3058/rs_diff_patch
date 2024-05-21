@@ -1,15 +1,17 @@
-mod main_copy;
+// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use clap::Parser;
 use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
 
+use clap::Parser;
 use log;
 use stderrlog;
 use stderrlog::LogLevelNum;
 
-use pw_diff_lib::{apply_bytes::ApplyChunksClean, apply_text::ApplyChunksFuzzy, data::Data, diff::Diff};
+use pw_diff_lib::{
+    apply_bytes::ApplyChunksClean, apply_text::ApplyChunksFuzzy, diff::Diff, sequence::Seq,
+};
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -56,7 +58,7 @@ fn main() {
                     std::process::exit(1);
                 }
             };
-            let patchable_lines = match Data::<String>::read(patchable_file) {
+            let patchable_lines = match Seq::<String>::read(patchable_file) {
                 Ok(lines) => lines,
                 Err(err) => {
                     log::error!("Error reading {patchable_path:?}: {err}");
@@ -152,7 +154,7 @@ fn main() {
                     std::process::exit(1);
                 }
             };
-            let patchable_bytes = match Data::<u8>::read(patchable_file) {
+            let patchable_bytes = match Seq::<u8>::read(patchable_file) {
                 Ok(lines) => lines,
                 Err(err) => {
                     log::error!("Error reading {patchable_path:?}: {err}");

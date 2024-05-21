@@ -128,13 +128,14 @@ impl<'a, T: PartialEq + Clone, I: ContentItemIndices<T>> ModificationsGenerator<
     ///
     /// Example:
     /// ```
-    /// use pw_diff_lib::data::{Data, LineIndices, DataIfce};
+    /// use pw_diff_lib::sequence::{Seq, StringItemIndices};
     /// use pw_diff_lib::modifications::ModificationsGenerator;
     /// use pw_diff_lib::range::Range;
     /// use pw_diff_lib::common_subsequence::CommonSubsequence;
-    /// let before = Data::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\n");
-    /// let after = Data::<String>::from("X\nY\nZ\nC\nD\nE\nH\nI\nX\n");
-    /// let generator = ModificationsGenerator::<String, Data<String>, LineIndices>::new(&before, &after);
+    ///
+    /// let before = Seq::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\n");
+    /// let after = Seq::<String>::from("X\nY\nZ\nC\nD\nE\nH\nI\nX\n");
+    /// let generator = ModificationsGenerator::<String, StringItemIndices>::new(&before, &after);
     /// assert_eq!(Some(CommonSubsequence(2,3,3)), generator.longest_common_subsequence(before.range_from(0), after.range_from(0)));
     /// ```
     pub fn longest_common_subsequence(
@@ -259,14 +260,14 @@ impl<'a, T: PartialEq + Clone, I: ContentItemIndices<T>> ModificationsGenerator<
     /// Example:
     /// ```
     /// use pw_diff_lib::range::Range;
-    /// use pw_diff_lib::data::{Data, LineIndices};
+    /// use pw_diff_lib::sequence::{Seq, ContentItemIndices, StringItemIndices};
     /// use pw_diff_lib::common_subsequence::CommonSubsequence;
     /// use pw_diff_lib::modifications::ModificationsGenerator;
     /// use pw_diff_lib::modifications::Modification::*;
     ///
-    /// let before_lines = Data::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
-    /// let after_lines = Data::<String>::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
-    /// let modlist = ModificationsGenerator::<String, Data<String>, LineIndices>::new(&before_lines, &after_lines).generate();
+    /// let before_lines = Seq::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
+    /// let after_lines = Seq::<String>::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
+    /// let modlist = ModificationsGenerator::<String, StringItemIndices>::new(&before_lines, &after_lines).generate();
     /// assert_eq!(
     ///     vec![
     ///         NoChange(CommonSubsequence(0,0,1)), Delete(Range(1, 2), 1),
@@ -514,30 +515,40 @@ impl<T: PartialEq + Clone> Modifications<T> {
     ///
     /// ```
     /// use pw_diff_lib::common_subsequence::CommonSubsequence;
-    /// use pw_diff_lib::data::{Data, LineIndices};
+    /// use pw_diff_lib::sequence::Seq;
     /// use pw_diff_lib::modifications::{ModificationChunk, Modifications,Modification};
     /// use pw_diff_lib::range::Range;
     /// use Modification::*;
     ///
     /// let before = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
     /// let after = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
-    /// let modifications = Modifications::<String>::new(Data::<String>::from(before), Data::<String>::from(after));
+    /// let modifications = Modifications::<String>::new(Seq::<String>::from(before), Seq::<String>::from(after));
     /// let modn_chunks: Vec<_> = modifications.modification_chunks(2).collect();
     /// assert_eq!(
     ///     modn_chunks,
     ///     vec![
-    ///         ModificationChunk(vec![
-    ///             NoChange(CommonSubsequence(0, 0, 1)),
-    ///             Delete(Range(1, 2), 1),
-    ///             NoChange(CommonSubsequence(2, 1, 2)),
-    ///             Replace(Range(4, 6), Range(3, 5)),
-    ///             NoChange(CommonSubsequence(6, 5, 2))
-    ///         ]),
-    ///         ModificationChunk(vec![
-    ///             NoChange(CommonSubsequence(9, 8, 2)),
-    ///             Insert(11, Range(10, 11)),
-    ///             NoChange(CommonSubsequence(11, 11, 2))
-    ///         ]),
+    ///         ModificationChunk{
+    ///             before: &Seq::<String>::from(before),
+    ///             after: &Seq::<String>::from(after),
+    ///             modns:
+    ///                 vec![
+    ///                     NoChange(CommonSubsequence(0, 0, 1)),
+    ///                     Delete(Range(1, 2), 1),
+    ///                     NoChange(CommonSubsequence(2, 1, 2)),
+    ///                     Replace(Range(4, 6), Range(3, 5)),
+    ///                     NoChange(CommonSubsequence(6, 5, 2))
+    ///                 ]
+    ///         },
+    ///         ModificationChunk{
+    ///             before: &Seq::<String>::from(before),
+    ///             after: &Seq::<String>::from(after),
+    ///             modns:
+    ///                 vec![
+    ///                     NoChange(CommonSubsequence(9, 8, 2)),
+    ///                     Insert(11, Range(10, 11)),
+    ///                     NoChange(CommonSubsequence(11, 11, 2))
+    ///                 ]
+    ///         },
     ///     ]
     /// );
     /// ```

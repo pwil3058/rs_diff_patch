@@ -1,16 +1,17 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::apply_bytes::{ApplyChunkClean, ApplyChunksClean};
-use crate::data::{ConsumableData, ConsumableDataIfce, Data, DataIfce};
-use crate::modifications::{ChunkIter, Modifications};
-use crate::range::Len;
-use crate::snippet::{Snippet, SnippetWrite};
-use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::data::ExtractSnippet;
+use serde::{Deserialize, Serialize};
+
+use crate::apply_bytes::{ApplyChunkClean, ApplyChunksClean};
+use crate::modifications::{ModificationChunk, Modifications};
+use crate::range::Len;
+use crate::snippet::{Snippet, SnippetWrite};
+
+use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ByteChangeChunk {
@@ -19,21 +20,15 @@ pub struct ByteChangeChunk {
     after: Snippet<u8>,
 }
 
-impl<'a> Iterator for ChunkIter<'a, u8>
-where
-    Data<u8>: ExtractSnippet<u8>,
-{
-    type Item = ByteChangeChunk;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let modn_chunk = self.iter.next()?;
+impl From<ModificationChunk<'_, u8>> for ByteChangeChunk {
+    fn from(modn_chunk: ModificationChunk<'_, u8>) -> Self {
         let (before_range, after_range) = modn_chunk.ranges();
 
-        Some(ByteChangeChunk {
+        ByteChangeChunk {
             context_lengths: modn_chunk.context_lengths(),
-            before: self.before.extract_snippet(before_range),
-            after: self.after.extract_snippet(after_range),
-        })
+            before: modn_chunk.before.extract_snippet(before_range),
+            after: modn_chunk.after.extract_snippet(after_range),
+        }
     }
 }
 
@@ -56,38 +51,35 @@ impl ByteChangeChunk {
 }
 
 impl<'a> ApplyChunkClean for ByteChangeChunk {
-    fn will_apply(&self, data: &Data<u8>, reverse: bool) -> bool {
+    fn will_apply(&self, data: &Seq<u8>, reverse: bool) -> bool {
         let before = self.before(reverse);
         data.has_subsequence_at(&before.items, before.start)
     }
 
-    fn is_already_applied(&self, data: &Data<u8>, reverse: bool) -> bool {
+    fn is_already_applied(&self, data: &Seq<u8>, reverse: bool) -> bool {
         let after = self.after(reverse);
         data.has_subsequence_at(&after.items, after.start)
     }
 
     fn apply_into<W: io::Write>(
         &self,
-        pd: &mut ConsumableData<u8, Data<u8>>,
+        pd: &mut ConsumableSeq<u8>,
         into: &mut W,
         reverse: bool,
-    ) -> io::Result<bool> {
+    ) -> io::Result<()> {
         let before = self.before(reverse);
-        if pd.write_into_upto(into, before.start)? {
-            self.after(reverse).write_into(into, None)?;
-            pd.advance_consumed_by(before.len());
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        pd.write_into_upto(into, before.start)?;
+        self.after(reverse).write_into(into, None)?;
+        pd.advance_consumed_by(before.len());
+        Ok(())
     }
 
     fn already_applied_into<W: io::Write>(
         &self,
-        pd: &mut ConsumableData<u8, Data<u8>>,
+        pd: &mut ConsumableSeq<u8>,
         into: &mut W,
         reverse: bool,
-    ) -> io::Result<bool> {
+    ) -> io::Result<()> {
         let after = self.after(reverse);
         pd.write_into_upto(into, after.start + after.len())
     }
@@ -103,15 +95,18 @@ pub struct ByteChangeDiff {
 
 impl ByteChangeDiff {
     pub fn new(before_file_path: &Path, after_file_path: &Path, context: u8) -> io::Result<Self> {
-        let before_bytes = Data::<u8>::read(File::open(before_file_path)?)?;
-        let after_bytes = Data::<u8>::read(File::open(after_file_path)?)?;
+        let before_bytes = Seq::<u8>::read(File::open(before_file_path)?)?;
+        let after_bytes = Seq::<u8>::read(File::open(after_file_path)?)?;
         let modifications = Modifications::<u8>::new(before_bytes, after_bytes);
 
         Ok(Self {
             before_path: before_file_path.to_path_buf(),
             after_path: after_file_path.to_path_buf(),
             compressed: false,
-            chunks: modifications.chunks::<ByteChangeChunk>(context).collect(),
+            chunks: modifications
+                .modification_chunks(context)
+                .map(|c| ByteChangeChunk::from(c))
+                .collect(),
         })
     }
 

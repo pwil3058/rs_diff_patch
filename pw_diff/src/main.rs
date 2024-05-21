@@ -1,14 +1,14 @@
-mod main_copy;
+// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use clap::Parser;
 use std::io;
 use std::path::PathBuf;
 
+use clap::Parser;
 use log;
 use stderrlog;
 use stderrlog::LogLevelNum;
 
-use pw_diff_lib::diff_copy::Diff;
+use pw_diff_lib::diff::Diff;
 
 #[derive(Parser)]
 struct Cli {
@@ -27,7 +27,7 @@ struct Cli {
     after_file_path: PathBuf,
 }
 
-fn _main_copy() {
+fn main() {
     let args = Cli::parse();
 
     stderrlog::new()
@@ -52,5 +52,3 @@ fn _main_copy() {
         }
     }
 }
-
-fn main() {}

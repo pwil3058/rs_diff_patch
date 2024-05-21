@@ -1,24 +1,16 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
-use crate::data::{ConsumableData, ConsumableDataIfce, Data, DataIfce};
-use crate::range::{Len, Range};
 use std::io;
 
 use log;
 
-pub trait TextChunkBasics {
+use crate::modifications::ModificationBasics;
+use crate::range::{Len, Range};
+use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
+
+pub trait TextChunkBasics: ModificationBasics {
     fn context_lengths(&self) -> (u8, u8);
-    fn before_start(&self, reverse: bool) -> usize;
-    fn before_length(&self, reverse: bool) -> usize;
     fn before_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String>;
-    fn after_start(&self, reverse: bool) -> usize {
-        self.before_start(!reverse)
-    }
-
-    fn after_length(&self, reverse: bool) -> usize {
-        self.before_length(!reverse)
-    }
-
     fn after_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String> {
         self.before_lines(range, !reverse)
     }
@@ -61,24 +53,18 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
 
     fn before_is_subsequence_in_at(
         &self,
-        patchable: &Data<String>,
+        patchable: &Seq<String>,
         at: usize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> bool {
-        let length = self.before_adjusted_length(reductions, reverse);
-        let end = at + length;
+        let my_range = self.my_before_range(reductions, reverse);
+        let end = at + my_range.len();
         if end > patchable.len() {
             false
-        } else if let Some(reductions) = reductions {
-            let my_range = Range(reductions.0 as usize, length - reductions.1 as usize);
-            let other_range = Range(at, end);
-            self.before_lines(Some(my_range), reverse)
-                .zip(patchable.subsequence(other_range))
-                .all(|(l, r)| l == r)
         } else {
             let other_range = Range(at, end);
-            self.before_lines(None, reverse)
+            self.before_lines(Some(my_range), reverse)
                 .zip(patchable.subsequence(other_range))
                 .all(|(l, r)| l == r)
         }
@@ -90,11 +76,8 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
         reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> io::Result<()> {
-        if let Some(reductions) = reductions {
-            let range = Range(
-                reductions.0 as usize,
-                self.before_length(reverse) - reductions.1 as usize,
-            );
+        if reductions.is_some() {
+            let range = self.before_range(reductions, reverse);
             for line in self.before_lines(Some(range), reverse) {
                 into.write_all(line.as_bytes())?;
             }
@@ -117,7 +100,7 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
 
     fn will_apply(
         &self,
-        patchable: &Data<String>,
+        patchable: &Seq<String>,
         offset: isize,
         reverse: bool,
     ) -> Option<WillApply> {
@@ -151,7 +134,7 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
     fn apply_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut ConsumableData<String, Data<String>>,
+        pd: &mut ConsumableSeq<String>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
@@ -165,16 +148,16 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
 
     fn will_apply_nearby(
         &self,
-        pd: &ConsumableData<String, Data<String>>,
+        pd: &ConsumableSeq<String>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
     ) -> Option<(isize, WillApply)> {
         let not_after = if let Some(next_chunk) = next_chunk {
-            next_chunk.before_adjusted_start(offset, None, reverse) as usize
-                - self.before_adjusted_length(None, reverse)
+            next_chunk.before_adjusted_start(offset, Some(self.context_lengths()), reverse) as usize
+                - self.before_adjusted_length(Some(self.context_lengths()), reverse)
         } else {
-            pd.data().len() - self.before_adjusted_length(None, reverse)
+            pd.data().len() - self.before_adjusted_length(Some(self.context_lengths()), reverse)
         };
         let mut backward_done = false;
         let mut forward_done = false;
@@ -210,7 +193,7 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
 
     fn is_already_applied(
         &self,
-        patchable: &Data<String>,
+        patchable: &Seq<String>,
         offset: isize,
         reverse: bool,
     ) -> Option<WillApply> {
@@ -219,7 +202,7 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
 
     fn is_already_applied_nearby(
         &self,
-        pd: &ConsumableData<String, Data<String>>,
+        pd: &ConsumableSeq<String>,
         next_chunk: Option<&Self>,
         offset: isize,
         reverse: bool,
@@ -230,16 +213,14 @@ pub trait ApplyChunkFuzzy: TextChunkBasics {
     fn already_applied_into<W: io::Write>(
         &self,
         into: &mut W,
-        pd: &mut ConsumableData<String, Data<String>>,
+        pd: &mut ConsumableSeq<String>,
         offset: isize,
         reductions: Option<(u8, u8)>,
         reverse: bool,
     ) -> io::Result<()> {
         let end = self.after_adjusted_start(offset, reductions, reverse) as usize
             + self.after_adjusted_length(reductions, reverse);
-        let ok = pd.write_into_upto(into, end)?;
-        debug_assert!(ok);
-        Ok(())
+        pd.write_into_upto(into, end)
     }
 
     fn write_failure_data_into<W: io::Write>(&self, into: &mut W, reverse: bool) -> io::Result<()> {
@@ -276,11 +257,11 @@ where
 
     fn apply_into<W: io::Write>(
         &self,
-        patchable: &Data<String>,
+        patchable: &Seq<String>,
         into: &mut W,
         reverse: bool,
     ) -> io::Result<Statistics> {
-        let mut pd = ConsumableData::<String, Data<String>>::new(patchable);
+        let mut pd = ConsumableSeq::<String>::new(patchable);
         let mut stats = Statistics::default();
         let mut iter = self.chunks().peekable();
         let mut chunk_num = 0;
@@ -365,13 +346,12 @@ where
                 log::error!("Chunk #{chunk_num} could NOT be applied!");
             }
         }
-        let ok = pd.write_remainder(into)?;
-        debug_assert!(ok);
+        pd.write_remainder(into)?;
         Ok(stats)
     }
 
-    fn is_already_applied(&self, patchable: &Data<String>, reverse: bool) -> bool {
-        let pd = ConsumableData::<String, Data<String>>::new(patchable);
+    fn is_already_applied(&self, patchable: &Seq<String>, reverse: bool) -> bool {
+        let pd = ConsumableSeq::<String>::new(patchable);
         let mut iter = self.chunks().peekable();
         let mut chunk_num = 0;
         let mut offset: isize = 0;

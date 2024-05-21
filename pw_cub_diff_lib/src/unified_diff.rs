@@ -1,10 +1,14 @@
-use regex::{Captures, Regex};
+// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-use pw_diff_lib::modifications::{ChunkIter, Modification, ModificationChunkIter, Modifications};
+use regex::{Captures, Regex};
+
+use pw_diff_lib::apply_text::TextChunkBasics;
+use pw_diff_lib::modifications::{Modification, ModificationBasics, ModificationChunkIter};
 use pw_diff_lib::range::{Len, Range};
-use pw_diff_lib::{data::{Data, DataIfce, ExtractSnippet}, apply_text::TextChunkBasics};
+use pw_diff_lib::sequence::Seq;
 
 use crate::text_diff::{
     CheckEndOfInput, DiffParseError, DiffParseResult, PathAndTimestamp, StartAndLength,
@@ -122,8 +126,8 @@ pub struct UnifiedDiffChunk {
 }
 
 impl UnifiedDiffChunk {
-    pub fn get_from_at(lines: &Data<String>, start_index: usize) -> DiffParseResult<Option<Self>> {
-        let mut iter = lines.subsequence_from(start_index);
+    pub fn get_from_at(lines: &Seq<String>, start_index: usize) -> DiffParseResult<Option<Self>> {
+        let mut iter = lines.subsequence(lines.range_from(start_index));
         let line = match iter.next() {
             Some(line) => line,
             None => return Ok(None),
@@ -195,11 +199,7 @@ impl UnifiedDiffChunk {
     }
 }
 
-impl TextChunkBasics for UnifiedDiffChunk {
-    fn context_lengths(&self) -> (u8, u8) {
-        self.context_lengths
-    }
-
+impl ModificationBasics for UnifiedDiffChunk {
     fn before_start(&self, reverse: bool) -> usize {
         if reverse {
             self.starts_and_lengths.after.start
@@ -208,12 +208,22 @@ impl TextChunkBasics for UnifiedDiffChunk {
         }
     }
 
+    fn before_end(&self, reverse: bool) -> usize {
+        self.before_start(reverse) + self.before_length(reverse)
+    }
+
     fn before_length(&self, reverse: bool) -> usize {
         if reverse {
             self.starts_and_lengths.after.length
         } else {
             self.starts_and_lengths.before.length
         }
+    }
+}
+
+impl TextChunkBasics for UnifiedDiffChunk {
+    fn context_lengths(&self) -> (u8, u8) {
+        self.context_lengths
     }
 
     fn before_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String> {
@@ -239,15 +249,12 @@ pub struct UnifiedChunkText {
 }
 
 pub struct UnifiedChunkIter<'a> {
-    pub before: &'a Data<String>,
-    pub after: &'a Data<String>,
-    pub iter: ModificationChunkIter<'a>,
+    pub before: &'a Seq<String>,
+    pub after: &'a Seq<String>,
+    pub iter: ModificationChunkIter<'a, String>,
 }
 
-impl<'a> Iterator for UnifiedChunkIter<'a>
-where
-    Data<String>: ExtractSnippet<String>,
-{
+impl<'a> Iterator for UnifiedChunkIter<'a> {
     type Item = UnifiedChunkText;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -319,25 +326,13 @@ where
     }
 }
 
-pub trait ModificationsUnifiedChunks {
-    fn unified_chunks<'a, I>(&'a self, context: u8) -> ChunkIter<String>;
-}
-
-impl ModificationsUnifiedChunks for Modifications<String> {
-    fn unified_chunks<'a, I>(&'a self, context: u8) -> ChunkIter<String> {
-        ChunkIter {
-            before: &self.before,
-            after: &self.after,
-            iter: self.modification_chunks(context),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::unified_diff_copy::UnifiedDiffChunk;
     use std::fs::File;
-    use pw_diff_lib::sequence::Seq;
+
+    use pw_diff_lib::sequence::*;
+
+    use crate::unified_diff_copy::UnifiedDiffChunk;
 
     static UNIFIED_DIFF_CHUNK: &str = "--- lao	2002-02-21 23:30:39.942229878 -0800
 +++ tzu	2002-02-21 23:30:50.442260588 -0800
@@ -362,9 +357,7 @@ mod tests {
 
     #[test]
     fn unified_diff_chunk_parse_string() {
-        let diff_lines = Seq(UNIFIED_DIFF_CHUNK.split_inclusive('\n').map(|s| s.to_string()).collect());
-
-        // let diff_lines = Data::<String>::from(UNIFIED_DIFF_CHUNK);
+        let diff_lines = Seq::<String>::from(UNIFIED_DIFF_CHUNK);
         assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 2).is_ok());
         assert!(UnifiedDiffChunk::get_from_at(&diff_lines, 2)
             .unwrap()
@@ -386,7 +379,5 @@ mod tests {
         assert!(result.is_ok());
         let result = result.unwrap();
         assert!(result.is_none());
-        // let diff = result.unwrap();
-        // assert!(diff.lines_consumed == diff.len());
     }
 }
