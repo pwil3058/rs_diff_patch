@@ -332,7 +332,7 @@ mod tests {
 
     use pw_diff_lib::sequence::*;
 
-    use crate::unified_diff_copy::UnifiedDiffChunk;
+    use crate::unified_diff::UnifiedDiffChunk;
 
     static UNIFIED_DIFF_CHUNK: &str = "--- lao	2002-02-21 23:30:39.942229878 -0800
 +++ tzu	2002-02-21 23:30:50.442260588 -0800

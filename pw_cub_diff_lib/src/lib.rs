@@ -2,7 +2,6 @@
 
 pub mod text_diff;
 pub mod unified_diff;
-pub mod unified_diff_copy;
 
 pub const TIMESTAMP_RE_STR: &str = r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{9})? [-+]{1}\d{4}";
 pub const ALT_TIMESTAMP_RE_STR: &str =
