@@ -42,7 +42,7 @@ impl ByteChangeClump {
     }
 }
 
-impl ApplyClumpClean for ByteChangeClump {
+impl<'a> ApplyClumpClean for ByteChangeClump {
     fn will_apply(&self, data: &Seq<u8>, reverse: bool) -> bool {
         let before = self.before(reverse);
         data.has_subsequence_at(&before.items, before.start)
