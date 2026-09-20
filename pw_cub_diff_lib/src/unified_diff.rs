@@ -172,21 +172,21 @@ impl UnifiedDiffClump {
             index += 1;
         }
         let mut lines_consumed = index + 1;
-        if let Some(line) = iter.next() {
-            if line.starts_with("\\") {
-                lines_consumed += 1;
-                if last_line_type == "-" {
-                    let line = before_lines.pop().unwrap();
-                    before_lines.push(line.trim_end().to_string())
-                } else if last_line_type == "+" {
-                    let line = after_lines.pop().unwrap();
-                    after_lines.push(line.trim_end().to_string())
-                } else {
-                    let line = before_lines.pop().unwrap();
-                    before_lines.push(line.trim_end().to_string());
-                    let line = after_lines.pop().unwrap();
-                    after_lines.push(line.trim_end().to_string())
-                }
+        if let Some(line) = iter.next()
+            && line.starts_with("\\")
+        {
+            lines_consumed += 1;
+            if last_line_type == "-" {
+                let line = before_lines.pop().unwrap();
+                before_lines.push(line.trim_end().to_string())
+            } else if last_line_type == "+" {
+                let line = after_lines.pop().unwrap();
+                after_lines.push(line.trim_end().to_string())
+            } else {
+                let line = before_lines.pop().unwrap();
+                before_lines.push(line.trim_end().to_string());
+                let line = after_lines.pop().unwrap();
+                after_lines.push(line.trim_end().to_string())
             }
         }
         Ok(Some(Self {
@@ -359,12 +359,16 @@ mod tests {
     fn unified_diff_clump_parse_string() {
         let diff_lines = Seq::<String>::from(UNIFIED_DIFF_CLUMP);
         assert!(UnifiedDiffClump::get_from_at(&diff_lines, 2).is_ok());
-        assert!(UnifiedDiffClump::get_from_at(&diff_lines, 2)
-            .unwrap()
-            .is_some());
-        assert!(UnifiedDiffClump::get_from_at(&diff_lines, 1)
-            .unwrap()
-            .is_none());
+        assert!(
+            UnifiedDiffClump::get_from_at(&diff_lines, 2)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            UnifiedDiffClump::get_from_at(&diff_lines, 1)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

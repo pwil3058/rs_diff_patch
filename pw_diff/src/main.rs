@@ -4,8 +4,6 @@ use std::io;
 use std::path::PathBuf;
 
 use clap::Parser;
-use log;
-use stderrlog;
 use stderrlog::LogLevelNum;
 
 use pw_diff_lib::diff::Diff;

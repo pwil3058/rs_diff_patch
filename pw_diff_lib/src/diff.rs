@@ -40,12 +40,12 @@ impl Diff {
         } else if after_file_path.exists() {
             match PathAndLines::new(after_file_path) {
                 Ok(mut path_and_lines) => {
-                    path_and_lines.change_path(&before_file_path);
+                    path_and_lines.change_path(before_file_path);
                     Ok(Self::TextAdd(path_and_lines))
                 }
                 Err(_) => {
                     let mut path_and_bytes = PathAndBytes::new(after_file_path)?;
-                    path_and_bytes.change_path(&before_file_path);
+                    path_and_bytes.change_path(before_file_path);
                     Ok(Self::ByteAdd(path_and_bytes))
                 }
             }

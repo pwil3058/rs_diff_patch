@@ -15,11 +15,7 @@ pub struct Range(pub usize, pub usize);
 
 impl Len for Range {
     fn len(&self) -> usize {
-        if self.1 > self.0 {
-            self.1 - self.0
-        } else {
-            0
-        }
+        self.1.saturating_sub(self.0)
     }
 }
 

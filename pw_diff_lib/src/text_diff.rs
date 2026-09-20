@@ -64,19 +64,11 @@ impl TextClumpBasics for TextChangeClump {
 
 impl TextChangeClump {
     pub fn before(&self, reverse: bool) -> &Snippet<String> {
-        if reverse {
-            &self.after
-        } else {
-            &self.before
-        }
+        if reverse { &self.after } else { &self.before }
     }
 
     pub fn after(&self, reverse: bool) -> &Snippet<String> {
-        if reverse {
-            &self.before
-        } else {
-            &self.after
-        }
+        if reverse { &self.before } else { &self.after }
     }
 }
 
@@ -100,7 +92,7 @@ impl TextChangeDiff {
             after_path: after_file_path.to_path_buf(),
             clumps: modifications
                 .change_clumps(context)
-                .map(|c| TextChangeClump::from(c))
+                .map(TextChangeClump::from)
                 .collect(),
         })
     }

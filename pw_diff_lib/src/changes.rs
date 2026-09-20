@@ -309,15 +309,9 @@ impl<'a, T: PartialEq + Clone, I: ContentItemIndices<T>> ChangesGenerator<'a, T,
                 self.after.range_from(j),
             ));
         } else if i < self.before.len() {
-            changes.push(Change::Delete(
-                self.before.range_from(i),
-                self.after.len(),
-            ));
+            changes.push(Change::Delete(self.before.range_from(i), self.after.len()));
         } else if j < self.after.len() {
-            changes.push(Change::Insert(
-                self.before.len(),
-                self.after.range_from(j),
-            ));
+            changes.push(Change::Insert(self.before.len(), self.after.range_from(j)));
         }
 
         changes
@@ -434,19 +428,13 @@ impl<'a, T: PartialEq + Clone> ChangeClump<'a, T> {
 
     pub fn context_lengths(&self) -> (u8, u8) {
         use Change::NoChange;
-        let start = if let Some(change) = self.first() {
-            match change {
-                NoChange(match_) => match_.len(),
-                _ => 0,
-            }
+        let start = if let Some(NoChange(m)) = self.first() {
+            m.len()
         } else {
             0
         };
-        let end = if let Some(op_code) = self.last() {
-            match op_code {
-                NoChange(match_) => match_.len(),
-                _ => 0,
-            }
+        let end = if let Some(NoChange(m)) = self.last() {
+            m.len()
         } else {
             0
         };

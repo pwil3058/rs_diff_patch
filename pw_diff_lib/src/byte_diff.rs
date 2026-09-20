@@ -34,23 +34,15 @@ impl From<ChangeClump<'_, u8>> for ByteChangeClump {
 
 impl ByteChangeClump {
     pub fn before(&self, reverse: bool) -> &Snippet<u8> {
-        if reverse {
-            &self.after
-        } else {
-            &self.before
-        }
+        if reverse { &self.after } else { &self.before }
     }
 
     pub fn after(&self, reverse: bool) -> &Snippet<u8> {
-        if reverse {
-            &self.before
-        } else {
-            &self.after
-        }
+        if reverse { &self.before } else { &self.after }
     }
 }
 
-impl<'a> ApplyClumpClean for ByteChangeClump {
+impl ApplyClumpClean for ByteChangeClump {
     fn will_apply(&self, data: &Seq<u8>, reverse: bool) -> bool {
         let before = self.before(reverse);
         data.has_subsequence_at(&before.items, before.start)
@@ -105,7 +97,7 @@ impl ByteChangeDiff {
             compressed: false,
             clumps: modifications
                 .change_clumps(context)
-                .map(|c| ByteChangeClump::from(c))
+                .map(ByteChangeClump::from)
                 .collect(),
         })
     }

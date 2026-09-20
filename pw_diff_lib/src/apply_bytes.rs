@@ -38,9 +38,8 @@ where
         reverse: bool,
     ) -> io::Result<()> {
         let mut pd = ConsumableSeq::<u8>::new(patchable);
-        let mut iter = self.clumps();
         let mut clump_num = 0;
-        while let Some(clump) = iter.next() {
+        for clump in self.clumps() {
             clump_num += 1; // for human consumption
             if clump.will_apply(patchable, reverse) {
                 clump.apply_into(&mut pd, into, reverse)?;
@@ -57,8 +56,7 @@ where
 
     fn already_applied(&self, patchable: &Seq<u8>, reverse: bool) -> bool {
         let mut clump_num = 0;
-        let mut iter = self.clumps().peekable();
-        while let Some(clump) = iter.next() {
+        for clump in self.clumps().peekable() {
             clump_num += 1; // for human consumption
             if clump.is_already_applied(patchable, reverse) {
                 log::info!("Clump #{clump_num} already applied")
