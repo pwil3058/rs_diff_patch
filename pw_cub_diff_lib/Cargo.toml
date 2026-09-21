@@ -7,4 +7,3 @@ edition = "2024"
 regex = "1.10.4"
 
 pw_diff_lib = { path = "../pw_diff_lib" }
-lazy_static = "1.4.0"

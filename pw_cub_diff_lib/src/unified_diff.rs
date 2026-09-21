@@ -1,9 +1,9 @@
 // Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
 
+use regex::{Captures, Regex};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-
-use regex::{Captures, Regex};
+use std::sync::LazyLock;
 
 use pw_diff_lib::apply_text::TextClumpBasics;
 use pw_diff_lib::changes::{Change, ChangeBasics, ChangeClumpIter};
@@ -15,17 +15,23 @@ use crate::text_diff::{
 };
 use crate::{ALT_TIMESTAMP_RE_STR, PATH_RE_STR, TIMESTAMP_RE_STR};
 
-lazy_static::lazy_static! {
-    pub static ref EITHER_TIME_STAMP_RE_STR: String = format!("({TIMESTAMP_RE_STR}|{ALT_TIMESTAMP_RE_STR})");
-    pub static ref BEFORE_PATH_REGEX: Regex =
-        Regex::new(&format!(r"^--- ({PATH_RE_STR})\s+({TIMESTAMP_RE_STR}|{ALT_TIMESTAMP_RE_STR})?(.*)(\n)?$")).unwrap();
+pub static BEFORE_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(
+        r"^--- ({PATH_RE_STR})\s+({TIMESTAMP_RE_STR}|{ALT_TIMESTAMP_RE_STR})?(.*)(\n)?$"
+    ))
+    .unwrap()
+});
 
-    pub static ref AFTER_PATH_REGEX: Regex =
-        Regex::new(&format!(r"^\+\+\+ ({PATH_RE_STR})\s+({TIMESTAMP_RE_STR}|{ALT_TIMESTAMP_RE_STR})?(.*)(\n)?$")).unwrap();
+pub static AFTER_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(
+        r"^\+\+\+ ({PATH_RE_STR})\s+({TIMESTAMP_RE_STR}|{ALT_TIMESTAMP_RE_STR})?(.*)(\n)?$"
+    ))
+    .unwrap()
+});
 
-    pub static ref CLUMP_HEADER_REGEX: Regex =
-        Regex::new(r"^@@\s+-(\d+)(,(\d+))?\s+\+(\d+)(,(\d+))?\s+@@\s*(.*)(\n)?$").unwrap();
-}
+pub static CLUMP_HEADER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^@@\s+-(\d+)(,(\d+))?\s+\+(\d+)(,(\d+))?\s+@@\s*(.*)(\n)?$").unwrap()
+});
 
 fn path_and_time_stamp_from_captures(captures: &Captures) -> PathAndTimestamp {
     let file_path = if let Some(path) = captures.get(2) {
