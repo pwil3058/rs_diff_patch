@@ -16,10 +16,10 @@ use sequence::Seq;
 /// use longest_common_subsequence::sequence::Seq;
 /// use longest_common_subsequence::common_subsequence::CommonSubsequence;
 /// use longest_common_subsequence::longest_common_subsequence;
-/// let left = Seq::<String>("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\n"
-///     .split_inclusive('\n').map(|s| s.to_string()).collect::<Vec<_>>().into_boxed_slice());
-/// let right = Seq::<String>("X\nY\nZ\nC\nD\nE\nH\nI\nX\n"
-///     .split_inclusive('\n').map(|s| s.to_string()).collect::<Vec<_>>().into_boxed_slice());
+/// let left = Seq::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\n"
+///     .split_inclusive('\n').map(|s| s.to_string()).collect::<Vec<_>>());
+/// let right = Seq::<String>::from_iter("X\nY\nZ\nC\nD\nE\nH\nI\nX\n"
+///     .split_inclusive('\n').map(|s| s.to_string()));
 /// assert_eq!(Some(CommonSubsequence(2,3,3)), longest_common_subsequence(&left, &right));
 /// ```
 pub fn longest_common_subsequence<T: PartialEq + Eq + Clone + std::hash::Hash>(
@@ -43,7 +43,7 @@ pub fn longest_common_subsequence<T: PartialEq + Eq + Clone + std::hash::Hash>(
 ///     .split_inclusive('\n').map(|s| s.to_string()).collect::<Vec<_>>().into_boxed_slice());
 /// assert_eq!(
 ///     Seq(vec![CommonSubsequence(2,3,3),CommonSubsequence(7, 6, 2)].into_boxed_slice()),
-///      longest_common_subsequences(&left, &right)
+///     longest_common_subsequences(&left, &right)
 /// );
 /// ```
 pub fn longest_common_subsequences<T: PartialEq + Eq + Clone + std::hash::Hash>(
@@ -52,13 +52,4 @@ pub fn longest_common_subsequences<T: PartialEq + Eq + Clone + std::hash::Hash>(
 ) -> Seq<CommonSubsequence> {
     let data = lcs::Data::<T>::new(left, right);
     Seq(data.longest_common_subsequences().into_boxed_slice())
-}
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn it_works() {
-        assert_eq!(4, 4);
-    }
 }
