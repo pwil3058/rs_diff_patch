@@ -1,14 +1,14 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use regex::{Captures, Regex};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::sync::LazyLock;
 
+use longest_common_subsequence::range::{Len, Range};
+use longest_common_subsequence::sequence::Seq;
 use pw_diff_lib::apply_text::TextClumpBasics;
 use pw_diff_lib::changes::{Change, ChangeBasics, ChangeClumpIter};
-use pw_diff_lib::range::{Len, Range};
-use pw_diff_lib::sequence::Seq;
 
 use crate::text_diff::{
     CheckEndOfInput, DiffParseError, DiffParseResult, PathAndTimestamp, StartAndLength,
@@ -287,7 +287,7 @@ impl<'a> Iterator for UnifiedClumpIter<'a> {
             use Change::*;
             match change {
                 NoChange(common_subsequence) => {
-                    for line in self.before.subsequence(common_subsequence.before_range()) {
+                    for line in self.before.subsequence(common_subsequence.left_range()) {
                         lines.push(format!(" {line}"));
                     }
                 }
@@ -334,9 +334,9 @@ impl<'a> Iterator for UnifiedClumpIter<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
-
+    use longest_common_subsequence::sequence::Seq;
     use pw_diff_lib::sequence::*;
+    use std::fs::File;
 
     use crate::unified_diff::UnifiedDiffClump;
 
@@ -363,7 +363,11 @@ mod tests {
 
     #[test]
     fn unified_diff_clump_parse_string() {
-        let diff_lines = Seq::<String>::from(UNIFIED_DIFF_CLUMP);
+        let diff_lines = Seq::<String>::from_iter(
+            UNIFIED_DIFF_CLUMP
+                .split_inclusive('\n')
+                .map(|s| s.to_string()),
+        );
         assert!(UnifiedDiffClump::get_from_at(&diff_lines, 2).is_ok());
         assert!(
             UnifiedDiffClump::get_from_at(&diff_lines, 2)

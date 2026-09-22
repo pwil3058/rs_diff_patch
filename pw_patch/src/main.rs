@@ -1,4 +1,4 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::fs;
 use std::fs::File;
@@ -7,9 +7,9 @@ use std::path::PathBuf;
 use clap::Parser;
 use stderrlog::LogLevelNum;
 
-use pw_diff_lib::{
-    apply_bytes::ApplyClumpsClean, apply_text::ApplyClumpsFuzzy, diff::Diff, sequence::Seq,
-};
+use longest_common_subsequence::sequence::Seq;
+use pw_diff_lib::sequence::ReadSequence;
+use pw_diff_lib::{apply_bytes::ApplyClumpsClean, apply_text::ApplyClumpsFuzzy, diff::Diff};
 
 #[derive(Debug, Parser)]
 struct Cli {

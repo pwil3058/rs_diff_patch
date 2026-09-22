@@ -8,6 +8,7 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 log = "0.4"
-
-pw_diff_lib = { path = "../pw_diff_lib" }
 stderrlog = "0.6.0"
+
+longest_common_subsequence = { path = "../longest_common_subsequence" }
+pw_diff_lib = { path = "../pw_diff_lib" }

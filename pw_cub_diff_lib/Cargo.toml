@@ -7,3 +7,4 @@ edition = "2024"
 regex = "1.10.4"
 
 pw_diff_lib = { path = "../pw_diff_lib" }
+longest_common_subsequence = { path = "../longest_common_subsequence" }
