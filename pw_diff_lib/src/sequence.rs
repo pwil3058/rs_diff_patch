@@ -3,7 +3,6 @@
 use longest_common_subsequence::{range::Range, sequence::Seq};
 
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::io;
 use std::io::{BufRead, BufReader, Read, Write};
 
@@ -33,58 +32,6 @@ impl ReadSequence for Seq<u8> {
         let mut bytes = vec![];
         reader.read_to_end(&mut bytes)?;
         Ok(Self(bytes.into_boxed_slice()))
-    }
-}
-
-pub trait ContentItemIndices<T: PartialEq + Clone> {
-    fn generate_from(sequence: &Seq<T>) -> Box<Self>
-    where
-        Self: Sized;
-    fn indices(&self, item: &T) -> Option<&Vec<usize>>;
-}
-
-#[derive(Debug, Default)]
-pub struct StringItemIndices(HashMap<String, Vec<usize>>);
-
-impl ContentItemIndices<String> for StringItemIndices {
-    fn generate_from(sequence: &Seq<String>) -> Box<Self> {
-        let mut map = HashMap::<String, Vec<usize>>::new();
-        for (index, line) in sequence.iter().enumerate() {
-            if let Some(vec) = map.get_mut(line) {
-                vec.push(index)
-            } else {
-                map.insert(line.to_string(), vec![index]);
-            }
-        }
-
-        Box::new(Self(map))
-    }
-
-    fn indices(&self, item: &String) -> Option<&Vec<usize>> {
-        self.0.get(item)
-    }
-}
-
-#[derive(Debug)]
-pub struct ByteItemIndices(pub [Vec<usize>; 256]);
-
-impl ContentItemIndices<u8> for ByteItemIndices {
-    fn generate_from(sequence: &Seq<u8>) -> Box<Self> {
-        const ARRAY_REPEAT_VALUE: Vec<usize> = Vec::<usize>::new();
-        let mut indices = [ARRAY_REPEAT_VALUE; 256];
-        for (index, byte) in sequence.iter().enumerate() {
-            indices[*byte as usize].push(index);
-        }
-        Box::new(Self(indices))
-    }
-
-    fn indices(&self, item: &u8) -> Option<&Vec<usize>> {
-        let result = &self.0[*item as usize];
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
     }
 }
 
