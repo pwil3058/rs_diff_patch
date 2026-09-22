@@ -1,4 +1,4 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use crate::range::Range;
 use crate::snippet::Snippet;
@@ -8,7 +8,7 @@ use std::io;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::ops::Deref;
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct Seq<T: PartialEq + Clone>(pub Box<[T]>);
 
 impl<T: PartialEq + Clone> Deref for Seq<T> {
