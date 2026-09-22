@@ -1,4 +1,4 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::fs::File;
 use std::io;
@@ -6,12 +6,13 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use longest_common_subsequence::{range::Len, sequence::Seq, snippet::Snippet};
+
 use crate::apply_bytes::{ApplyClumpClean, ApplyClumpsClean};
 use crate::changes::{ChangeClump, Changes};
-use crate::range::Len;
-use crate::snippet::{Snippet, SnippetWrite};
+use crate::snippet::SnippetWrite;
 
-use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
+use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, ReadSequence};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ByteChangeClump {

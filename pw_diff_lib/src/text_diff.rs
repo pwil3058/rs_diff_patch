@@ -1,15 +1,15 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use longest_common_subsequence::{range::Range, sequence::Seq, snippet::Snippet};
+
 use crate::apply_text::*;
 use crate::changes::*;
-use crate::range::Range;
 use crate::sequence::*;
-use crate::snippet::Snippet;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextChangeClump {

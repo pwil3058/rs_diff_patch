@@ -1,53 +1,18 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
-use crate::range::Range;
-use crate::snippet::Snippet;
+use longest_common_subsequence::{range::Range, sequence::Seq};
+
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::io;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::ops::Deref;
 
-#[derive(Debug, Default, PartialEq)]
-pub struct Seq<T: PartialEq + Clone>(pub Box<[T]>);
-
-impl<T: PartialEq + Clone> Deref for Seq<T> {
-    type Target = Box<[T]>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+pub trait ReadSequence: Sized {
+    fn read<R: Read>(read: R) -> io::Result<Self>;
 }
 
-impl<T: PartialEq + Clone> Seq<T> {
-    pub fn range_from(&self, from: usize) -> Range {
-        Range(from, self.len())
-    }
-
-    pub fn subsequence(&self, range: Range) -> impl DoubleEndedIterator<Item = &T> {
-        self.0[range.0..range.1].iter()
-    }
-
-    pub fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
-        if at < self.len() && self.len() - at >= subsequence.len() {
-            subsequence
-                .iter()
-                .zip(self.0[at..].iter())
-                .all(|(b, a)| a == b)
-        } else {
-            false
-        }
-    }
-
-    pub fn extract_snippet(&self, range: Range) -> Snippet<T> {
-        let start = range.start();
-        let items = self.0[range.0..range.1].to_vec().into_boxed_slice();
-        Snippet { start, items }
-    }
-}
-
-impl Seq<String> {
-    pub fn read<R: Read>(read: R) -> io::Result<Self> {
+impl ReadSequence for Seq<String> {
+    fn read<R: Read>(read: R) -> io::Result<Self> {
         let mut reader = BufReader::new(read);
         let mut lines = vec![];
         loop {
@@ -62,36 +27,12 @@ impl Seq<String> {
     }
 }
 
-impl Seq<u8> {
-    pub fn read<R: Read>(read: R) -> io::Result<Self> {
+impl ReadSequence for Seq<u8> {
+    fn read<R: Read>(read: R) -> io::Result<Self> {
         let mut reader = BufReader::new(read);
         let mut bytes = vec![];
         reader.read_to_end(&mut bytes)?;
         Ok(Self(bytes.into_boxed_slice()))
-    }
-}
-
-impl From<String> for Seq<String> {
-    fn from(text: String) -> Self {
-        Self(text.split_inclusive('\n').map(|s| s.to_string()).collect())
-    }
-}
-
-impl From<&str> for Seq<String> {
-    fn from(arg: &str) -> Self {
-        Self::from(arg.to_string())
-    }
-}
-
-impl From<Vec<u8>> for Seq<u8> {
-    fn from(bytes: Vec<u8>) -> Self {
-        Self(bytes.into_boxed_slice())
-    }
-}
-
-impl From<&[u8]> for Seq<u8> {
-    fn from(bytes: &[u8]) -> Self {
-        Self::from(bytes.to_vec())
     }
 }
 

@@ -1,18 +1,21 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
-use std::collections::HashMap;
 use std::iter::Peekable;
 use std::ops::{Deref, DerefMut};
 use std::slice::Iter;
 
-use rayon::prelude::ParallelSliceMut;
-
-use crate::common_subsequence::*;
-use crate::range::*;
-use crate::sequence::{ByteItemIndices, ContentItemIndices, Seq, StringItemIndices};
+use longest_common_subsequence::{common_subsequence::*, range::*, sequence::*};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Change {
+    NoChange(CommonSubsequence),
+    Delete(Range, usize),
+    Insert(usize, Range),
+    Replace(Range, Range),
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ChangeNG {
     NoChange(CommonSubsequence),
     Delete(Range, usize),
     Insert(usize, Range),
@@ -71,14 +74,14 @@ impl ChangeBasics for Change {
     fn before_start(&self, reverse: bool) -> usize {
         if reverse {
             match self {
-                Change::NoChange(common_subsequence) => common_subsequence.after_start(),
+                Change::NoChange(common_subsequence) => common_subsequence.right_start(),
                 Change::Delete(_, start) => *start,
                 Change::Insert(_, after_range) => after_range.start(),
                 Change::Replace(_, after_range) => after_range.start(),
             }
         } else {
             match self {
-                Change::NoChange(common_subsequence) => common_subsequence.before_start(),
+                Change::NoChange(common_subsequence) => common_subsequence.left_start(),
                 Change::Delete(before_range, _) => before_range.start(),
                 Change::Insert(start, _) => *start,
                 Change::Replace(before_range, _) => before_range.start(),
@@ -89,14 +92,14 @@ impl ChangeBasics for Change {
     fn before_end(&self, reverse: bool) -> usize {
         if reverse {
             match self {
-                Change::NoChange(common_subsequence) => common_subsequence.after_end(),
+                Change::NoChange(common_subsequence) => common_subsequence.right_end(),
                 Change::Delete(_, end) => *end,
                 Change::Insert(_, after_range) => after_range.end(),
                 Change::Replace(_, after_range) => after_range.end(),
             }
         } else {
             match self {
-                Change::NoChange(common_subsequence) => common_subsequence.before_end(),
+                Change::NoChange(common_subsequence) => common_subsequence.left_end(),
                 Change::Delete(before_range, _) => before_range.end(),
                 Change::Insert(end, _) => *end,
                 Change::Replace(before_range, _) => before_range.end(),
@@ -105,245 +108,56 @@ impl ChangeBasics for Change {
     }
 }
 
-#[derive(Debug)]
-pub struct ChangesGenerator<'a, T: PartialEq + Clone, I: ContentItemIndices<T>> {
-    before: &'a Seq<T>,
-    after: &'a Seq<T>,
-    before_content_indices: Box<I>,
+#[derive(Debug, Default)]
+pub struct Changes<T: PartialEq + Eq + Clone + std::hash::Hash> {
+    pub before: Seq<T>,
+    pub after: Seq<T>,
+    pub changes: Box<[Change]>,
 }
 
-impl<'a, T: PartialEq + Clone, I: ContentItemIndices<T>> ChangesGenerator<'a, T, I> {
-    pub fn new(before: &'a Seq<T>, after: &'a Seq<T>) -> Self {
-        let before_content_indices = ContentItemIndices::<T>::generate_from(before);
-        Self {
-            before,
-            after,
-            before_content_indices,
-        }
-    }
-}
-
-impl<'a, T: PartialEq + Clone, I: ContentItemIndices<T>> ChangesGenerator<'a, T, I> {
-    /// Find the longest common subsequences in the given subsequences
-    ///
-    /// Example:
-    /// ```
-    /// use pw_diff_lib::sequence::{Seq, ContentItemIndices, StringItemIndices};
-    /// use pw_diff_lib::changes::ChangesGenerator;
-    /// use pw_diff_lib::range::Range;
-    /// use pw_diff_lib::common_subsequence::CommonSubsequence;
-    /// let before = Seq::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\n");
-    /// let after = Seq::<String>::from("X\nY\nZ\nC\nD\nE\nH\nI\nX\n");
-    /// let generator = ChangesGenerator::<String, StringItemIndices>::new(&before, &after);
-    /// assert_eq!(Some(CommonSubsequence(2,3,3)), generator.longest_common_subsequence(before.range_from(0), after.range_from(0)));
-    /// ```
-    pub fn longest_common_subsequence(
-        &self,
-        before_range: Range,
-        after_range: Range,
-    ) -> Option<CommonSubsequence> {
-        let mut best_lcs = CommonSubsequence::default();
-
-        let mut j_to_len = HashMap::<isize, usize>::new();
-        for (i, item) in self.after.subsequence(after_range).enumerate() {
-            let index = i + after_range.start();
-            let mut new_j_to_len = HashMap::<isize, usize>::new();
-            if let Some(indices) = self.before_content_indices.indices(item) {
-                for j in indices {
-                    if j < &before_range.start() {
-                        continue;
-                    }
-                    if j >= &before_range.end() {
-                        break;
-                    }
-
-                    let k = match j_to_len.get(&(*j as isize - 1)) {
-                        Some(k) => *k + 1,
-                        None => 1,
-                    };
-                    new_j_to_len.insert(*j as isize, k);
-                    if k > best_lcs.len() {
-                        best_lcs = CommonSubsequence(j + 1 - k, index + 1 - k, k);
-                    }
-                }
-            }
-            j_to_len = new_j_to_len;
-        }
-
-        if best_lcs.is_empty() {
-            None
-        } else {
-            let count = self
-                .before
-                .subsequence(Range(before_range.start(), best_lcs.before_start()))
-                .rev()
-                .zip(
-                    self.after
-                        .subsequence(Range(after_range.start(), best_lcs.after_start()))
-                        .rev(),
-                )
-                .take_while(|(a, b)| a == b)
-                .count();
-            best_lcs.incr_size_moving_starts(
-                count
-                    .min(best_lcs.before_start())
-                    .min(best_lcs.after_start()),
-            );
-
-            if best_lcs.before_end() + 1 < before_range.end()
-                && best_lcs.after_end() + 1 < after_range.end()
-            {
-                let count = self
-                    .before
-                    .subsequence(Range(best_lcs.before_end() + 1, before_range.end()))
-                    .zip(
-                        self.after
-                            .subsequence(Range(best_lcs.after_end() + 1, after_range.end())),
-                    )
-                    .take_while(|(a, b)| a == b)
-                    .count();
-                best_lcs.incr_size_moving_ends(count);
-            }
-
-            Some(best_lcs)
-        }
-    }
-
-    fn longest_common_subsequences(&self) -> Vec<CommonSubsequence> {
-        let mut lifo = vec![(self.before.range_from(0), self.after.range_from(0))];
-        let mut raw_lcses = vec![];
-        while let Some((before_range, after_range)) = lifo.pop() {
-            if let Some(lcs) = self.longest_common_subsequence(before_range, after_range) {
-                if before_range.start() < lcs.before_start()
-                    && after_range.start() < lcs.after_start()
-                {
-                    lifo.push((
-                        Range(before_range.start(), lcs.before_start()),
-                        Range(after_range.start(), lcs.after_start()),
-                    ))
-                };
-                if lcs.before_end() < before_range.end() && lcs.after_end() < after_range.end() {
-                    lifo.push((
-                        Range(lcs.before_end(), before_range.end()),
-                        Range(lcs.after_end(), after_range.end()),
-                    ))
-                }
-                raw_lcses.push(lcs);
-            }
-        }
-        raw_lcses.par_sort();
-
-        let mut lcses = vec![];
-        let mut i = 0usize;
-        while let Some(lcs) = raw_lcses.get(i) {
-            let mut new_lcs = *lcs;
-            i += 1;
-            while let Some(lcs) = raw_lcses.get(i) {
-                if new_lcs.before_end() == lcs.before_start()
-                    && new_lcs.after_end() == lcs.after_start()
-                {
-                    new_lcs.incr_size_moving_ends(lcs.len());
-                    i += 1
-                } else {
-                    break;
-                }
-            }
-            lcses.push(new_lcs);
-        }
-
-        lcses
-    }
-
-    /// Return a vector of the Mods describing changes
-    ///
-    /// Example:
-    /// ```
-    /// use pw_diff_lib::range::Range;
-    /// use pw_diff_lib::sequence::{Seq, ContentItemIndices, StringItemIndices};
-    /// use pw_diff_lib::common_subsequence::CommonSubsequence;
-    /// use pw_diff_lib::changes::ChangesGenerator;
-    /// use pw_diff_lib::changes::Change::*;
-    ///
-    /// let before_lines = Seq::<String>::from("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n");
-    /// let after_lines = Seq::<String>::from("A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n");
-    /// let changes = ChangesGenerator::<String, StringItemIndices>::new(&before_lines, &after_lines).generate();
-    /// assert_eq!(
-    ///     vec![
-    ///         NoChange(CommonSubsequence(0,0,1)), Delete(Range(1, 2), 1),
-    ///         NoChange(CommonSubsequence(2, 1, 2)), Replace(Range(4, 6), Range(3, 5)),
-    ///         NoChange(CommonSubsequence(6, 5, 5)), Insert(11, Range(10, 11)),
-    ///         NoChange(CommonSubsequence(11, 11, 2))
-    ///     ],
-    ///     changes
-    /// );
-    /// ```
-    pub fn generate(&self) -> Vec<Change> {
+impl<T: PartialEq + Eq + Clone + std::hash::Hash> Changes<T> {
+    pub fn new(
+        before: Seq<T>,
+        after: Seq<T>,
+        // changes: Vec<Change>,
+    ) -> Self {
         let mut changes = vec![];
         let mut i = 0usize;
         let mut j = 0usize;
-
-        for lcs in self.longest_common_subsequences() {
-            if i < lcs.before_start() && j < lcs.after_start() {
+        for lcs in
+            longest_common_subsequence::longest_common_subsequences::<T>(&before, &after).iter()
+        {
+            if i < lcs.left_start() && j < lcs.right_start() {
                 changes.push(Change::Replace(
-                    Range(i, lcs.before_start()),
-                    Range(j, lcs.after_start()),
+                    longest_common_subsequence::range::Range(i, lcs.left_start()),
+                    longest_common_subsequence::range::Range(j, lcs.right_start()),
                 ));
-            } else if i < lcs.before_start() {
+            } else if i < lcs.left_start() {
                 changes.push(Change::Delete(
-                    Range(i, lcs.before_start()),
-                    lcs.after_start(),
+                    longest_common_subsequence::range::Range(i, lcs.left_start()),
+                    lcs.right_start(),
                 ));
-            } else if j < lcs.after_start() {
+            } else if j < lcs.right_start() {
                 changes.push(Change::Insert(
-                    lcs.before_start(),
-                    Range(j, lcs.after_start()),
+                    lcs.left_start(),
+                    longest_common_subsequence::range::Range(j, lcs.right_start()),
                 ));
             }
-            changes.push(Change::NoChange(lcs));
-            i = lcs.before_end();
-            j = lcs.after_end();
+            changes.push(Change::NoChange(*lcs));
+            i = lcs.left_end();
+            j = lcs.right_end();
         }
-        if i < self.before.len() && j < self.after.len() {
-            changes.push(Change::Replace(
-                self.before.range_from(i),
-                self.after.range_from(j),
-            ));
-        } else if i < self.before.len() {
-            changes.push(Change::Delete(self.before.range_from(i), self.after.len()));
-        } else if j < self.after.len() {
-            changes.push(Change::Insert(self.before.len(), self.after.range_from(j)));
+        if i < before.len() && j < after.len() {
+            changes.push(Change::Replace(before.range_from(i), after.range_from(j)));
+        } else if i < before.len() {
+            changes.push(Change::Delete(before.range_from(i), after.len()));
+        } else if j < after.len() {
+            changes.push(Change::Insert(before.len(), after.range_from(j)));
         }
-
-        changes
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct Changes<T: PartialEq + Clone> {
-    pub before: Seq<T>,
-    pub after: Seq<T>,
-    pub changes: Vec<Change>,
-}
-
-impl Changes<String> {
-    pub fn new(before: Seq<String>, after: Seq<String>) -> Self {
-        let changes =
-            ChangesGenerator::<String, StringItemIndices>::new(&before, &after).generate();
-        Self {
+        Changes {
             before,
             after,
-            changes,
-        }
-    }
-}
-
-impl Changes<u8> {
-    pub fn new(before: Seq<u8>, after: Seq<u8>) -> Self {
-        let changes = ChangesGenerator::<u8, ByteItemIndices>::new(&before, &after).generate();
-        Self {
-            before,
-            after,
-            changes,
+            changes: changes.into_boxed_slice(),
         }
     }
 }
@@ -393,7 +207,7 @@ impl<'a, T: PartialEq + Clone> ChangeClump<'a, T> {
         if let Some(change) = self.changes.first() {
             match change {
                 Delete(range, after_start) => (range.start(), *after_start),
-                NoChange(match_) => (match_.before_start(), match_.after_start()),
+                NoChange(match_) => (match_.left_start(), match_.right_start()),
                 Insert(before_start, after_range) => (*before_start, after_range.start()),
                 Replace(before_range, after_range) => (before_range.start(), after_range.start()),
             }
@@ -407,7 +221,7 @@ impl<'a, T: PartialEq + Clone> ChangeClump<'a, T> {
         if let Some(op_code) = self.changes.last() {
             match op_code {
                 Delete(range, after_start) => (range.end(), *after_start),
-                NoChange(match_) => (match_.before_end(), match_.after_end()),
+                NoChange(match_) => (match_.left_end(), match_.right_end()),
                 Insert(before_start, after_range) => (*before_start, after_range.end()),
                 Replace(before_range, after_range) => (before_range.end(), after_range.end()),
             }
@@ -495,30 +309,30 @@ impl<'a, T: PartialEq + Clone> Iterator for ChangeClumpIter<'a, T> {
     }
 }
 
-impl<T: PartialEq + Clone> Changes<T> {
+impl<T: PartialEq + Eq + Clone + std::hash::Hash> Changes<T> {
     /// Return an iterator over ModificationClumps generated with the given `context` size.
     ///
     /// Example:
     ///
     /// ```
-    /// use pw_diff_lib::common_subsequence::CommonSubsequence;
-    /// use pw_diff_lib::sequence::*;
+    /// use longest_common_subsequence::common_subsequence::CommonSubsequence;
+    /// use longest_common_subsequence::sequence::*;
     /// use pw_diff_lib::changes::{ChangeClump, Changes,Change};
-    /// use pw_diff_lib::range::Range;
+    /// use longest_common_subsequence::range::Range;
     /// use Change::*;
     ///
     /// let before = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
     /// let after = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
-    /// let before_lines = Seq::<String>::from(before);
-    /// let after_lines = Seq::<String>::from(after);
-    /// let changes = Changes::<String>::new(before_lines, after_lines);
+    /// let before_lines = Seq::<String>::from_iter(before.split_inclusive('\n').map(|s| s.to_string()));
+    /// let after_lines = Seq::<String>::from_iter(after.split_inclusive('\n').map(|s| s.to_string()));
+    /// let changes = Changes::<String>::new(before_lines.clone(), after_lines.clone());
     /// let change_clumps: Vec<_> = changes.change_clumps(2).collect();
     /// assert_eq!(
     ///     change_clumps,
     ///     vec![
     ///         ChangeClump{
-    ///             before: &Seq::<String>::from(before),
-    ///             after: &Seq::<String>::from(after),
+    ///             before: &before_lines,
+    ///             after: &after_lines,
     ///             changes: vec![
     ///                 NoChange(CommonSubsequence(0, 0, 1)),
     ///                 Delete(Range(1, 2), 1),
@@ -528,8 +342,8 @@ impl<T: PartialEq + Clone> Changes<T> {
     ///             ]
     ///         },
     ///         ChangeClump{
-    ///             before: &Seq::<String>::from(before),
-    ///             after: &Seq::<String>::from(after),
+    ///             before: &before_lines,
+    ///             after: &after_lines,
     ///             changes: vec![
     ///                 NoChange(CommonSubsequence(9, 8, 2)),
     ///                 Insert(11, Range(10, 11)),

@@ -1,10 +1,12 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::io;
 
 use log;
 
-use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
+use longest_common_subsequence::sequence::Seq;
+
+use crate::sequence::{ConsumableSeq, ConsumableSeqIfce};
 
 pub trait ApplyClumpClean {
     fn will_apply(&self, se: &Seq<u8>, reverse: bool) -> bool;

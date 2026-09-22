@@ -1,12 +1,16 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::io;
 
 use log;
 
+use longest_common_subsequence::{
+    range::{Len, Range},
+    sequence::Seq,
+};
+
 use crate::changes::ChangeBasics;
-use crate::range::{Len, Range};
-use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, Seq};
+use crate::sequence::{ConsumableSeq, ConsumableSeqIfce};
 
 pub trait TextClumpBasics: ChangeBasics {
     fn context_lengths(&self) -> (u8, u8);
@@ -294,7 +298,9 @@ where
                     WillApply::WithReductions(reductions) => {
                         clump.apply_into(into, &mut pd, offset, Some(reductions), reverse)?;
                         stats.fuzzy += 1;
-                        log::warn!("Clump #{clump_num} applies with {reductions:?} reductions and offset {offset_adj}.");
+                        log::warn!(
+                            "Clump #{clump_num} applies with {reductions:?} reductions and offset {offset_adj}."
+                        );
                     }
                 }
             } else if let Some(appplied) = clump.is_already_applied(patchable, offset, reverse) {
@@ -337,7 +343,9 @@ where
                             reverse,
                         )?;
                         stats.already_applied_fuzzy += 1;
-                        log::warn!("Clump #{clump_num} already applied with {reductions:?} reductions and offset {offset_adj}.")
+                        log::warn!(
+                            "Clump #{clump_num} already applied with {reductions:?} reductions and offset {offset_adj}."
+                        )
                     }
                 }
             } else {
@@ -377,7 +385,9 @@ where
                         log::warn!("Clump #{clump_num} already applied with offset {offset_adj}")
                     }
                     WillApply::WithReductions(reductions) => {
-                        log::warn!("Clump #{clump_num} already applied with {reductions:?} reductions and offset {offset_adj}.")
+                        log::warn!(
+                            "Clump #{clump_num} already applied with {reductions:?} reductions and offset {offset_adj}."
+                        )
                     }
                 }
             } else {
