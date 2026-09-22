@@ -9,7 +9,7 @@ pub mod snippet;
 use common_subsequence::CommonSubsequence;
 use sequence::Seq;
 
-/// Find the longest common subsequences in the given sequences
+/// Find the longest common subsequence in the given sequences
 ///
 /// Example:
 /// ```
@@ -30,11 +30,28 @@ pub fn longest_common_subsequence<T: PartialEq + Eq + Clone + std::hash::Hash>(
     data.longest_common_subsequence(left.range_from(0), right.range_from(0))
 }
 
-pub fn longest_common_subsequences<T: PartialEq + Clone>(
-    _left: &Seq<T>,
-    _right: &Seq<T>,
+/// Find the longest common subsequences in the given sequences
+///
+/// Example:
+/// ```
+/// use longest_common_subsequence::sequence::Seq;
+/// use longest_common_subsequence::common_subsequence::CommonSubsequence;
+/// use longest_common_subsequence::longest_common_subsequences;
+/// let left = Seq::<String>("A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\n"
+///     .split_inclusive('\n').map(|s| s.to_string()).collect::<Vec<_>>().into_boxed_slice());
+/// let right = Seq::<String>("X\nY\nZ\nC\nD\nE\nH\nI\nX\n"
+///     .split_inclusive('\n').map(|s| s.to_string()).collect::<Vec<_>>().into_boxed_slice());
+/// assert_eq!(
+///     Seq(vec![CommonSubsequence(2,3,3),CommonSubsequence(7, 6, 2)].into_boxed_slice()),
+///      longest_common_subsequences(&left, &right)
+/// );
+/// ```
+pub fn longest_common_subsequences<T: PartialEq + Eq + Clone + std::hash::Hash>(
+    left: &Seq<T>,
+    right: &Seq<T>,
 ) -> Seq<CommonSubsequence> {
-    Seq(vec![].into_boxed_slice())
+    let data = lcs::Data::<T>::new(left, right);
+    Seq(data.longest_common_subsequences().into_boxed_slice())
 }
 
 #[cfg(test)]

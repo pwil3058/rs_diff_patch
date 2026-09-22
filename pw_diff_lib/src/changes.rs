@@ -1,4 +1,4 @@
-// Copyright 2024 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::collections::HashMap;
 use std::iter::Peekable;
@@ -254,7 +254,7 @@ impl<'a, T: PartialEq + Clone, I: ContentItemIndices<T>> ChangesGenerator<'a, T,
         lcses
     }
 
-    /// Return an iterator over the Mods describing changes
+    /// Return a vector of the Mods describing changes
     ///
     /// Example:
     /// ```

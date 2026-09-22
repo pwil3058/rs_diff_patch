@@ -5,6 +5,8 @@ use crate::range::{Len, Range};
 use crate::sequence::Seq;
 use std::collections::HashMap;
 
+use rayon::prelude::ParallelSliceMut;
+
 pub(crate) struct Data<'a, T: PartialEq + Eq + Clone + std::hash::Hash> {
     left: &'a Seq<T>,
     right: &'a Seq<T>,
@@ -96,6 +98,50 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Data<'a, T> {
 
             Some(best_lcs)
         }
+    }
+
+    pub(crate) fn longest_common_subsequences(&self) -> Vec<CommonSubsequence> {
+        let mut lifo = vec![(self.left.range_from(0), self.right.range_from(0))];
+        let mut raw_lcses = vec![];
+        while let Some((left_range, right_range)) = lifo.pop() {
+            if let Some(lcs) = self.longest_common_subsequence(left_range, right_range) {
+                if left_range.start() < lcs.left_start() && right_range.start() < lcs.right_start()
+                {
+                    lifo.push((
+                        Range(left_range.start(), lcs.left_start()),
+                        Range(right_range.start(), lcs.right_start()),
+                    ))
+                };
+                if lcs.left_end() < left_range.end() && lcs.right_end() < right_range.end() {
+                    lifo.push((
+                        Range(lcs.left_end(), left_range.end()),
+                        Range(lcs.right_end(), right_range.end()),
+                    ))
+                }
+                raw_lcses.push(lcs);
+            }
+        }
+        raw_lcses.par_sort();
+
+        let mut lcses = vec![];
+        let mut i = 0usize;
+        while let Some(lcs) = raw_lcses.get(i) {
+            let mut new_lcs = *lcs;
+            i += 1;
+            while let Some(lcs) = raw_lcses.get(i) {
+                if new_lcs.left_end() == lcs.left_start()
+                    && new_lcs.right_end() == lcs.right_start()
+                {
+                    new_lcs.incr_size_moving_ends(lcs.len());
+                    i += 1
+                } else {
+                    break;
+                }
+            }
+            lcses.push(new_lcs);
+        }
+
+        lcses
     }
 }
 
