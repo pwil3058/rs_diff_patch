@@ -2,4 +2,4 @@
 
 resolver = "3"
 
-members = ["pw_diff_lib", "pw_diff", "pw_patch", "pw_cub_diff_lib", "longest_common_subsequence", ]
+members = ["pw_diff_lib", "pw_diff", "pw_patch", "pw_cub_diff_lib", "longest_common_subsequence", "unified_diff_lib", ]
