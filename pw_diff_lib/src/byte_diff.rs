@@ -90,7 +90,7 @@ impl ByteChangeDiff {
     pub fn new(before_file_path: &Path, after_file_path: &Path, context: u8) -> io::Result<Self> {
         let before_bytes = Seq::<u8>::read(File::open(before_file_path)?)?;
         let after_bytes = Seq::<u8>::read(File::open(after_file_path)?)?;
-        let modifications = Changes::<u8>::new(before_bytes, after_bytes);
+        let modifications = Changes::<u8>::new(&before_bytes, &after_bytes);
 
         Ok(Self {
             before_path: before_file_path.to_path_buf(),

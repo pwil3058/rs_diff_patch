@@ -14,14 +14,6 @@ pub enum Change {
     Replace(Range, Range),
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum ChangeNG {
-    NoChange(CommonSubsequence),
-    Delete(Range, usize),
-    Insert(usize, Range),
-    Replace(Range, Range),
-}
-
 pub trait ChangeBasics {
     fn before_start(&self, reverse: bool) -> usize;
     fn before_end(&self, reverse: bool) -> usize;
@@ -108,24 +100,20 @@ impl ChangeBasics for Change {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct Changes<T: PartialEq + Eq + Clone + std::hash::Hash> {
-    pub before: Seq<T>,
-    pub after: Seq<T>,
+#[derive(Debug)]
+pub struct Changes<'a, T: PartialEq + Eq + Clone + std::hash::Hash> {
+    pub before: &'a Seq<T>,
+    pub after: &'a Seq<T>,
     pub changes: Box<[Change]>,
 }
 
-impl<T: PartialEq + Eq + Clone + std::hash::Hash> Changes<T> {
-    pub fn new(
-        before: Seq<T>,
-        after: Seq<T>,
-        // changes: Vec<Change>,
-    ) -> Self {
+impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
+    pub fn new(before: &'a Seq<T>, after: &'a Seq<T>) -> Self {
         let mut changes = vec![];
         let mut i = 0usize;
         let mut j = 0usize;
         for lcs in
-            longest_common_subsequence::longest_common_subsequences::<T>(&before, &after).iter()
+            longest_common_subsequence::longest_common_subsequences::<T>(before, after).iter()
         {
             if i < lcs.left_start() && j < lcs.right_start() {
                 changes.push(Change::Replace(
@@ -309,7 +297,7 @@ impl<'a, T: PartialEq + Clone> Iterator for ChangeClumpIter<'a, T> {
     }
 }
 
-impl<T: PartialEq + Eq + Clone + std::hash::Hash> Changes<T> {
+impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
     /// Return an iterator over ModificationClumps generated with the given `context` size.
     ///
     /// Example:
@@ -353,10 +341,10 @@ impl<T: PartialEq + Eq + Clone + std::hash::Hash> Changes<T> {
     ///     ]
     /// );
     /// ```
-    pub fn change_clumps<'a>(&'a self, context: u8) -> ChangeClumpIter<'a, T> {
+    pub fn change_clumps(&'a self, context: u8) -> ChangeClumpIter<'a, T> {
         ChangeClumpIter {
-            before: &self.before,
-            after: &self.after,
+            before: self.before,
+            after: self.after,
             iter: self.changes.iter().peekable(),
             context,
             stash: None,

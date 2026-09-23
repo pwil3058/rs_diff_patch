@@ -5,10 +5,10 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-use longest_common_subsequence::range::{Len, Range};
+use longest_common_subsequence::range::Range;
 use longest_common_subsequence::sequence::Seq;
 use pw_diff_lib::apply_text::TextClumpBasics;
-use pw_diff_lib::changes::{Change, ChangeBasics, ChangeClumpIter};
+use pw_diff_lib::changes::ChangeBasics;
 
 use crate::text_diff::{
     CheckEndOfInput, DiffParseError, DiffParseResult, PathAndTimestamp, StartAndLength,
@@ -246,89 +246,6 @@ impl TextClumpBasics for UnifiedDiffClump {
                 self.before_lines.iter()
             }
         }
-    }
-}
-
-pub struct UnifiedClumpText {
-    pub header: String,
-    pub lines: Vec<String>,
-}
-
-pub struct UnifiedClumpIter<'a> {
-    pub before: &'a Seq<String>,
-    pub after: &'a Seq<String>,
-    pub iter: ChangeClumpIter<'a, String>,
-}
-
-impl<'a> Iterator for UnifiedClumpIter<'a> {
-    type Item = UnifiedClumpText;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let change_clump = self.iter.next()?;
-
-        let starts = change_clump.starts();
-        let ends = change_clump.ends();
-        let before_start_and_end = StartAndLength {
-            start: starts.0,
-            length: ends.0 - starts.0,
-        };
-        let after_start_and_end = StartAndLength {
-            start: starts.1,
-            length: ends.1 - starts.1,
-        };
-        let starts_and_lengths = StartsAndLengths {
-            before: before_start_and_end,
-            after: after_start_and_end,
-        };
-        let header = format!("{starts_and_lengths}");
-
-        let mut lines = vec![];
-        for change in change_clump.iter() {
-            use Change::*;
-            match change {
-                NoChange(common_subsequence) => {
-                    for line in self.before.subsequence(common_subsequence.left_range()) {
-                        lines.push(format!(" {line}"));
-                    }
-                }
-                Delete(before_range, _) => {
-                    for line in self.before.subsequence(*before_range) {
-                        lines.push(format!("-{line}"));
-                    }
-                }
-                Insert(_, after_range) => {
-                    for line in self.after.subsequence(*after_range) {
-                        lines.push(format!("+{line}"));
-                    }
-                }
-                Replace(before_range, after_range) => {
-                    if before_range.len() < after_range.len() {
-                        for line in self.before.subsequence(*before_range) {
-                            lines.push(format!("-{line}"));
-                        }
-                        for line in self.after.subsequence(*after_range) {
-                            lines.push(format!("+{line}"));
-                        }
-                    } else {
-                        for line in self.after.subsequence(*after_range) {
-                            lines.push(format!("+{line}"));
-                        }
-                        for line in self.before.subsequence(*before_range) {
-                            lines.push(format!("-{line}"));
-                        }
-                    }
-                }
-            }
-        }
-        if !lines
-            .last()
-            .expect("impl Iterator for UnifiedClumpIter")
-            .ends_with("\n")
-        {
-            lines.push("\n\\\n".to_string());
-        }
-
-        Some(UnifiedClumpText { header, lines })
     }
 }
 

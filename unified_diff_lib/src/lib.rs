@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
+pub mod generate;
+
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, PartialEq, Clone)]
