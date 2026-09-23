@@ -4,5 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+regex = "1.13.1"
+thiserror = "2.0"
+
 pw_diff_lib = { path = "../pw_diff_lib" }
 longest_common_subsequence = { path = "../longest_common_subsequence" }
