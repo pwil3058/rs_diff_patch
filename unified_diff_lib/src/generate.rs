@@ -4,11 +4,23 @@ use crate::{StartAndLength, StartsAndLengths};
 use longest_common_subsequence::{range::Len, sequence::Seq};
 use pw_diff_lib::changes::{Change, ChangeClumpIter, Changes};
 use std::fmt::Display;
+use std::io;
+use std::io::Write;
 use std::ops::Deref;
 
 pub struct UnifiedClump {
     pub header: String,
     pub lines: Vec<String>,
+}
+
+impl UnifiedClump {
+    pub fn write_into<W: Write>(&self, into: &mut W) -> io::Result<()> {
+        into.write_all(self.header.as_bytes())?;
+        for line in self.lines.iter() {
+            into.write_all(line.as_bytes())?;
+        }
+        Ok(())
+    }
 }
 
 impl Display for UnifiedClump {
@@ -110,6 +122,13 @@ impl UnifiedClumps {
             iter: changes.change_clumps(context),
         };
         Self(iter.collect::<Vec<_>>().into_boxed_slice())
+    }
+
+    pub fn write_into<W: Write>(&self, into: &mut W) -> io::Result<()> {
+        for clump in self.0.iter() {
+            clump.write_into(into)?;
+        }
+        Ok(())
     }
 }
 
