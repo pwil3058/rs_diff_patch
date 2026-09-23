@@ -167,5 +167,12 @@ mod generated_unified_diff_tests {
             format!("{clumps}"),
             "@@ -0,8 +0,7 @@ A\n-B\n C\n D\n+Ef\n+Fg\n-E\n-F\n G\n H\n@@ -9,4 +8,5 @@ J\n K\n+H\n L\n M\n"
         );
+        let mut buffer = Vec::new();
+        clumps.write_into(&mut buffer).unwrap();
+        let string = String::from_utf8(buffer).unwrap();
+        assert_eq!(
+            &string,
+            "@@ -0,8 +0,7 @@ A\n-B\n C\n D\n+Ef\n+Fg\n-E\n-F\n G\n H\n@@ -9,4 +8,5 @@ J\n K\n+H\n L\n M\n"
+        );
     }
 }
