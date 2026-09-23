@@ -147,6 +147,6 @@ mod generated_unified_diff_tests {
         assert_eq!(
             format!("{clumps}"),
             "@@ -0,8 +0,7 @@ A\n-B\n C\n D\n+Ef\n+Fg\n-E\n-F\n G\n H\n@@ -9,4 +8,5 @@ J\n K\n+H\n L\n M\n"
-        )
+        );
     }
 }

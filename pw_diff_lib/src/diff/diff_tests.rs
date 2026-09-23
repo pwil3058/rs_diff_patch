@@ -12,9 +12,11 @@ fn line_seq(text: &str) -> Seq<String> {
 
 #[test]
 fn diff_clump_applies() {
-    let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
-    let after_lines = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
-    let changes = Changes::<String>::new(line_seq(before_lines), line_seq(after_lines));
+    let before_lines_str = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
+    let after_lines_str = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
+    let before_lines = line_seq(before_lines_str);
+    let after_lines = line_seq(after_lines_str);
+    let changes = Changes::<String>::new(&before_lines, &after_lines);
     let diff_clumps: Vec<TextChangeClump> = changes
         .change_clumps(2)
         .map(|c| TextChangeClump::from(c))
@@ -22,19 +24,13 @@ fn diff_clump_applies() {
 
     for diff_clump in diff_clumps.iter() {
         assert_eq!(
-            diff_clump.will_apply(&line_seq(before_lines), 0, false),
+            diff_clump.will_apply(&before_lines, 0, false),
             Some(WillApply::Cleanly)
         );
+        assert_eq!(diff_clump.will_apply(&before_lines, 0, true), None);
+        assert_eq!(diff_clump.will_apply(&after_lines, 0, false), None);
         assert_eq!(
-            diff_clump.will_apply(&line_seq(before_lines), 0, true),
-            None
-        );
-        assert_eq!(
-            diff_clump.will_apply(&line_seq(after_lines), 0, false),
-            None
-        );
-        assert_eq!(
-            diff_clump.will_apply(&line_seq(after_lines), 0, true),
+            diff_clump.will_apply(&after_lines, 0, true),
             Some(WillApply::Cleanly)
         );
     }
@@ -79,14 +75,16 @@ fn diff_clump_applies() {
 
 #[test]
 fn find_compromise() {
-    let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
-    let after_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nX\nY\nZ\n\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
-    let changes = Changes::<String>::new(line_seq(before_lines), line_seq(after_lines));
+    let before_lines_str = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
+    let after_lines_str = "A\nB\nC\nD\nE\nF\nG\nH\nI\nX\nY\nZ\n\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
+    let before_lines = line_seq(before_lines_str);
+    let after_lines = line_seq(after_lines_str);
+    let changes = Changes::<String>::new(&before_lines, &after_lines);
     let diff_clumps: Vec<TextChangeClump> = changes
         .change_clumps(2)
         .map(|c| TextChangeClump::from(c))
         .collect();
-    let lines = line_seq(before_lines);
+    let lines = line_seq(before_lines_str);
     let mut pd = ConsumableSeq::new(&lines);
     pd.advance_consumed_by(2);
 
@@ -109,10 +107,12 @@ fn find_compromise() {
 
 #[test]
 fn find_compromise_edges() {
-    let before_lines = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
-    let after_lines =
+    let before_lines_str = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nT\n";
+    let after_lines_str =
         "A\nX\nB\nC\nD\nE\nF\nG\nH\nI\nX\nY\nZ\n\nJ\nK\nL\nM\nO\nP\nQ\nR\nS\nX\nY\nZ\nT\n";
-    let changes = Changes::<String>::new(line_seq(before_lines), line_seq(after_lines));
+    let before_lines = line_seq(before_lines_str);
+    let after_lines = line_seq(after_lines_str);
+    let changes = Changes::<String>::new(&before_lines, &after_lines);
     let diff_clumps: Vec<TextChangeClump> = changes
         .change_clumps(2)
         .map(|c| TextChangeClump::from(c))

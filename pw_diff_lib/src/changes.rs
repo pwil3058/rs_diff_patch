@@ -313,7 +313,7 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
     /// let after = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
     /// let before_lines = Seq::<String>::from_iter(before.split_inclusive('\n').map(|s| s.to_string()));
     /// let after_lines = Seq::<String>::from_iter(after.split_inclusive('\n').map(|s| s.to_string()));
-    /// let changes = Changes::<String>::new(before_lines.clone(), after_lines.clone());
+    /// let changes = Changes::<String>::new(&before_lines, &after_lines);
     /// let change_clumps: Vec<_> = changes.change_clumps(2).collect();
     /// assert_eq!(
     ///     change_clumps,
