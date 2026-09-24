@@ -1,11 +1,10 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use crate::range::Range;
-use crate::snippet::Snippet;
 use std::ops::Deref;
 
 /// A sequence of items of type T
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Seq<T: PartialEq + Clone>(pub Box<[T]>);
 
 impl<T: PartialEq + Clone> Deref for Seq<T> {
@@ -38,13 +37,6 @@ impl<T: PartialEq + Clone> Seq<T> {
             false
         }
     }
-
-    /// Returns the Snippet` contained in the given range
-    pub fn extract_snippet(&self, range: Range) -> Snippet<T> {
-        let start = range.start();
-        let items = self.0[range.0..range.1].to_vec().into_boxed_slice();
-        Snippet { start, items }
-    }
 }
 
 impl<T: PartialEq + Clone> From<&[T]> for Seq<T> {
@@ -55,7 +47,7 @@ impl<T: PartialEq + Clone> From<&[T]> for Seq<T> {
 
 impl<T: PartialEq + Clone> From<Vec<T>> for Seq<T> {
     fn from(vec: Vec<T>) -> Self {
-        Seq(vec.to_vec().into_boxed_slice())
+        Seq(vec.into_boxed_slice())
     }
 }
 

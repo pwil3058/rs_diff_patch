@@ -4,7 +4,6 @@ pub mod common_subsequence;
 mod lcs;
 pub mod range;
 pub mod sequence;
-pub mod snippet;
 
 use common_subsequence::CommonSubsequence;
 use sequence::Seq;
