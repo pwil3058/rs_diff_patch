@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use longest_common_subsequence::range::Range;
 use longest_common_subsequence::sequence::Seq;
-use pw_diff_lib::apply_text::TextClumpBasics;
+use pw_diff_lib::apply_text::{ApplyClumpFuzzy, ApplyClumpsFuzzy, TextClumpBasics};
 use pw_diff_lib::changes::ChangeBasics;
 
 use crate::{PathAndTimestamp, StartAndLength, StartsAndLengths};
@@ -224,6 +224,8 @@ impl ChangeBasics for UnifiedDiffClump {
     }
 }
 
+impl ApplyClumpFuzzy for UnifiedDiffClump {}
+
 impl TextClumpBasics for UnifiedDiffClump {
     fn context_lengths(&self) -> (u8, u8) {
         self.context_lengths
@@ -246,13 +248,36 @@ impl TextClumpBasics for UnifiedDiffClump {
     }
 }
 
+pub struct UnifiedDiffClumps(pub Box<[UnifiedDiffClump]>);
+
+impl UnifiedDiffClumps {
+    pub fn get_from_at(lines: &Seq<String>, start_index: usize) -> DiffParseResult<Self> {
+        let mut clumps = vec![];
+        let mut index = start_index;
+        while let Some(clump) = UnifiedDiffClump::get_from_at(lines, index)? {
+            index += clump.lines_consumed;
+            clumps.push(clump);
+        }
+        Ok(Self(clumps.into_boxed_slice()))
+    }
+}
+
+impl ApplyClumpsFuzzy<UnifiedDiffClump> for UnifiedDiffClumps {
+    fn clumps<'s>(&'s self) -> impl Iterator<Item = &'s UnifiedDiffClump>
+    where
+        UnifiedDiffClump: 's,
+    {
+        self.0.iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use longest_common_subsequence::sequence::Seq;
     use pw_diff_lib::sequence::*;
     use std::fs::File;
 
-    use crate::parse::UnifiedDiffClump;
+    use crate::parse::{UnifiedDiffClump, UnifiedDiffClumps};
 
     static UNIFIED_DIFF_CLUMP: &str = "--- lao	2002-02-21 23:30:39.942229878 -0800
 +++ tzu	2002-02-21 23:30:50.442260588 -0800
@@ -307,5 +332,24 @@ mod tests {
         assert!(result.is_ok());
         let result = result.unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn unified_diff_clumps_parse_string() {
+        let diff_lines = Seq::<String>::from_iter(
+            UNIFIED_DIFF_CLUMP
+                .split_inclusive('\n')
+                .map(|s| s.to_string()),
+        );
+        let clumps = UnifiedDiffClumps::get_from_at(&diff_lines, 2).unwrap();
+        assert_eq!(clumps.0.len(), 2);
+    }
+
+    #[test]
+    fn unified_diff_clumps_parse_from_file() {
+        let file = File::open("test_diffs/test_1.diff").unwrap();
+        let lines = Seq::<String>::read(file).unwrap();
+        let result = UnifiedDiffClumps::get_from_at(&lines, 0);
+        assert!(result.is_ok());
     }
 }

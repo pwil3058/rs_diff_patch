@@ -86,12 +86,12 @@ impl TextChangeDiff {
     pub fn new(before_file_path: &Path, after_file_path: &Path, context: u8) -> io::Result<Self> {
         let before_lines = Seq::<String>::read(File::open(before_file_path)?)?;
         let after_lines = Seq::<String>::read(File::open(after_file_path)?)?;
-        let modifications = Changes::<String>::new(&before_lines, &after_lines);
+        let changes = Changes::<String>::new(&before_lines, &after_lines);
 
         Ok(Self {
             before_path: before_file_path.to_path_buf(),
             after_path: after_file_path.to_path_buf(),
-            clumps: modifications
+            clumps: changes
                 .change_clumps(context)
                 .map(TextChangeClump::from)
                 .collect(),
