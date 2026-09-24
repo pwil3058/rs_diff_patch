@@ -72,7 +72,7 @@ fn path_and_time_stamp_from_captures(captures: &Captures) -> PathAndTimestamp {
     };
     let time_stamp = captures.get(4).map(|ts| ts.as_str().to_string());
     PathAndTimestamp {
-        file_path: file_path.to_string(),
+        file_path: file_path.to_string().into(),
         time_stamp,
     }
 }
@@ -105,40 +105,6 @@ fn start_and_length_from_captures(
     };
     Ok(StartAndLength { start, length })
 }
-
-// #[derive(Debug, PartialEq, Clone)]
-// pub struct StartsAndLengths {
-//     pub before: StartAndLength,
-//     pub after: StartAndLength,
-// }
-
-// impl Display for StartsAndLengths {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         if self.before.length == 1 {
-//             if self.after.length == 1 {
-//                 write!(f, "@@ -{} +{} @@", self.before.start, self.after.start)
-//             } else {
-//                 write!(
-//                     f,
-//                     "@@ -{} +{},{} @@",
-//                     self.before.start, self.after.start, self.after.length
-//                 )
-//             }
-//         } else if self.after.length == 1 {
-//             write!(
-//                 f,
-//                 "@@ -{},{} +{} @@",
-//                 self.before.start, self.before.length, self.after.start
-//             )
-//         } else {
-//             write!(
-//                 f,
-//                 "@@ -{},{} +{},{} @@",
-//                 self.before.start, self.before.length, self.after.start, self.after.length
-//             )
-//         }
-//     }
-// }
 
 pub fn starts_and_lengths(
     line: &str,

@@ -4,10 +4,11 @@ pub mod generate;
 pub mod parse;
 
 use std::fmt::{Display, Formatter};
+use std::path::PathBuf;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct PathAndTimestamp {
-    pub file_path: String,
+    pub file_path: PathBuf,
     pub time_stamp: Option<String>,
 }
 
