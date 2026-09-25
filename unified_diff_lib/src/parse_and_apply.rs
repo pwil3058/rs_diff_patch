@@ -14,9 +14,9 @@ use pw_diff_lib::apply_text::{ApplyClumpFuzzy, ApplyClumpsFuzzy, TextClumpBasics
 
 use crate::{PathAndTimestamp, StartAndLength, StartsAndLengths};
 
-pub const TIMESTAMP_RE_STR: &str = r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{9})? [-+]{1}\d{4}";
+pub const TIMESTAMP_RE_STR: &str = r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)? [-+]{1}\d{4}";
 pub const ALT_TIMESTAMP_RE_STR: &str =
-    r"[A-Z][a-z]{2} [A-Z][a-z]{2} \d{2} \d{2}:\d{2}:\d{2} \d{4} [-+]{1}\d{4}";
+    r"[A-Z][a-z]{2} [A-Z][a-z]{2} [\s\d]\d \d{2}:\d{2}:\d{2} \d{4} [-+]{1}\d{4}";
 pub const PATH_RE_STR: &str = r###""([^"]+)"|(\S+)"###;
 
 #[derive(Debug, Error)]
