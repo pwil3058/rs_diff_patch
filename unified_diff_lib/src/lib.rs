@@ -19,6 +19,7 @@ pub struct PathAndTimestamp {
 fn extract_timestamp(path: &Path) -> Option<String> {
     path.metadata().ok()?.modified().ok().map(|system_time| {
         let datetime: DateTime<Local> = system_time.into();
+        println!("DT {:?}", datetime);
         // %F = YYYY-MM-DD, %T = HH:MM:SS, %.9f = nanoseconds, %z = timezone offset
         format!("\t{}", datetime.format("%F %T%.9f %z"))
     })

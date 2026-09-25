@@ -217,14 +217,14 @@ mod generated_unified_diff_tests {
         let clumps = UnifiedClumps::new(&before_lines, &after_lines, 2);
         assert_eq!(
             format!("{clumps}"),
-            "@@ -0,8 +0,7 @@ A\n-B\n C\n D\n+Ef\n+Fg\n-E\n-F\n G\n H\n@@ -9,4 +8,5 @@ J\n K\n+H\n L\n M\n"
+            "@@ -0,8 +0,7 @@ A\n-B\n C\n D\n-E\n-F\n+Ef\n+Fg\n G\n H\n@@ -9,4 +8,5 @@ J\n K\n+H\n L\n M\n"
         );
         let mut buffer = Vec::new();
         clumps.write_into(&mut buffer).unwrap();
         let string = String::from_utf8(buffer).unwrap();
         assert_eq!(
             &string,
-            "@@ -0,8 +0,7 @@ A\n-B\n C\n D\n+Ef\n+Fg\n-E\n-F\n G\n H\n@@ -9,4 +8,5 @@ J\n K\n+H\n L\n M\n"
+            "@@ -0,8 +0,7 @@ A\n-B\n C\n D\n-E\n-F\n+Ef\n+Fg\n G\n H\n@@ -9,4 +8,5 @@ J\n K\n+H\n L\n M\n"
         );
     }
 
@@ -235,14 +235,14 @@ mod generated_unified_diff_tests {
         let unified_diff = UnifiedDiff::new(before_path_buf, after_path_buf, 2).unwrap();
         assert_eq!(
             unified_diff.to_string(),
-            "--- ../test_files/file_1_original
-+++ ../test_files/file_1_modified
+            "--- ../test_files/file_1_original\t2024-05-06 13:29:58.967655492 +1000
++++ ../test_files/file_1_modified\t2024-04-30 11:46:08.686859216 +1000
 @@ -9,6 +9,6 @@ Line 10 original
  Line 11 original
-+Line 12 modified
-+Line 13 modified
 -Line 12 original
 -Line 13 original
++Line 12 modified
++Line 13 modified
  Line 14 original
  Line 15 original
 @@ -24,4 +24,5 @@ Line 25 original
@@ -252,8 +252,8 @@ mod generated_unified_diff_tests {
  Line 28 original
 @@ -61,3 +62,3 @@ Line 62 original
  Line 63 original
-+Line 64 modified
 -Line 64 original
++Line 64 modified
 "
         );
     }
