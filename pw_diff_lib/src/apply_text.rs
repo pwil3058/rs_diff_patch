@@ -9,8 +9,8 @@ use longest_common_subsequence::{
     sequence::Seq,
 };
 
-use crate::changes::ChangeBasics;
 use crate::sequence::{ConsumableSeq, ConsumableSeqIfce};
+use longest_common_subsequence::changes::ChangeBasics;
 
 pub trait TextClumpBasics: ChangeBasics {
     fn context_lengths(&self) -> (u8, u8);

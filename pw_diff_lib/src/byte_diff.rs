@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use longest_common_subsequence::{range::Len, sequence::Seq};
 
 use crate::apply_bytes::{ApplyClumpClean, ApplyClumpsClean};
-use crate::changes::{ChangeClump, Changes};
 use crate::snippet::{ExtractSnippet, Snippet, SnippetWrite};
+use longest_common_subsequence::changes::{ChangeClump, Changes};
 
 use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, ReadSequence};
 

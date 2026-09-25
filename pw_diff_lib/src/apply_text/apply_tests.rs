@@ -5,8 +5,8 @@ use std::io::BufWriter;
 use serde::{Deserialize, Serialize};
 
 use crate::apply_text::*;
-use crate::changes::*;
 use crate::text_diff::*;
+use longest_common_subsequence::changes::*;
 
 #[derive(Serialize, Deserialize)]
 struct WrappedDiffClumps(pub Vec<TextChangeClump>);

@@ -7,10 +7,10 @@ use std::sync::LazyLock;
 
 use thiserror::Error;
 
+use longest_common_subsequence::changes::ChangeBasics;
 use longest_common_subsequence::range::Range;
 use longest_common_subsequence::sequence::Seq;
 use pw_diff_lib::apply_text::{ApplyClumpFuzzy, ApplyClumpsFuzzy, TextClumpBasics};
-use pw_diff_lib::changes::ChangeBasics;
 
 use crate::{PathAndTimestamp, StartAndLength, StartsAndLengths};
 

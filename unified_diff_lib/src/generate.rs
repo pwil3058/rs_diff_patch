@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use crate::{PathAndTimestamp, StartAndLength, StartsAndLengths};
+use longest_common_subsequence::changes::{Change, ChangeClumpIter, Changes};
 use longest_common_subsequence::{range::Len, sequence::Seq};
-use pw_diff_lib::changes::{Change, ChangeClumpIter, Changes};
 use pw_diff_lib::sequence::ReadSequence;
 use std::fmt::Display;
 use std::fs::File;

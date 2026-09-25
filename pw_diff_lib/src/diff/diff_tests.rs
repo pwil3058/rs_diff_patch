@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use crate::apply_text::*;
-use crate::changes::Changes;
 use crate::sequence::*;
 use crate::text_diff::*;
+use longest_common_subsequence::changes::Changes;
 use longest_common_subsequence::sequence::Seq;
 
 fn line_seq(text: &str) -> Seq<String> {

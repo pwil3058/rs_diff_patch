@@ -4,7 +4,7 @@ use std::iter::Peekable;
 use std::ops::{Deref, DerefMut};
 use std::slice::Iter;
 
-use longest_common_subsequence::{common_subsequence::*, range::*, sequence::*};
+use crate::{common_subsequence::*, range::*, sequence::*};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Change {
@@ -112,23 +112,21 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
         let mut changes = vec![];
         let mut i = 0usize;
         let mut j = 0usize;
-        for lcs in
-            longest_common_subsequence::longest_common_subsequences::<T>(before, after).iter()
-        {
+        for lcs in crate::longest_common_subsequences::<T>(before, after).iter() {
             if i < lcs.left_start() && j < lcs.right_start() {
                 changes.push(Change::Replace(
-                    longest_common_subsequence::range::Range(i, lcs.left_start()),
-                    longest_common_subsequence::range::Range(j, lcs.right_start()),
+                    crate::range::Range(i, lcs.left_start()),
+                    crate::range::Range(j, lcs.right_start()),
                 ));
             } else if i < lcs.left_start() {
                 changes.push(Change::Delete(
-                    longest_common_subsequence::range::Range(i, lcs.left_start()),
+                    crate::range::Range(i, lcs.left_start()),
                     lcs.right_start(),
                 ));
             } else if j < lcs.right_start() {
                 changes.push(Change::Insert(
                     lcs.left_start(),
-                    longest_common_subsequence::range::Range(j, lcs.right_start()),
+                    crate::range::Range(j, lcs.right_start()),
                 ));
             }
             changes.push(Change::NoChange(*lcs));
@@ -298,16 +296,16 @@ impl<'a, T: PartialEq + Clone> Iterator for ChangeClumpIter<'a, T> {
 }
 
 impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
-    /// Return an iterator over ModificationClumps generated with the given `context` size.
+    /// Return an iterator over ChangeClumps generated with the given `context` size.
     ///
     /// Example:
     ///
     /// ```
-    /// use longest_common_subsequence::common_subsequence::CommonSubsequence;
-    /// use longest_common_subsequence::sequence::*;
-    /// use pw_diff_lib::changes::{ChangeClump, Changes,Change};
-    /// use longest_common_subsequence::range::Range;
     /// use Change::*;
+    /// use longest_common_subsequence::changes::{Change, ChangeClump, Changes};
+    /// use longest_common_subsequence::common_subsequence::CommonSubsequence;
+    /// use longest_common_subsequence::range::Range;
+    /// use longest_common_subsequence::sequence::*;
     ///
     /// let before = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
     /// let after = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";

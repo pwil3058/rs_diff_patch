@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use longest_common_subsequence::{range::Range, sequence::Seq};
 
 use crate::apply_text::*;
-use crate::changes::*;
 use crate::sequence::*;
 use crate::snippet::{ExtractSnippet, Snippet};
+use longest_common_subsequence::changes::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextChangeClump {
