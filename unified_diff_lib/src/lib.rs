@@ -4,12 +4,24 @@ pub mod generate;
 pub mod parse_and_apply;
 
 use std::fmt::{Display, Formatter};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+use chrono::{DateTime, Local};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct PathAndTimestamp {
     pub file_path: PathBuf,
     pub time_stamp: Option<String>,
+}
+
+/// Helper function to extract a file's last modified timestamp as a formatted string.
+/// Returns a standard unified diff timestamp fragment preceded by a tab: "\tYYYY-MM-DD HH:MM:SS.fffffffff ±hhmm"
+fn extract_timestamp(path: &Path) -> Option<String> {
+    path.metadata().ok()?.modified().ok().map(|system_time| {
+        let datetime: DateTime<Local> = system_time.into();
+        // %F = YYYY-MM-DD, %T = HH:MM:SS, %.9f = nanoseconds, %z = timezone offset
+        format!("\t{}", datetime.format("%F %T%.9f %z"))
+    })
 }
 
 #[derive(Debug, PartialEq, Clone)]

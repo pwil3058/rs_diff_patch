@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
-use crate::{PathAndTimestamp, StartAndLength, StartsAndLengths};
+use crate::{PathAndTimestamp, StartAndLength, StartsAndLengths, extract_timestamp};
 use longest_common_subsequence::changes::{Change, ChangeClumpIter, Changes};
 use longest_common_subsequence::{range::Len, sequence::Seq};
 use pw_diff_lib::sequence::ReadSequence;
@@ -84,30 +84,20 @@ impl<'a> Iterator for UnifiedClumpIter<'a> {
                     }
                 }
                 Replace(before_range, after_range) => {
-                    if before_range.len() < after_range.len() {
-                        for line in self.before.subsequence(*before_range) {
-                            lines.push(format!("-{line}"));
-                        }
-                        for line in self.after.subsequence(*after_range) {
-                            lines.push(format!("+{line}"));
-                        }
-                    } else {
-                        for line in self.after.subsequence(*after_range) {
-                            lines.push(format!("+{line}"));
-                        }
-                        for line in self.before.subsequence(*before_range) {
-                            lines.push(format!("-{line}"));
-                        }
+                    for line in self.before.subsequence(*before_range) {
+                        lines.push(format!("-{line}"));
+                    }
+                    for line in self.after.subsequence(*after_range) {
+                        lines.push(format!("+{line}"));
                     }
                 }
             }
         }
-        if !lines
-            .last()
-            .expect("impl Iterator for UnifiedClumpIter")
-            .ends_with("\n")
-        {
-            lines.push("\n\\\n".to_string());
+
+        if let Some(last_line) = lines.last() {
+            if !last_line.ends_with('\n') {
+                lines.push("\n\\\n".to_string());
+            }
         }
 
         Some(UnifiedClump { header, lines })
@@ -124,7 +114,7 @@ impl UnifiedClumps {
             after,
             iter: changes.change_clumps(context),
         };
-        Self(iter.collect::<Vec<_>>().into_boxed_slice())
+        Self(iter.collect())
     }
 
     pub fn write_into<W: Write>(&self, into: &mut W) -> io::Result<()> {
@@ -163,17 +153,22 @@ impl UnifiedDiff {
     pub fn new(before: impl AsRef<Path>, after: impl AsRef<Path>, context: u8) -> io::Result<Self> {
         let before_path = before.as_ref().to_owned();
         let after_path = after.as_ref().to_owned();
+
+        let before_timestamp = extract_timestamp(&before_path);
+        let after_timestamp = extract_timestamp(&after_path);
+
         let before_lines = Seq::<String>::read(File::open(&before)?)?;
         let after_lines = Seq::<String>::read(File::open(&after)?)?;
         let unified_clumps = UnifiedClumps::new(&before_lines, &after_lines, context);
+
         Ok(Self {
             before: PathAndTimestamp {
                 file_path: before_path,
-                time_stamp: None,
+                time_stamp: before_timestamp,
             },
             after: PathAndTimestamp {
                 file_path: after_path,
-                time_stamp: None,
+                time_stamp: after_timestamp,
             },
             unified_clumps,
         })
