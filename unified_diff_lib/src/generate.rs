@@ -2,7 +2,7 @@
 
 use crate::{PathAndTimestamp, StartAndLength, StartsAndLengths, extract_timestamp};
 use longest_common_subsequence::changes::{Change, ChangeClumpIter, Changes};
-use longest_common_subsequence::{range::Len, sequence::Seq};
+use longest_common_subsequence::sequence::Seq;
 use pw_diff_lib::sequence::ReadSequence;
 use std::fmt::Display;
 use std::fs::File;
@@ -126,7 +126,7 @@ impl UnifiedClumps {
 }
 
 impl Deref for UnifiedClumps {
-    type Target = Box<[UnifiedClump]>;
+    type Target = [UnifiedClump];
 
     fn deref(&self) -> &Self::Target {
         &self.0

@@ -8,7 +8,7 @@ use std::ops::Deref;
 pub struct Seq<T: PartialEq + Clone>(pub Box<[T]>);
 
 impl<T: PartialEq + Clone> Deref for Seq<T> {
-    type Target = Box<[T]>;
+    type Target = [T];
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -28,13 +28,10 @@ impl<T: PartialEq + Clone> Seq<T> {
 
     /// Returns `true` if the given subsequence exists at the given index,
     pub fn has_subsequence_at(&self, subsequence: &[T], at: usize) -> bool {
-        if at < self.len() && self.len() - at >= subsequence.len() {
-            subsequence
-                .iter()
-                .zip(self.0[at..].iter())
-                .all(|(b, a)| a == b)
+        if let Some(end) = at.checked_add(subsequence.len()) {
+            end <= self.len() && self.0[at..end] == *subsequence
         } else {
-            false
+            false // Arithmetic overflowed usize capacity
         }
     }
 }

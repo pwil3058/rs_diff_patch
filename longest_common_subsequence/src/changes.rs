@@ -152,11 +152,11 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
 pub struct ChangeClump<'a, T: PartialEq + Clone> {
     pub before: &'a Seq<T>,
     pub after: &'a Seq<T>,
-    pub changes: Vec<Change>,
+    pub changes: Box<[Change]>,
 }
 
 impl<'a, T: PartialEq + Clone> Deref for ChangeClump<'a, T> {
-    type Target = Vec<Change>;
+    type Target = [Change];
 
     fn deref(&self) -> &Self::Target {
         &self.changes
@@ -289,7 +289,7 @@ impl<'a, T: PartialEq + Clone> Iterator for ChangeClumpIter<'a, T> {
             Some(ChangeClump {
                 before: self.before,
                 after: self.after,
-                changes,
+                changes: changes.into_boxed_slice(),
             })
         }
     }
@@ -325,7 +325,7 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
     ///                 NoChange(CommonSubsequence(2, 1, 2)),
     ///                 Replace(Range(4, 6), Range(3, 5)),
     ///                 NoChange(CommonSubsequence(6, 5, 2))
-    ///             ]
+    ///             ].into()
     ///         },
     ///         ChangeClump{
     ///             before: &before_lines,
@@ -334,7 +334,7 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
     ///                 NoChange(CommonSubsequence(9, 8, 2)),
     ///                 Insert(11, Range(10, 11)),
     ///                 NoChange(CommonSubsequence(11, 11, 2))
-    ///             ]
+    ///             ].into()
     ///         },
     ///     ]
     /// );
