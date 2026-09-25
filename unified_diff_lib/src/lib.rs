@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 pub mod generate;
-pub mod parse;
+pub mod parse_and_apply;
 
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;

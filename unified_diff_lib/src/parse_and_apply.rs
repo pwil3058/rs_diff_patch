@@ -277,7 +277,7 @@ mod tests {
     use pw_diff_lib::sequence::*;
     use std::fs::File;
 
-    use crate::parse::{UnifiedDiffClump, UnifiedDiffClumps};
+    use crate::parse_and_apply::{UnifiedDiffClump, UnifiedDiffClumps};
 
     static UNIFIED_DIFF_CLUMP: &str = "--- lao	2002-02-21 23:30:39.942229878 -0800
 +++ tzu	2002-02-21 23:30:50.442260588 -0800
