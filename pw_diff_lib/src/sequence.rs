@@ -136,7 +136,10 @@ where
                 self.sequence.write_into(writer, range)
             }
             Ordering::Equal => Ok(()),
-            Ordering::Greater => Ok(()),
+            Ordering::Greater => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Attempt to write non existent data.",
+            )),
         }
     }
 
