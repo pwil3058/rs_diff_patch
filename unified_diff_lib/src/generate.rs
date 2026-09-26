@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use crate::{PathAndTimestamp, StartAndLength, StartsAndLengths, extract_timestamp};
-use longest_common_subsequence::changes::{Change, ChangeClumpIter, Changes};
+use longest_common_subsequence::changes::{Change, ChangeBasics, ChangeClumpIter, Changes};
 use longest_common_subsequence::sequence::Seq;
 use pw_diff_lib::sequence::ReadSequence;
 use std::fmt::Display;
@@ -217,14 +217,14 @@ mod generated_unified_diff_tests {
         let clumps = UnifiedClumps::new(&before_lines, &after_lines, 2);
         assert_eq!(
             format!("{clumps}"),
-            "@@ -0,8 +0,7 @@ A\n-B\n C\n D\n-E\n-F\n+Ef\n+Fg\n G\n H\n@@ -9,4 +8,5 @@ J\n K\n+H\n L\n M\n"
+            "@@ -0,8 +0,7 @@\n A\n-B\n C\n D\n-E\n-F\n+Ef\n+Fg\n G\n H\n@@ -9,4 +8,5 @@\n J\n K\n+H\n L\n M\n"
         );
         let mut buffer = Vec::new();
         clumps.write_into(&mut buffer).unwrap();
         let string = String::from_utf8(buffer).unwrap();
         assert_eq!(
             &string,
-            "@@ -0,8 +0,7 @@ A\n-B\n C\n D\n-E\n-F\n+Ef\n+Fg\n G\n H\n@@ -9,4 +8,5 @@ J\n K\n+H\n L\n M\n"
+            "@@ -0,8 +0,7 @@\n A\n-B\n C\n D\n-E\n-F\n+Ef\n+Fg\n G\n H\n@@ -9,4 +8,5 @@\n J\n K\n+H\n L\n M\n"
         );
     }
 
@@ -237,7 +237,8 @@ mod generated_unified_diff_tests {
             unified_diff.to_string(),
             "--- ../test_files/file_1_original\t2024-05-06 13:29:58.967655492 +1000
 +++ ../test_files/file_1_modified\t2024-04-30 11:46:08.686859216 +1000
-@@ -9,6 +9,6 @@ Line 10 original
+@@ -9,6 +9,6 @@
+ Line 10 original
  Line 11 original
 -Line 12 original
 -Line 13 original
@@ -245,12 +246,14 @@ mod generated_unified_diff_tests {
 +Line 13 modified
  Line 14 original
  Line 15 original
-@@ -24,4 +24,5 @@ Line 25 original
+@@ -24,4 +24,5 @@
+ Line 25 original
  Line 26 original
 +Line 26.1 inserted
  Line 27 original
  Line 28 original
-@@ -61,3 +62,3 @@ Line 62 original
+@@ -61,3 +62,3 @@
+ Line 62 original
  Line 63 original
 -Line 64 original
 +Line 64 modified

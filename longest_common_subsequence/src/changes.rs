@@ -32,6 +32,7 @@ pub trait ChangeBasics {
             Range(self.before_start(reverse), self.before_end(reverse))
         }
     }
+
     fn my_before_range(&self, reductions: Option<(u8, u8)>, reverse: bool) -> Range {
         let length = self.before_length(reverse);
         if let Some(reductions) = reductions {
@@ -107,6 +108,33 @@ pub struct Changes<'a, T: PartialEq + Eq + Clone + std::hash::Hash> {
     pub changes: Box<[Change]>,
 }
 
+/// Return an iterator over ChangeClumps generated with the given `context` size.
+///
+/// Example:
+///
+/// ```
+/// use Change::*;
+/// use longest_common_subsequence::changes::{Change, ChangeClump, Changes, ChangeBasics};
+/// use longest_common_subsequence::common_subsequence::CommonSubsequence;
+/// use longest_common_subsequence::range::Range;
+/// use longest_common_subsequence::sequence::*;
+///
+/// let before = "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\n";
+/// let after = "A\nC\nD\nEf\nFg\nG\nH\nI\nJ\nK\nH\nL\nM\n";
+/// let before_lines = Seq::<String>::from_iter(before.split_inclusive('\n').map(|s| s.to_string()));
+/// let after_lines = Seq::<String>::from_iter(after.split_inclusive('\n').map(|s| s.to_string()));
+/// let changes = Changes::<String>::new(&before_lines, &after_lines);
+/// assert_eq!(
+///     changes.changes,
+///     vec![
+///         NoChange(CommonSubsequence(0, 0, 1)),
+///         Delete(Range(1, 2), 1),
+///         NoChange(CommonSubsequence(2, 1, 2)),
+///         Replace(Range(4, 6), Range(3, 5)),
+///         NoChange(CommonSubsequence(6, 5, 5)),
+///         Insert(11, Range(10, 11)),
+///         NoChange(CommonSubsequence(11, 11, 2)),
+///     ].into_boxed_slice());
 impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
     pub fn new(before: &'a Seq<T>, after: &'a Seq<T>) -> Self {
         let mut changes = vec![];
@@ -179,7 +207,7 @@ impl<'a, T: PartialEq + Clone> ChangeBasics for ChangeClump<'a, T> {
     }
 
     fn before_end(&self, reverse: bool) -> usize {
-        if let Some(change) = self.changes.first() {
+        if let Some(change) = self.changes.last() {
             change.before_end(reverse)
         } else {
             0
@@ -189,43 +217,49 @@ impl<'a, T: PartialEq + Clone> ChangeBasics for ChangeClump<'a, T> {
 
 impl<'a, T: PartialEq + Clone> ChangeClump<'a, T> {
     pub fn starts(&self) -> (usize, usize) {
-        use Change::*;
-        if let Some(change) = self.changes.first() {
-            match change {
-                Delete(range, after_start) => (range.start(), *after_start),
-                NoChange(match_) => (match_.left_start(), match_.right_start()),
-                Insert(before_start, after_range) => (*before_start, after_range.start()),
-                Replace(before_range, after_range) => (before_range.start(), after_range.start()),
-            }
-        } else {
-            (0, 0)
-        }
+        (self.before_start(false), self.after_start(false))
+        // use Change::*;
+        // if let Some(change) = self.changes.first() {
+        //     match change {
+        //         Delete(range, after_start) => (range.start(), *after_start),
+        //         NoChange(match_) => (match_.left_start(), match_.right_start()),
+        //         Insert(before_start, after_range) => (*before_start, after_range.start()),
+        //         Replace(before_range, after_range) => (before_range.start(), after_range.start()),
+        //     }
+        // } else {
+        //     (0, 0)
+        // }
     }
 
     pub fn ends(&self) -> (usize, usize) {
-        use Change::*;
-        if let Some(op_code) = self.changes.last() {
-            match op_code {
-                Delete(range, after_start) => (range.end(), *after_start),
-                NoChange(match_) => (match_.left_end(), match_.right_end()),
-                Insert(before_start, after_range) => (*before_start, after_range.end()),
-                Replace(before_range, after_range) => (before_range.end(), after_range.end()),
-            }
-        } else {
-            (0, 0)
-        }
+        (self.before_end(false), self.after_end(false))
+        //         use Change::*;
+        //         if let Some(op_code) = self.changes.last() {
+        //             match op_code {
+        //                 Delete(range, after_start) => (range.end(), *after_start),
+        //                 NoChange(match_) => (match_.left_end(), match_.right_end()),
+        //                 Insert(before_start, after_range) => (*before_start, after_range.end()),
+        //                 Replace(before_range, after_range) => (before_range.end(), after_range.end()),
+        //             }
+        //         } else {
+        //             (0, 0)
+        //         }
     }
-
+    //
     pub fn ranges(&self) -> (Range, Range) {
-        let (before_start, after_start) = self.starts();
-        let (before_end, after_end) = self.ends();
-
         (
-            Range(before_start, before_end),
-            Range(after_start, after_end),
+            self.before_range(None, false),
+            self.after_range(None, false),
         )
+        // let (before_start, after_start) = self.starts();
+        // let (before_end, after_end) = self.ends();
+        //
+        //         (
+        //             Range(before_start, before_end),
+        //             Range(after_start, after_end),
+        //         )
     }
-
+    //
     pub fn context_lengths(&self) -> (u8, u8) {
         use Change::NoChange;
         let start = if let Some(NoChange(m)) = self.first() {
@@ -302,7 +336,7 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
     ///
     /// ```
     /// use Change::*;
-    /// use longest_common_subsequence::changes::{Change, ChangeClump, Changes};
+    /// use longest_common_subsequence::changes::{Change, ChangeClump, Changes, ChangeBasics};
     /// use longest_common_subsequence::common_subsequence::CommonSubsequence;
     /// use longest_common_subsequence::range::Range;
     /// use longest_common_subsequence::sequence::*;
@@ -338,6 +372,10 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
     ///         },
     ///     ]
     /// );
+    /// assert_eq!(change_clumps[0].before_length(false), 8);
+    /// assert_eq!(change_clumps[0].after_length(false), 7);
+    /// assert_eq!(change_clumps[1].before_length(false), 4);
+    /// assert_eq!(change_clumps[1].after_length(false), 5);
     /// ```
     pub fn change_clumps(&'a self, context: u8) -> ChangeClumpIter<'a, T> {
         ChangeClumpIter {
