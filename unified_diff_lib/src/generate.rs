@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use crate::{PathAndTimestamp, StartAndLength, StartsAndLengths, extract_timestamp};
-use longest_common_subsequence::changes::{Change, ChangeBasics, ChangeClumpIter, Changes};
+use longest_common_subsequence::changes::{Change, ChangeClumpIter, Changes};
 use longest_common_subsequence::sequence::Seq;
 use pw_diff_lib::sequence::ReadSequence;
 use std::fmt::Display;
@@ -94,10 +94,10 @@ impl<'a> Iterator for UnifiedClumpIter<'a> {
             }
         }
 
-        if let Some(last_line) = lines.last() {
-            if !last_line.ends_with('\n') {
-                lines.push("\n\\\n".to_string());
-            }
+        if let Some(last_line) = lines.last()
+            && !last_line.ends_with('\n')
+        {
+            lines.push("\n\\\n".to_string());
         }
 
         Some(UnifiedClump { header, lines })

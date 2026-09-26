@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
+use std::fmt::Debug;
 use std::io;
 
 use log;
@@ -253,7 +254,7 @@ pub struct Statistics {
 
 pub trait ApplyClumpsFuzzy<C>
 where
-    C: ApplyClumpFuzzy,
+    C: ApplyClumpFuzzy + Debug,
 {
     fn clumps<'b>(&'b self) -> impl Iterator<Item = &'b C>
     where

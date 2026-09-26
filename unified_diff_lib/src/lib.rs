@@ -40,24 +40,24 @@ impl Display for StartsAndLengths {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.before.length == 1 {
             if self.after.length == 1 {
-                write!(f, "@@ -{} +{} @@\n", self.before.start, self.after.start)
+                writeln!(f, "@@ -{} +{} @@", self.before.start, self.after.start)
             } else {
-                write!(
+                writeln!(
                     f,
-                    "@@ -{} +{},{} @@\n",
+                    "@@ -{} +{},{} @@",
                     self.before.start, self.after.start, self.after.length
                 )
             }
         } else if self.after.length == 1 {
-            write!(
+            writeln!(
                 f,
-                "@@ -{},{} +{} @@\n",
+                "@@ -{},{} +{} @@",
                 self.before.start, self.before.length, self.after.start
             )
         } else {
-            write!(
+            writeln!(
                 f,
-                "@@ -{},{} +{},{} @@\n",
+                "@@ -{},{} +{},{} @@",
                 self.before.start, self.before.length, self.after.start, self.after.length
             )
         }
@@ -68,6 +68,7 @@ impl Display for StartsAndLengths {
 mod tests {
     use crate::{generate, parse_and_apply};
     use longest_common_subsequence::sequence::Seq;
+    use pw_diff_lib::apply_text::ApplyClumpsFuzzy;
     use pw_diff_lib::sequence::*;
     use std::fs::File;
 
@@ -76,15 +77,21 @@ mod tests {
         let before_file_path = "../test_files/file_2_original";
         let after_file_path = "../test_files/file_2_modified";
 
-        let _before_lines = Seq::<String>::read(File::open(before_file_path).unwrap()).unwrap();
-        let _after_lines = Seq::<String>::read(File::open(after_file_path).unwrap()).unwrap();
+        let before_lines = Seq::<String>::read(File::open(before_file_path).unwrap()).unwrap();
+        let after_lines = Seq::<String>::read(File::open(after_file_path).unwrap()).unwrap();
 
         let generated_diff =
             generate::UnifiedDiff::new(before_file_path, after_file_path, 2).unwrap();
         let mut buffer = Vec::<u8>::new();
         generated_diff.write_into(&mut buffer).unwrap();
         let generated_diff_lines = Seq::<String>::read(buffer.as_slice()).unwrap();
-        let _parsed_diff_clumps =
+        let parsed_diff_clumps =
             parse_and_apply::UnifiedDiffClumps::get_from_at(&generated_diff_lines, 2).unwrap();
+        let mut buffer = Vec::<u8>::new();
+        parsed_diff_clumps
+            .apply_into(&before_lines, &mut buffer, false)
+            .unwrap();
+        let patched_lines = Seq::<String>::read(buffer.as_slice()).unwrap();
+        assert_eq!(patched_lines, after_lines);
     }
 }

@@ -120,6 +120,7 @@ pub fn starts_and_lengths(
     }
 }
 
+#[derive(Debug)]
 pub struct UnifiedDiffClump {
     pub starts_and_lengths: StartsAndLengths,
     pub before_lines: Box<[String]>,
@@ -150,19 +151,20 @@ impl UnifiedDiffClump {
             || after_lines.len() < starts_and_lengths.after.length
         {
             let line = *iter.next().check_end_of_input()?;
-            if line.starts_with('-') {
-                before_lines.push(line.as_str().to_string());
+            // if line.starts_with('-') {
+            if let Some(stripped) = line.strip_prefix('-') {
+                before_lines.push(stripped.to_string());
                 end_context_length = 0;
                 at_the_front = false;
                 last_line_type = "-";
-            } else if line.starts_with('+') {
-                after_lines.push(line.as_str().to_string());
+            } else if let Some(stripped) = line.strip_prefix('+') {
+                after_lines.push(stripped.to_string());
                 end_context_length = 0;
                 at_the_front = false;
                 last_line_type = "+";
-            } else if line.starts_with(' ') {
-                before_lines.push(line.as_str().to_string());
-                after_lines.push(line.as_str().to_string());
+            } else if let Some(stripped) = line.strip_prefix(' ') {
+                before_lines.push(stripped.to_string());
+                after_lines.push(stripped.to_string());
                 if at_the_front {
                     start_context_length += 1
                 } else {
@@ -248,6 +250,7 @@ impl TextClumpBasics for UnifiedDiffClump {
     }
 }
 
+#[derive(Debug)]
 pub struct UnifiedDiffClumps(pub Box<[UnifiedDiffClump]>);
 
 impl UnifiedDiffClumps {
