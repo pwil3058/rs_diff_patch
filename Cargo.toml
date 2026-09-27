@@ -8,4 +8,5 @@ members = [
     "pw_patch",
     "longest_common_subsequence",
     "unified_diff_lib",
+    "git_binary_diff_lib",
 ]
