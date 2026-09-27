@@ -2,6 +2,7 @@
 
 use regex::{Captures, Regex};
 use std::num::ParseIntError;
+use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
@@ -253,6 +254,14 @@ impl TextClumpBasics for UnifiedDiffClump {
 #[derive(Debug)]
 pub struct UnifiedDiffClumps(pub Box<[UnifiedDiffClump]>);
 
+impl Deref for UnifiedDiffClumps {
+    type Target = [UnifiedDiffClump];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl UnifiedDiffClumps {
     pub fn get_from_at(lines: &Seq<String>, start_index: usize) -> DiffParseResult<Self> {
         let mut clumps = vec![];
@@ -274,13 +283,48 @@ impl ApplyClumpsFuzzy<UnifiedDiffClump> for UnifiedDiffClumps {
     }
 }
 
+#[derive(Debug)]
+pub struct UnifiedDiff {
+    pub before: PathAndTimestamp,
+    pub after: PathAndTimestamp,
+    clumps: UnifiedDiffClumps,
+}
+
+impl UnifiedDiff {
+    pub fn get_from_at(lines: &Seq<String>, start_index: usize) -> DiffParseResult<Option<Self>> {
+        let before = match before_path_and_time_stamp(&lines[start_index]) {
+            Some(before) => before,
+            None => return Ok(None),
+        };
+        let after = match after_path_and_time_stamp(&lines[start_index + 1]) {
+            Some(after) => after,
+            None => return Err(DiffParseError::SyntaxError(start_index)),
+        };
+        let clumps = UnifiedDiffClumps::get_from_at(lines, start_index + 2)?;
+        Ok(Some(Self {
+            before,
+            after,
+            clumps,
+        }))
+    }
+}
+
+impl ApplyClumpsFuzzy<UnifiedDiffClump> for UnifiedDiff {
+    fn clumps<'s>(&'s self) -> impl Iterator<Item = &'s UnifiedDiffClump>
+    where
+        UnifiedDiffClump: 's,
+    {
+        self.clumps.clumps()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use longest_common_subsequence::sequence::Seq;
     use pw_diff_lib::sequence::*;
     use std::fs::File;
 
-    use crate::parse_and_apply::{UnifiedDiffClump, UnifiedDiffClumps};
+    use crate::parse_and_apply::{UnifiedDiff, UnifiedDiffClump, UnifiedDiffClumps};
 
     static UNIFIED_DIFF_CLUMP: &str = "--- lao	2002-02-21 23:30:39.942229878 -0800
 +++ tzu	2002-02-21 23:30:50.442260588 -0800
@@ -354,5 +398,17 @@ mod tests {
         let lines = Seq::<String>::read(file).unwrap();
         let result = UnifiedDiffClumps::get_from_at(&lines, 0);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn unified_diff_clump_parse_from_string() {
+        let diff_lines = Seq::<String>::from_iter(
+            UNIFIED_DIFF_CLUMP
+                .split_inclusive('\n')
+                .map(|s| s.to_string()),
+        );
+        let result = UnifiedDiff::get_from_at(&diff_lines, 0);
+        let diff = result.unwrap().unwrap();
+        assert_eq!(diff.clumps.len(), 2);
     }
 }
