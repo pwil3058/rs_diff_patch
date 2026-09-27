@@ -214,61 +214,88 @@ pub fn patch_delta(source: &[u8], delta: &[u8]) -> Result<Vec<u8>, DeltaError> {
         return Err(DeltaError::InvalidDelta);
     }
     let mut index = 0;
+
     // make sure the source size matches what we expect
     let (size, bytes_used) = get_delta_hdr_size(&delta[index..])?;
     index += bytes_used;
     if size != source.len() {
         return Err(DeltaError::InvalidSourceSize);
     }
+
     // now the expected result size
     let (expected_size, bytes_used) = get_delta_hdr_size(&delta[index..])?;
     index += bytes_used;
+
     let mut output: Vec<u8> = Vec::with_capacity(expected_size);
+
     while index < delta.len() {
         let cmd = delta[index];
         index += 1;
+
         if cmd & 0x80 != 0 {
             let mut cp_offset: usize = 0;
             let mut cp_size: usize = 0;
-            for (mask, lshift) in [0, 1, 2, 3].iter().map(|i| (0x01u8 << i, 8 * i)) {
-                if cmd & mask != 0u8 {
-                    cp_offset |= (delta[index] as usize) << lshift;
+
+            // Parse Copy Offset (Bits 0x01, 0x02, 0x04, 0x08)
+            for i in 0..4 {
+                if cmd & (0x01u8 << i) != 0 {
+                    if index >= delta.len() {
+                        return Err(DeltaError::InvalidDelta);
+                    }
+                    cp_offset |= (delta[index] as usize) << (8 * i);
                     index += 1;
                 }
             }
-            for (mask, lshift) in [0, 1, 2].iter().map(|i| (0x01u8 << i, 8 * i)) {
-                if cmd & mask != 0u8 {
-                    cp_size |= (delta[index] as usize) << lshift;
+
+            for i in 0..3 {
+                if cmd & (0x10u8 << i) != 0 {
+                    if index >= delta.len() {
+                        return Err(DeltaError::InvalidDelta);
+                    }
+                    cp_size |= (delta[index] as usize) << (8 * i);
                     index += 1;
                 }
             }
+
             if cp_size == 0 {
                 cp_size = 0x10000;
             }
-            output.extend(source[cp_offset..cp_offset + cp_size].iter());
-        } else if cmd != 0 {
-            if index > expected_size - output.len() {
-                break;
+
+            // Boundary Protection checking source and destination constraints
+            if cp_offset + cp_size > source.len() || output.len() + cp_size > expected_size {
+                return Err(DeltaError::PatchError(
+                    "Copy parameters out of bounds".to_string(),
+                ));
             }
-            output.push(delta[index]);
-            index += 1;
+
+            output.extend_from_slice(&source[cp_offset..cp_offset + cp_size]);
+        } else if cmd != 0 {
+            // Literal Action: 'cmd' represents the exact byte length to emit directly
+            let literal_len = cmd as usize;
+
+            if index + literal_len > delta.len() || output.len() + literal_len > expected_size {
+                return Err(DeltaError::PatchError(
+                    "Literal insertion out of bounds".to_string(),
+                ));
+            }
+
+            output.extend_from_slice(&delta[index..index + literal_len]);
+            index += literal_len;
         } else {
-            // cmd == 0 is reserved for future encoding
-            // extensions. In the mean time we must fail when
-            // encountering them (might be data corruption).
             return Err(DeltaError::PatchError(
                 "unexpected delta opcode 0".to_string(),
             ));
         }
     }
-    if index < delta.len() || expected_size < output.len() {
+    if index != delta.len() || expected_size != output.len() {
         let msg = format!(
-            "delta replay has gone wild {0}:{1}:{2}",
+            "Delta structural length mismatch {0}:{1}:{2}",
             index,
             expected_size,
             output.len()
         );
         return Err(DeltaError::PatchError(msg));
     }
+
     Ok(output)
 }
