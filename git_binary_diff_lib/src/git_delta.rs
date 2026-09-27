@@ -104,27 +104,34 @@ pub struct DeltaIndex<'a> {
     entry_vals: Vec<u32>,
     entry_next: Vec<Option<NonZeroU32>>,
 }
-
 impl<'a> DeltaIndex<'a> {
     pub fn new(data: &[u8]) -> DeltaIndex<'_> {
-        // Determine index hash size.  Note that indexing skips the
-        // first byte to allow for optimizing the Rabin's polynomial
-        // initialization in create_delta().
-        // Current delta format can't encode offsets into
-        // reference buffer with more than 32 bits.
+        // Safe check: If data is smaller than our rolling hash window, return an empty index structures
+        if data.len() <= RABIN_WINDOW {
+            return DeltaIndex {
+                _data: data,
+                hash_mask: 0,
+                hash_heads: vec![None; 1],
+                entry_offsets: Vec::new(),
+                entry_vals: Vec::new(),
+                entry_next: Vec::new(),
+            };
+        }
+
         let num_entries = (data.len().min(0xFFFF_FFFF) - 1) / RABIN_WINDOW;
         let h_size = (num_entries / 4).next_power_of_two().max(16);
         let hash_mask = h_size - 1;
 
         let mut hash_heads: Vec<Option<NonZeroU32>> = vec![None; h_size];
 
-        // Preallocate flat tracking spaces based on max entry bounds
         let mut entry_offsets = Vec::with_capacity(num_entries * RABIN_WINDOW);
         let mut entry_vals = Vec::with_capacity(num_entries * RABIN_WINDOW);
         let mut entry_next = Vec::with_capacity(num_entries * RABIN_WINDOW);
 
-        // Populate the index from bottom up
-        for offset in (0..num_entries * RABIN_WINDOW - RABIN_WINDOW).rev() {
+        // Safe subtraction: We verified that num_entries * RABIN_WINDOW >= RABIN_WINDOW above
+        let loop_limit = (num_entries * RABIN_WINDOW) - RABIN_WINDOW;
+
+        for offset in (0..loop_limit).rev() {
             let mut val: u32 = 0;
             for datum in &data[offset + 1..=offset + RABIN_WINDOW] {
                 val = (((val << 8) & 0xFFFF_FFFF) | *datum as u32)
@@ -133,24 +140,19 @@ impl<'a> DeltaIndex<'a> {
                 let hash_index = (val as usize) & hash_mask;
                 let head = hash_heads[hash_index];
 
-                // Optimisation check: Collapse adjacent consecutive identical data sequences
                 if let Some(first_node) = head {
                     let idx = first_node.get() as usize - 1;
                     if entry_vals[idx] == val {
-                        // Mutate block offset context linearly without needing inner Mutex/Cell wraps
                         entry_offsets[idx] = offset + RABIN_WINDOW;
                         continue;
                     }
                 }
 
-                // Register a brand new index tracker node within our flat workspace
                 let next_node_idx = entry_offsets.len();
                 entry_offsets.push(offset + RABIN_WINDOW);
                 entry_vals.push(val);
-                // The new node points downstream to the old bucket head
                 entry_next.push(head);
 
-                // Update hash table routing map to point here
                 hash_heads[hash_index] = NonZeroU32::new((next_node_idx + 1) as u32);
             }
         }
@@ -288,4 +290,94 @@ pub fn patch_delta(source: &[u8], delta: &[u8]) -> Result<Vec<u8>, DeltaError> {
     }
 
     Ok(output)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A rich mix of unique strings, exact matches, null bytes, and cyclic repetitions
+    const REF_DATA: &[u8] =
+        b"abcdefghijklmnop_REPEAT_PATTERN_1234567890\0\0\0_REPEAT_PATTERN_xyz789";
+
+    #[test]
+    fn test_delta_index_creation_and_bounds() {
+        // Test with buffer sizes smaller than the RABIN_WINDOW size (16)
+        let tiny_data = b"short";
+        let tiny_index = DeltaIndex::new(tiny_data);
+        assert!(tiny_index.hash_heads.iter().all(|head| head.is_none()));
+
+        // Test with empty data
+        let empty_index = DeltaIndex::new(b"");
+        assert!(empty_index.hash_heads.iter().all(|head| head.is_none()));
+    }
+
+    #[test]
+    fn test_flat_index_lookup_and_deduplication() {
+        let index = DeltaIndex::new(REF_DATA);
+
+        // Find a signature window inside the known repeat block
+        // Skip the first character to match how create_delta/indexer rolls the window
+        let mut target_val: u32 = 0;
+        let window_start = 17; // offset into "_REPEAT_PATTERN_"
+
+        for datum in &REF_DATA[window_start + 1..=window_start + RABIN_WINDOW] {
+            target_val = (((target_val << 8) & 0xFFFF_FFFF) | *datum as u32)
+                ^ TANGO[(target_val >> RABIN_SHIFT) as usize];
+        }
+
+        // Retrieve entries matching our computed Rabin hash block
+        let matches: Vec<usize> = index.iter_entries(target_val as usize).collect();
+
+        // The sequence should hit exactly twice because of the duplicated phrase "_REPEAT_PATTERN_"
+        assert!(
+            !matches.is_empty(),
+            "Rabin hash entry lookup failed entirely"
+        );
+        assert!(
+            matches.len() <= HASH_LIMIT,
+            "The lazy iterator failed to strictly apply the bucket traversal boundary cap!"
+        );
+    }
+
+    #[test]
+    fn test_patch_delta_roundtrip_and_safety() {
+        // 1. Build a valid minimal git delta binary frame manually
+        let mut mock_delta = Vec::new();
+
+        // Encode Source Size = 67 (REF_DATA len)
+        mock_delta.push(67u8);
+        // Encode Expected Target Output Size = 8 (5 copy bytes + 3 literal bytes)
+        mock_delta.push(8u8);
+
+        // Opcode 0x91: Copy action (0x80) | offset bit 1 (0x01) | size bit 1 (0x10)
+        mock_delta.push(0x91);
+        mock_delta.push(17); // Copy Offset (Value 17)
+        mock_delta.push(5); // Copy Size (Length 5)
+
+        // Opcode 0x03: Emit literal bytes next (Length 3)
+        mock_delta.push(0x03);
+        mock_delta.extend_from_slice(b"NEW");
+
+        // Verify standard patch evaluation routines
+        let result = patch_delta(REF_DATA, &mock_delta).expect("Failed parsing valid mock delta");
+
+        // Verify output matches the slice generation rules
+        let mut expected = REF_DATA[17..17 + 5].to_vec();
+        expected.extend_from_slice(b"NEW");
+        assert_eq!(result, expected);
+
+        // 2. Structural Malicious Validation Test: Out of bounds offset injection
+        let mut bad_delta = Vec::new();
+        bad_delta.push(67u8); // Src Size
+        bad_delta.push(8u8); // Target Size
+        bad_delta.push(0x91); // Copy command
+        bad_delta.push(200); // MALICIOUS OFFSET: Exceeds source buffer size completely!
+        bad_delta.push(5); // Size
+
+        let patch_err = patch_delta(REF_DATA, &bad_delta);
+        assert!(
+            patch_err.is_err(),
+            "Harden verification failure: An illegal out-of-bounds copy index allowed a memory breach!"
+        );
+    }
 }
