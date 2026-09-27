@@ -1,14 +1,14 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
-use std::fmt;
-use std::io;
-use std::num::ParseIntError;
-use std::str::FromStr;
-
 use crate::git_delta::DeltaError;
 use inflate;
 use longest_common_subsequence::sequence::Seq;
 use regex::Regex;
+use std::fmt;
+use std::io;
+use std::num::ParseIntError;
+use std::str::FromStr;
+use std::sync::OnceLock;
 use thiserror::Error;
 
 pub mod git_base85;
@@ -91,7 +91,7 @@ impl GitBinaryDiffData {
             .map_err(DiffParseError::ZLibInflateError)?;
         if data.len() != self.len_raw {
             let msg = format!(
-                "Inflated size {} doesn not match expected size {}",
+                "Inflated size {} doesn't match expected size {}",
                 data.len(),
                 self.len_raw
             );
@@ -104,7 +104,7 @@ impl GitBinaryDiffData {
         let delta: Vec<u8> = match self.method {
             GitBinaryDiffMethod::Delta => self.get_raw_data()?,
             GitBinaryDiffMethod::Literal => {
-                panic!("allempt to use \"literal\" data as a \"delta\"")
+                panic!("attempt to use \"literal\" data as a \"delta\"")
             }
         };
         git_delta::patch_delta(data, &delta).map_err(DiffParseError::GitDeltaError)
@@ -131,37 +131,28 @@ impl GitBinaryDiff {
         self.lines.iter()
     }
 
-    pub fn apply_to_contents<R, W>(
+    pub fn apply_to_contents<R>(
         &mut self,
         reader: &mut R,
         reverse: bool,
     ) -> DiffParseResult<Vec<u8>>
     where
         R: io::Read,
-        W: io::Write,
     {
-        if reverse {
-            match self.reverse.method {
-                GitBinaryDiffMethod::Delta => {
-                    let mut data: Vec<u8> = Vec::new();
-                    reader
-                        .read_to_end(&mut data)
-                        .map_err(DiffParseError::IOError)?;
-                    self.reverse.apply_delta(&data)
-                }
-                GitBinaryDiffMethod::Literal => self.reverse.get_raw_data(),
-            }
+        let target_data = if reverse {
+            &self.reverse
         } else {
-            match self.forward.method {
-                GitBinaryDiffMethod::Delta => {
-                    let mut data: Vec<u8> = Vec::new();
-                    reader
-                        .read_to_end(&mut data)
-                        .map_err(DiffParseError::IOError)?;
-                    self.forward.apply_delta(&data)
-                }
-                GitBinaryDiffMethod::Literal => self.forward.get_raw_data(),
+            &self.forward
+        };
+        match target_data.method {
+            GitBinaryDiffMethod::Delta => {
+                let mut data = Vec::new();
+                reader
+                    .read_to_end(&mut data)
+                    .map_err(DiffParseError::IOError)?;
+                target_data.apply_delta(&data)
             }
+            GitBinaryDiffMethod::Literal => target_data.get_raw_data(),
         }
     }
 }
@@ -181,12 +172,26 @@ impl Default for GitBinaryDiffParser {
 
 impl GitBinaryDiffParser {
     pub fn new() -> GitBinaryDiffParser {
+        static START_CRE: OnceLock<Regex> = OnceLock::new();
+        static DATA_START_CRE: OnceLock<Regex> = OnceLock::new();
+        static BLANK_LINE_CRE: OnceLock<Regex> = OnceLock::new();
+        static DATA_LINE_CRE: OnceLock<Regex> = OnceLock::new();
+
         GitBinaryDiffParser {
-            start_cre: Regex::new(r"^GIT binary patch(\n)?$").unwrap(),
-            data_start_cre: Regex::new(r"^(literal|delta) (\d+)(\n)?$").unwrap(),
-            blank_line_cre: Regex::new(r"^\s*(\n)?$").unwrap(),
-            data_line_cre: Regex::new(r"^([a-zA-Z])([0-9a-zA-Z!#$%&()*+;<=>?@^_`{|}~-]+)(\n)?$")
-                .unwrap(),
+            start_cre: START_CRE
+                .get_or_init(|| Regex::new(r"^GIT binary patch\n?$").unwrap())
+                .clone(),
+            data_start_cre: DATA_START_CRE
+                .get_or_init(|| Regex::new(r"^(literal|delta) (\d+)\n?$").unwrap())
+                .clone(),
+            blank_line_cre: BLANK_LINE_CRE
+                .get_or_init(|| Regex::new(r"^\s*\n?$").unwrap())
+                .clone(),
+            data_line_cre: DATA_LINE_CRE
+                .get_or_init(|| {
+                    Regex::new(r"^([a-zA-Z])([0-9a-zA-Z!#$%&()*+;<=>?@^_`{|}~-]+)\n?$").unwrap()
+                })
+                .clone(),
         }
     }
 
