@@ -11,6 +11,7 @@ use std::str::FromStr;
 use std::sync::OnceLock;
 use thiserror::Error;
 
+pub mod create_git_delta;
 pub mod git_base85;
 pub mod git_delta;
 

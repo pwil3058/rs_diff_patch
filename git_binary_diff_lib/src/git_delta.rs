@@ -104,6 +104,7 @@ pub struct DeltaIndex<'a> {
     entry_vals: Vec<u32>,
     entry_next: Vec<Option<NonZeroU32>>,
 }
+
 impl<'a> DeltaIndex<'a> {
     pub fn new(data: &[u8]) -> DeltaIndex<'_> {
         // Safe check: If data is smaller than our rolling hash window, return an empty index structures
@@ -291,6 +292,7 @@ pub fn patch_delta(source: &[u8], delta: &[u8]) -> Result<Vec<u8>, DeltaError> {
 
     Ok(output)
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
