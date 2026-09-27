@@ -1,15 +1,23 @@
-//Copyright 2019 Peter Williams <pwil3058@gmail.com> <pwil3058@bigpond.net.au>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use std::cell::Cell;
 use std::rc::Rc;
 
-#[derive(Debug)]
+use thiserror::Error;
+
+#[derive(Debug, Error)]
 pub enum DeltaError {
+    #[error("Patch error: {0}")]
     PatchError(String),
+    #[error("Empty buffer")]
     EmptyBuffer,
+    #[error("Empty source  buffer")]
     EmptySourceBuffer,
+    #[error("Empty target buffer")]
     EmptyTargetBuffer,
+    #[error("Invalid data")]
     InvalidDelta,
+    #[error("Invalid source size")]
     InvalidSourceSize,
 }
 

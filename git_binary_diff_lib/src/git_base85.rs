@@ -1,24 +1,20 @@
-// Copyright 2019 Peter Williams <pwil3058@gmail.com>
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
+use crate::{DiffParseError, DiffParseResult};
 use std::collections::HashMap;
-
-use crate::lines::Line;
-use crate::text_diff::{DiffParseError, DiffParseResult};
-use crate::DiffFormat;
+use std::sync::LazyLock;
 
 const ENCODE: &[u8; 85] =
     b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~";
 const MAX_VAL: u64 = 0xFFFF_FFFF;
 
-lazy_static! {
-    static ref DECODE: HashMap<u8, u64> = {
-        let mut decode_map = HashMap::new();
-        for (index, chr) in ENCODE.iter().enumerate() {
-            decode_map.insert(*chr, index as u64);
-        }
-        decode_map
-    };
-}
+static DECODE: LazyLock<HashMap<u8, u64>> = LazyLock::new(|| {
+    let mut decode_map = HashMap::new();
+    for (index, chr) in ENCODE.iter().enumerate() {
+        decode_map.insert(*chr, index as u64);
+    }
+    decode_map
+});
 
 pub struct Encoding {
     string: Vec<u8>,
@@ -97,14 +93,14 @@ pub fn decode_size(ch: u8) -> DiffParseResult<usize> {
     } else if ch.is_ascii_lowercase() {
         Ok((ch - b'a' + 27) as usize)
     } else {
-        Err(DiffParseError::UnexpectedInput(
-            DiffFormat::GitBinary,
-            format!("{}: expected char in range [azAZ]", ch as char),
-        ))
+        Err(DiffParseError::UnexpectedInput(format!(
+            "{}: expected char in range [azAZ]",
+            ch as char
+        )))
     }
 }
 
-pub fn decode_line(line: &Line) -> DiffParseResult<Vec<u8>> {
+pub fn decode_line(line: &str) -> DiffParseResult<Vec<u8>> {
     let string = line.trim_end().as_bytes();
     let size = decode_size(string[0])?;
     let encoding = Encoding {
@@ -114,7 +110,7 @@ pub fn decode_line(line: &Line) -> DiffParseResult<Vec<u8>> {
     decode(&encoding)
 }
 
-pub fn decode_lines(lines: &[Line]) -> DiffParseResult<Vec<u8>> {
+pub fn decode_lines(lines: &[String]) -> DiffParseResult<Vec<u8>> {
     let mut data: Vec<u8> = Vec::new();
     for line in lines.iter() {
         data.append(&mut decode_line(line)?);

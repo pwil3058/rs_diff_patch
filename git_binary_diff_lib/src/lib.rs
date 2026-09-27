@@ -2,18 +2,39 @@
 
 use std::fmt;
 use std::io;
-use std::slice::Iter;
+use std::num::ParseIntError;
 use std::str::FromStr;
 
+use crate::git_delta::DeltaError;
 use inflate;
+use longest_common_subsequence::sequence::Seq;
 use regex::Regex;
+use thiserror::Error;
 
 pub mod git_base85;
 pub mod git_delta;
 
-use crate::DiffFormat;
-use crate::lines::{Line, Lines};
-use crate::text_diff::{DiffParseError, DiffParseResult};
+#[derive(Error, Debug)]
+pub enum DiffParseError {
+    #[error("Invalid line")]
+    InvalidLine,
+    #[error("Base85 error: {0}")]
+    Base85Error(String),
+    #[error("Unexpected input: {0}")]
+    UnexpectedInput(String),
+    #[error("ZLib inflate error: {0}")]
+    ZLibInflateError(String),
+    #[error("Delta error: {0}")]
+    GitDeltaError(DeltaError),
+    #[error("Syntax error at line {0}")]
+    SyntaxError(usize),
+    #[error("IO error: {0}")]
+    IOError(io::Error),
+    #[error("Parse number error: {0} : {1}")]
+    ParseNumberError(ParseIntError, usize),
+}
+
+pub type DiffParseResult<T> = Result<T, DiffParseError>;
 
 #[derive(Debug)]
 pub enum GitBinaryDiffMethod {
@@ -37,17 +58,16 @@ impl FromStr for GitBinaryDiffMethod {
         match string {
             "delta" => Ok(GitBinaryDiffMethod::Delta),
             "literal" => Ok(GitBinaryDiffMethod::Literal),
-            _ => Err(DiffParseError::UnexpectedInput(
-                DiffFormat::GitBinary,
-                format!("{string}: unknown method expected \"delta\" or \"literal\""),
-            )),
+            _ => Err(DiffParseError::UnexpectedInput(format!(
+                "{string}: unknown method expected \"delta\" or \"literal\""
+            ))),
         }
     }
 }
 
 #[derive(Debug)]
 pub struct GitBinaryDiffData {
-    lines: Lines,
+    lines: Seq<String>,
     method: GitBinaryDiffMethod,
     len_raw: usize,
     data_zipped: Vec<u8>,
@@ -62,7 +82,7 @@ impl GitBinaryDiffData {
         self.lines.is_empty()
     }
 
-    pub fn iter(&self) -> Iter<'_, Line> {
+    pub fn iter(&self) -> impl Iterator<Item = &String> {
         self.lines.iter()
     }
 
@@ -93,7 +113,7 @@ impl GitBinaryDiffData {
 
 #[derive(Debug)]
 pub struct GitBinaryDiff {
-    lines: Lines,
+    lines: Seq<String>,
     forward: GitBinaryDiffData,
     reverse: GitBinaryDiffData,
 }
@@ -107,7 +127,7 @@ impl GitBinaryDiff {
         self.lines.is_empty()
     }
 
-    pub fn iter(&self) -> Iter<'_, Line> {
+    pub fn iter(&self) -> impl Iterator<Item = &String> {
         self.lines.iter()
     }
 
@@ -173,16 +193,13 @@ impl GitBinaryDiffParser {
     // return lines consumed in due to possible swallowing of blank line making len() unreliable for advancing index
     fn get_data_at(
         &self,
-        lines: &[Line],
+        lines: &Seq<String>,
         start_index: usize,
     ) -> DiffParseResult<(GitBinaryDiffData, usize)> {
         let captures = if let Some(captures) = self.data_start_cre.captures(&lines[start_index]) {
             captures
         } else {
-            return Err(DiffParseError::SyntaxError(
-                DiffFormat::GitBinary,
-                start_index + 1,
-            ));
+            return Err(DiffParseError::SyntaxError(start_index + 1));
         };
         let method = GitBinaryDiffMethod::from_str(captures.get(1).unwrap().as_str())?;
         let len_raw = usize::from_str(captures.get(2).unwrap().as_str())
@@ -199,7 +216,7 @@ impl GitBinaryDiffParser {
         let data_zipped = git_base85::decode_lines(&lines[start_index + 1..end_data])?;
         Ok((
             GitBinaryDiffData {
-                lines: lines[start_index..end_data].to_vec(),
+                lines: Seq::<String>::from_iter(&lines[start_index..end_data]),
                 method,
                 len_raw,
                 data_zipped,
@@ -210,7 +227,7 @@ impl GitBinaryDiffParser {
 
     pub fn get_diff_at(
         &self,
-        lines: &[Line],
+        lines: &Seq<String>,
         start_index: usize,
     ) -> DiffParseResult<Option<GitBinaryDiff>> {
         if start_index >= lines.len() || !self.start_cre.is_match(&lines[start_index]) {
@@ -222,7 +239,7 @@ impl GitBinaryDiffParser {
         let (reverse, lines_consumed) = self.get_data_at(lines, index)?;
         index += lines_consumed;
         Ok(Some(GitBinaryDiff {
-            lines: lines[start_index..index].to_vec(),
+            lines: Seq::<String>::from_iter(&lines[start_index..index]),
             forward,
             reverse,
         }))
@@ -232,12 +249,35 @@ impl GitBinaryDiffParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lines::{Lines, LinesIfce};
-    use std::path::Path;
+    use std::fs::File;
+    use std::io::{BufRead, BufReader, Read};
+
+    pub trait ReadSequence: Sized {
+        fn read_from<R: Read>(read: R) -> io::Result<Self>;
+    }
+
+    impl ReadSequence for Seq<String> {
+        fn read_from<R: Read>(read: R) -> io::Result<Self> {
+            let mut reader = BufReader::new(read);
+            let mut lines = vec![];
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line)? == 0 {
+                    break;
+                } else {
+                    lines.push(line)
+                }
+            }
+            Ok(Self(lines.into_boxed_slice()))
+        }
+    }
 
     #[test]
     fn get_git_binary_diff_at_works() {
-        let lines = Lines::read_from(Path::new("../test_diffs/test_2.binary_diff")).unwrap();
+        let lines = Seq::<String>::read_from(
+            File::open("../git_binary_diff_lib/test_diffs/test_2.binary_diff").unwrap(),
+        )
+        .unwrap();
         let parser = GitBinaryDiffParser::new();
         let result = parser.get_diff_at(&lines, 1);
         assert!(result.is_ok());

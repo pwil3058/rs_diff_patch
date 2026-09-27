@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 regex = "1.13.1"
 inflate = "0.4.5"
+thiserror = "2.0.21"
+
+longest_common_subsequence = { path = "../longest_common_subsequence" }
