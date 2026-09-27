@@ -1,20 +1,20 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use crate::{DiffParseError, DiffParseResult};
-use std::collections::HashMap;
-use std::sync::LazyLock;
 
 const ENCODE: &[u8; 85] =
     b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~";
 const MAX_VAL: u64 = 0xFFFF_FFFF;
 
-static DECODE: LazyLock<HashMap<u8, u64>> = LazyLock::new(|| {
-    let mut decode_map = HashMap::new();
-    for (index, chr) in ENCODE.iter().enumerate() {
-        decode_map.insert(*chr, index as u64);
+const DECODE_TABLE: [i16; 256] = {
+    let mut table = [-1i16; 256];
+    let mut i = 0;
+    while i < 85 {
+        table[ENCODE[i] as usize] = i as i16;
+        i += 1;
     }
-    decode_map
-});
+    table
+};
 
 pub struct Encoding {
     string: Vec<u8>,
@@ -22,23 +22,28 @@ pub struct Encoding {
 }
 
 pub fn encode(data: &[u8]) -> Encoding {
-    let mut string: Vec<u8> = Vec::new();
+    let estimated_chunks = (data.len() + 3) / 4;
+    let mut string: Vec<u8> = Vec::with_capacity(estimated_chunks * 5);
     let mut index = 0;
+
     while index < data.len() {
         let mut acc: u64 = 0;
-        for cnt in [24, 16, 8, 0].iter() {
+        for cnt in [24, 16, 8, 0] {
             if index < data.len() {
                 acc |= (data[index] as u64) << cnt;
                 index += 1;
             }
         }
-        let mut snippet: Vec<u8> = Vec::new();
+
+        let mut snippet: Vec<u8> = Vec::with_capacity(5);
         for _ in 0..5 {
             let val = acc % 85;
             acc /= 85;
-            snippet.insert(0, ENCODE[val as usize]);
+            snippet.push(ENCODE[val as usize]);
         }
-        string.append(&mut snippet);
+
+        snippet.reverse();
+        string.extend_from_slice(&snippet);
     }
     Encoding {
         string,
@@ -53,12 +58,10 @@ fn decode(encoding: &Encoding) -> DiffParseResult<Vec<u8>> {
     while d_index < encoding.size {
         let mut acc: u64 = 0;
         for _ in 0..5 {
-            if s_index == encoding.string.len() {
-                break;
-            }
             if let Some(ch) = encoding.string.get(s_index) {
-                if let Some(d) = DECODE.get(ch) {
-                    acc = acc * 85 + d;
+                let d = DECODE_TABLE[*ch as usize];
+                if d >= 0 {
+                    acc = acc * 85 + (d as u64);
                 } else {
                     return Err(DiffParseError::Base85Error(
                         "Illegal git base 85 character".to_string(),
@@ -102,7 +105,13 @@ pub fn decode_size(ch: u8) -> DiffParseResult<usize> {
 
 pub fn decode_line(line: &str) -> DiffParseResult<Vec<u8>> {
     let string = line.trim_end().as_bytes();
-    let size = decode_size(string[0])?;
+
+    let first_byte = match string.first() {
+        Some(&b) => b,
+        None => return Err(DiffParseError::InvalidLine),
+    };
+
+    let size = decode_size(first_byte)?;
     let encoding = Encoding {
         string: string[1..].to_vec(),
         size,
