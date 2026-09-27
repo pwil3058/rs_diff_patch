@@ -82,16 +82,26 @@ mod tests {
 
         let generated_diff =
             generate::UnifiedDiff::new(before_file_path, after_file_path, 2).unwrap();
+
         let mut buffer = Vec::<u8>::new();
         generated_diff.write_into(&mut buffer).unwrap();
         let generated_diff_lines = Seq::<String>::read(buffer.as_slice()).unwrap();
+
         let parsed_diff_clumps =
             parse_and_apply::UnifiedDiffClumps::get_from_at(&generated_diff_lines, 2).unwrap();
+
         let mut buffer = Vec::<u8>::new();
         parsed_diff_clumps
             .apply_into(&before_lines, &mut buffer, false)
             .unwrap();
         let patched_lines = Seq::<String>::read(buffer.as_slice()).unwrap();
         assert_eq!(patched_lines, after_lines);
+
+        let mut buffer = Vec::<u8>::new();
+        parsed_diff_clumps
+            .apply_into(&after_lines, &mut buffer, true)
+            .unwrap();
+        let patched_lines = Seq::<String>::read(buffer.as_slice()).unwrap();
+        assert_eq!(patched_lines, before_lines);
     }
 }
