@@ -84,8 +84,8 @@ pub struct TextChangeDiff {
 
 impl TextChangeDiff {
     pub fn new(before_file_path: &Path, after_file_path: &Path, context: u8) -> io::Result<Self> {
-        let before_lines = Seq::<String>::read(File::open(before_file_path)?)?;
-        let after_lines = Seq::<String>::read(File::open(after_file_path)?)?;
+        let before_lines = Seq::<String>::read_from(File::open(before_file_path)?)?;
+        let after_lines = Seq::<String>::read_from(File::open(after_file_path)?)?;
         let changes = Changes::<String>::new(&before_lines, &after_lines);
 
         Ok(Self {

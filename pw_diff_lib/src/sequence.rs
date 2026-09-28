@@ -7,11 +7,11 @@ use std::io;
 use std::io::{BufRead, BufReader, Read, Write};
 
 pub trait ReadSequence: Sized {
-    fn read<R: Read>(read: R) -> io::Result<Self>;
+    fn read_from<R: Read>(read: R) -> io::Result<Self>;
 }
 
 impl ReadSequence for Seq<String> {
-    fn read<R: Read>(read: R) -> io::Result<Self> {
+    fn read_from<R: Read>(read: R) -> io::Result<Self> {
         let mut reader = BufReader::new(read);
         let mut lines = vec![];
         loop {
@@ -27,7 +27,7 @@ impl ReadSequence for Seq<String> {
 }
 
 impl ReadSequence for Seq<u8> {
-    fn read<R: Read>(read: R) -> io::Result<Self> {
+    fn read_from<R: Read>(read: R) -> io::Result<Self> {
         let mut reader = BufReader::new(read);
         let mut bytes = vec![];
         reader.read_to_end(&mut bytes)?;

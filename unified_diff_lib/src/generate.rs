@@ -157,8 +157,8 @@ impl UnifiedDiff {
         let before_timestamp = extract_timestamp(&before_path);
         let after_timestamp = extract_timestamp(&after_path);
 
-        let before_lines = Seq::<String>::read(File::open(&before)?)?;
-        let after_lines = Seq::<String>::read(File::open(&after)?)?;
+        let before_lines = Seq::<String>::read_from(File::open(&before)?)?;
+        let after_lines = Seq::<String>::read_from(File::open(&after)?)?;
         let unified_clumps = UnifiedClumps::new(&before_lines, &after_lines, context);
 
         Ok(Self {

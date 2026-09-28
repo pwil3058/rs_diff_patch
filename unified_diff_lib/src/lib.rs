@@ -77,15 +77,15 @@ mod tests {
         let before_file_path = "../test_files/file_2_original";
         let after_file_path = "../test_files/file_2_modified";
 
-        let before_lines = Seq::<String>::read(File::open(before_file_path).unwrap()).unwrap();
-        let after_lines = Seq::<String>::read(File::open(after_file_path).unwrap()).unwrap();
+        let before_lines = Seq::<String>::read_from(File::open(before_file_path).unwrap()).unwrap();
+        let after_lines = Seq::<String>::read_from(File::open(after_file_path).unwrap()).unwrap();
 
         let generated_diff =
             generate::UnifiedDiff::new(before_file_path, after_file_path, 2).unwrap();
 
         let mut buffer = Vec::<u8>::new();
         generated_diff.write_into(&mut buffer).unwrap();
-        let generated_diff_lines = Seq::<String>::read(buffer.as_slice()).unwrap();
+        let generated_diff_lines = Seq::<String>::read_from(buffer.as_slice()).unwrap();
 
         let parsed_diff = parse_and_apply::UnifiedDiff::get_from_at(&generated_diff_lines, 0)
             .unwrap()
@@ -95,14 +95,14 @@ mod tests {
         parsed_diff
             .apply_into(&before_lines, &mut buffer, false)
             .unwrap();
-        let patched_lines = Seq::<String>::read(buffer.as_slice()).unwrap();
+        let patched_lines = Seq::<String>::read_from(buffer.as_slice()).unwrap();
         assert_eq!(patched_lines, after_lines);
 
         let mut buffer = Vec::<u8>::new();
         parsed_diff
             .apply_into(&after_lines, &mut buffer, true)
             .unwrap();
-        let patched_lines = Seq::<String>::read(buffer.as_slice()).unwrap();
+        let patched_lines = Seq::<String>::read_from(buffer.as_slice()).unwrap();
         assert_eq!(patched_lines, before_lines);
     }
 }

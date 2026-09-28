@@ -370,7 +370,7 @@ mod tests {
     #[test]
     fn unified_diff_clump_parse_from_file() {
         let file = File::open("test_diffs/test_1.diff").unwrap();
-        let lines = Seq::<String>::read(file).unwrap();
+        let lines = Seq::<String>::read_from(file).unwrap();
         let result = UnifiedDiffClump::get_from_at(&lines, 0);
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -395,7 +395,7 @@ mod tests {
     #[test]
     fn unified_diff_clumps_parse_from_file() {
         let file = File::open("test_diffs/test_1.diff").unwrap();
-        let lines = Seq::<String>::read(file).unwrap();
+        let lines = Seq::<String>::read_from(file).unwrap();
         let result = UnifiedDiffClumps::get_from_at(&lines, 0);
         assert!(result.is_ok());
     }

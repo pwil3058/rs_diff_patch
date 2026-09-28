@@ -56,7 +56,7 @@ fn main() {
                     std::process::exit(1);
                 }
             };
-            let patchable_lines = match Seq::<String>::read(patchable_file) {
+            let patchable_lines = match Seq::<String>::read_from(patchable_file) {
                 Ok(lines) => lines,
                 Err(err) => {
                     log::error!("Error reading {patchable_path:?}: {err}");
@@ -152,7 +152,7 @@ fn main() {
                     std::process::exit(1);
                 }
             };
-            let patchable_bytes = match Seq::<u8>::read(patchable_file) {
+            let patchable_bytes = match Seq::<u8>::read_from(patchable_file) {
                 Ok(lines) => lines,
                 Err(err) => {
                     log::error!("Error reading {patchable_path:?}: {err}");
