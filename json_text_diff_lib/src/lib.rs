@@ -7,13 +7,15 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use longest_common_subsequence::{
+    changes::*,
     range::Range,
     sequence::{Seq, SequenceIO},
 };
-
-use crate::apply_text::*;
-use crate::snippet::{ExtractSnippet, Snippet};
-use longest_common_subsequence::changes::*;
+use pw_diff_lib::apply_text::{ApplyClumpFuzzy, ApplyClumpsFuzzy};
+use pw_diff_lib::{
+    apply_text::TextClumpBasics,
+    snippet::{ExtractSnippet, Snippet},
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextChangeClump {
