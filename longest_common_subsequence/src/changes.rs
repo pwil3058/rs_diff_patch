@@ -102,7 +102,7 @@ impl ChangeBasics for Change {
 }
 
 #[derive(Debug)]
-pub struct Changes<'a, T: PartialEq + Eq + Clone + std::hash::Hash> {
+pub struct Changes<'a, T: PartialEq + Eq + Clone + std::hash::Hash + Sync> {
     pub before: &'a Seq<T>,
     pub after: &'a Seq<T>,
     pub changes: Box<[Change]>,
@@ -135,7 +135,7 @@ pub struct Changes<'a, T: PartialEq + Eq + Clone + std::hash::Hash> {
 ///         Insert(11, Range(10, 11)),
 ///         NoChange(CommonSubsequence(11, 11, 2)),
 ///     ].into_boxed_slice());
-impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
+impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash + Sync> Changes<'a, T> {
     pub fn new(before: &'a Seq<T>, after: &'a Seq<T>) -> Self {
         let mut changes = vec![];
         let mut i = 0usize;
@@ -329,7 +329,7 @@ impl<'a, T: PartialEq + Clone> Iterator for ChangeClumpIter<'a, T> {
     }
 }
 
-impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Changes<'a, T> {
+impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash + Sync> Changes<'a, T> {
     /// Return an iterator over ChangeClumps generated with the given `context` size.
     ///
     /// Example:
