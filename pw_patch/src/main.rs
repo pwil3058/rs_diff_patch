@@ -7,8 +7,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use stderrlog::LogLevelNum;
 
-use longest_common_subsequence::sequence::Seq;
-use pw_diff_lib::sequence::ReadSequence;
+use longest_common_subsequence::sequence::{Seq, SequenceIO};
 use pw_diff_lib::{apply_bytes::ApplyClumpsClean, apply_text::ApplyClumpsFuzzy, diff::Diff};
 
 #[derive(Debug, Parser)]

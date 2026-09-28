@@ -255,28 +255,29 @@ impl GitBinaryDiffParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use longest_common_subsequence::sequence::*;
     use std::fs::File;
-    use std::io::{BufRead, BufReader, Read};
+    // use std::io::{BufRead, BufReader, Read};
 
-    pub trait ReadSequence: Sized {
-        fn read_from<R: Read>(read: R) -> io::Result<Self>;
-    }
-
-    impl ReadSequence for Seq<String> {
-        fn read_from<R: Read>(read: R) -> io::Result<Self> {
-            let mut reader = BufReader::new(read);
-            let mut lines = vec![];
-            loop {
-                let mut line = String::new();
-                if reader.read_line(&mut line)? == 0 {
-                    break;
-                } else {
-                    lines.push(line)
-                }
-            }
-            Ok(Self(lines.into_boxed_slice()))
-        }
-    }
+    // pub trait ReadSequence: Sized {
+    //     fn read_from<R: Read>(read: R) -> io::Result<Self>;
+    // }
+    //
+    // impl ReadSequence for Seq<String> {
+    //     fn read_from<R: Read>(read: R) -> io::Result<Self> {
+    //         let mut reader = BufReader::new(read);
+    //         let mut lines = vec![];
+    //         loop {
+    //             let mut line = String::new();
+    //             if reader.read_line(&mut line)? == 0 {
+    //                 break;
+    //             } else {
+    //                 lines.push(line)
+    //             }
+    //         }
+    //         Ok(Self(lines.into_boxed_slice()))
+    //     }
+    // }
 
     #[test]
     fn get_git_binary_diff_at_works() {

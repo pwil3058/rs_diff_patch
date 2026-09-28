@@ -320,8 +320,7 @@ impl ApplyClumpsFuzzy<UnifiedDiffClump> for UnifiedDiff {
 
 #[cfg(test)]
 mod tests {
-    use longest_common_subsequence::sequence::Seq;
-    use pw_diff_lib::sequence::*;
+    use longest_common_subsequence::sequence::{Seq, SequenceIO};
     use std::fs::File;
 
     use crate::parse_and_apply::{UnifiedDiff, UnifiedDiffClump, UnifiedDiffClumps};

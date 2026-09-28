@@ -5,10 +5,12 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use longest_common_subsequence::{range::Range, sequence::Seq};
+use longest_common_subsequence::{
+    range::Range,
+    sequence::{Seq, SequenceIO},
+};
 
 use crate::apply_text::*;
-use crate::sequence::*;
 use crate::snippet::{ExtractSnippet, Snippet};
 use longest_common_subsequence::changes::*;
 

@@ -2,8 +2,7 @@
 
 use crate::{PathAndTimestamp, StartAndLength, StartsAndLengths, extract_timestamp};
 use longest_common_subsequence::changes::{Change, ChangeClumpIter, Changes};
-use longest_common_subsequence::sequence::Seq;
-use pw_diff_lib::sequence::ReadSequence;
+use longest_common_subsequence::sequence::{Seq, SequenceIO};
 use std::fmt::Display;
 use std::fs::File;
 use std::io;

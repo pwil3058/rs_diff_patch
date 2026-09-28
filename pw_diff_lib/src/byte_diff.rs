@@ -6,13 +6,16 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use longest_common_subsequence::{range::Len, sequence::Seq};
+use longest_common_subsequence::{
+    range::Len,
+    sequence::{Seq, SequenceIO},
+};
 
 use crate::apply_bytes::{ApplyClumpClean, ApplyClumpsClean};
 use crate::snippet::{ExtractSnippet, Snippet, SnippetWrite};
 use longest_common_subsequence::changes::{ChangeClump, Changes};
 
-use crate::sequence::{ConsumableSeq, ConsumableSeqIfce, ReadSequence};
+use crate::sequence::{ConsumableSeq, ConsumableSeqIfce};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ByteChangeClump {

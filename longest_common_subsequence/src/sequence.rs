@@ -1,7 +1,10 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
-use crate::range::Range;
+use std::io;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::ops::Deref;
+
+use crate::range::Range;
 
 /// A sequence of items of type T
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -61,5 +64,66 @@ impl<'a, T: PartialEq + Clone> FromIterator<&'a T> for Seq<T> {
             .cloned()
             .collect::<Vec<_>>()
             .into_boxed_slice())
+    }
+}
+
+pub trait SequenceIO: Sized {
+    fn read_from<R: Read>(read: R) -> io::Result<Self>;
+    fn write_into<W: io::Write>(&self, into: &mut W, range: Range) -> io::Result<()>;
+    fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()>;
+}
+
+/// Sequence of text lines
+
+impl SequenceIO for Seq<String> {
+    fn read_from<R: Read>(read: R) -> io::Result<Self> {
+        let mut reader = BufReader::new(read);
+        let mut lines = vec![];
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line)? == 0 {
+                break;
+            } else {
+                lines.push(line)
+            }
+        }
+        Ok(Self(lines.into_boxed_slice()))
+    }
+
+    fn write_into<W: Write>(&self, into: &mut W, range: Range) -> io::Result<()> {
+        debug_assert!(range.is_valid_for_max_end(self.len()));
+        for datum in self.0[range.start()..range.end()].iter() {
+            into.write_all(datum.as_bytes())?;
+        }
+        Ok(())
+    }
+
+    fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()> {
+        debug_assert!(from <= self.len());
+        for datum in self.0[from..].iter() {
+            into.write_all(datum.as_bytes())?;
+        }
+        Ok(())
+    }
+}
+
+/// A sequence of bytes
+
+impl SequenceIO for Seq<u8> {
+    fn read_from<R: Read>(read: R) -> io::Result<Self> {
+        let mut reader = BufReader::new(read);
+        let mut bytes = vec![];
+        reader.read_to_end(&mut bytes)?;
+        Ok(Self(bytes.into_boxed_slice()))
+    }
+
+    fn write_into<W: Write>(&self, into: &mut W, range: Range) -> io::Result<()> {
+        debug_assert!(range.is_valid_for_max_end(self.len()));
+        into.write_all(&self.0[range.start()..range.end()])
+    }
+
+    fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()> {
+        debug_assert!(from <= self.len());
+        into.write_all(&self.0[from..])
     }
 }

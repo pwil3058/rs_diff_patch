@@ -1,74 +1,74 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
-use longest_common_subsequence::{range::Range, sequence::Seq};
+use longest_common_subsequence::{range::Range, sequence::*};
 
 use std::cmp::Ordering;
 use std::io;
-use std::io::{BufRead, BufReader, Read, Write};
+//use std::io::{BufRead, BufReader, Read, Write};
 
-pub trait ReadSequence: Sized {
-    fn read_from<R: Read>(read: R) -> io::Result<Self>;
-}
-
-impl ReadSequence for Seq<String> {
-    fn read_from<R: Read>(read: R) -> io::Result<Self> {
-        let mut reader = BufReader::new(read);
-        let mut lines = vec![];
-        loop {
-            let mut line = String::new();
-            if reader.read_line(&mut line)? == 0 {
-                break;
-            } else {
-                lines.push(line)
-            }
-        }
-        Ok(Self(lines.into_boxed_slice()))
-    }
-}
-
-impl ReadSequence for Seq<u8> {
-    fn read_from<R: Read>(read: R) -> io::Result<Self> {
-        let mut reader = BufReader::new(read);
-        let mut bytes = vec![];
-        reader.read_to_end(&mut bytes)?;
-        Ok(Self(bytes.into_boxed_slice()))
-    }
-}
-
-pub trait WriteDataInto {
-    fn write_into<W: io::Write>(&self, into: &mut W, range: Range) -> io::Result<()>;
-    fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()>;
-}
-
-impl WriteDataInto for Seq<u8> {
-    fn write_into<W: Write>(&self, into: &mut W, range: Range) -> io::Result<()> {
-        debug_assert!(range.is_valid_for_max_end(self.len()));
-        into.write_all(&self.0[range.start()..range.end()])
-    }
-
-    fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()> {
-        debug_assert!(from <= self.len());
-        into.write_all(&self.0[from..])
-    }
-}
-
-impl WriteDataInto for Seq<String> {
-    fn write_into<W: Write>(&self, into: &mut W, range: Range) -> io::Result<()> {
-        debug_assert!(range.is_valid_for_max_end(self.len()));
-        for datum in self.0[range.start()..range.end()].iter() {
-            into.write_all(datum.as_bytes())?;
-        }
-        Ok(())
-    }
-
-    fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()> {
-        debug_assert!(from <= self.len());
-        for datum in self.0[from..].iter() {
-            into.write_all(datum.as_bytes())?;
-        }
-        Ok(())
-    }
-}
+// pub trait ReadSequence: Sized {
+//     fn read_from<R: Read>(read: R) -> io::Result<Self>;
+// }
+//
+// impl ReadSequence for Seq<String> {
+//     fn read_from<R: Read>(read: R) -> io::Result<Self> {
+//         let mut reader = BufReader::new(read);
+//         let mut lines = vec![];
+//         loop {
+//             let mut line = String::new();
+//             if reader.read_line(&mut line)? == 0 {
+//                 break;
+//             } else {
+//                 lines.push(line)
+//             }
+//         }
+//         Ok(Self(lines.into_boxed_slice()))
+//     }
+// }
+//
+// impl ReadSequence for Seq<u8> {
+//     fn read_from<R: Read>(read: R) -> io::Result<Self> {
+//         let mut reader = BufReader::new(read);
+//         let mut bytes = vec![];
+//         reader.read_to_end(&mut bytes)?;
+//         Ok(Self(bytes.into_boxed_slice()))
+//     }
+// }
+//
+// pub trait WriteDataInto {
+//     fn write_into<W: io::Write>(&self, into: &mut W, range: Range) -> io::Result<()>;
+//     fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()>;
+// }
+//
+// impl WriteDataInto for Seq<u8> {
+//     fn write_into<W: Write>(&self, into: &mut W, range: Range) -> io::Result<()> {
+//         debug_assert!(range.is_valid_for_max_end(self.len()));
+//         into.write_all(&self.0[range.start()..range.end()])
+//     }
+//
+//     fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()> {
+//         debug_assert!(from <= self.len());
+//         into.write_all(&self.0[from..])
+//     }
+// }
+//
+// impl WriteDataInto for Seq<String> {
+//     fn write_into<W: Write>(&self, into: &mut W, range: Range) -> io::Result<()> {
+//         debug_assert!(range.is_valid_for_max_end(self.len()));
+//         for datum in self.0[range.start()..range.end()].iter() {
+//             into.write_all(datum.as_bytes())?;
+//         }
+//         Ok(())
+//     }
+//
+//     fn write_into_all_from<W: io::Write>(&self, into: &mut W, from: usize) -> io::Result<()> {
+//         debug_assert!(from <= self.len());
+//         for datum in self.0[from..].iter() {
+//             into.write_all(datum.as_bytes())?;
+//         }
+//         Ok(())
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct ConsumableSeq<'a, T>
@@ -79,10 +79,7 @@ where
     consumed: usize,
 }
 
-pub trait ConsumableSeqIfce<'a, T: PartialEq + Clone>
-where
-    Seq<T>: WriteDataInto,
-{
+pub trait ConsumableSeqIfce<'a, T: PartialEq + Clone> {
     fn new(data: &'a Seq<T>) -> Self;
     fn data(&self) -> &Seq<T>;
     fn consumed(&self) -> usize;
@@ -95,7 +92,7 @@ where
 
 impl<'a, T: PartialEq + Clone> ConsumableSeqIfce<'a, T> for ConsumableSeq<'a, T>
 where
-    Seq<T>: WriteDataInto,
+    Seq<T>: SequenceIO,
 {
     fn new(sequence: &'a Seq<T>) -> Self {
         Self {

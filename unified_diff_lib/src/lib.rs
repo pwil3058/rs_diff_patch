@@ -67,9 +67,8 @@ impl Display for StartsAndLengths {
 #[cfg(test)]
 mod tests {
     use crate::{generate, parse_and_apply};
-    use longest_common_subsequence::sequence::Seq;
+    use longest_common_subsequence::sequence::{Seq, SequenceIO};
     use pw_diff_lib::apply_text::ApplyClumpsFuzzy;
-    use pw_diff_lib::sequence::*;
     use std::fs::File;
 
     #[test]
