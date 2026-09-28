@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 pub mod changes;
+mod changes2;
 pub mod common_subsequence;
 mod lcs;
 mod lcs2;

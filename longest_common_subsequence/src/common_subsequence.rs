@@ -7,46 +7,56 @@ use serde::{Deserialize, Serialize};
 pub struct CommonSubsequence(pub usize, pub usize, pub usize);
 
 impl Len for CommonSubsequence {
+    #[inline]
     fn len(&self) -> usize {
         self.2
     }
 }
 
 impl CommonSubsequence {
+    #[inline]
     pub fn left_range(&self) -> Range {
         Range(self.0, self.0 + self.2)
     }
 
+    #[inline]
     pub fn right_range(&self) -> Range {
         Range(self.1, self.1 + self.2)
     }
 
+    #[inline]
     pub fn left_start(&self) -> usize {
         self.0
     }
 
+    #[inline]
     pub fn right_start(&self) -> usize {
         self.1
     }
 
+    #[inline]
     pub fn left_end(&self) -> usize {
         self.0 + self.2
     }
 
+    #[inline]
     pub fn right_end(&self) -> usize {
         self.1 + self.2
     }
 
+    #[inline]
     pub fn incr_size_moving_starts(&mut self, arg: usize) {
         self.0 -= arg;
         self.1 -= arg;
         self.2 += arg;
     }
 
+    #[inline]
     pub fn incr_size_moving_ends(&mut self, increment: usize) {
         self.2 += increment;
     }
 
+    #[inline]
     pub fn starts_trimmed(&self, requested_size: u8) -> Self {
         let new_size = self.2.min(requested_size as usize);
         Self(
@@ -56,10 +66,12 @@ impl CommonSubsequence {
         )
     }
 
+    #[inline]
     pub fn ends_trimmed(&self, requested_size: u8) -> Self {
         Self(self.0, self.1, self.2.min(requested_size as usize))
     }
 
+    #[inline]
     pub fn split(&self, requested_size: u8) -> Option<(Self, Self)> {
         if self.2 >= requested_size as usize * 2 {
             Some((
