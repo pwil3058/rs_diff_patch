@@ -7,21 +7,20 @@ use std::collections::HashMap;
 
 use rayon::prelude::ParallelSliceMut;
 
-pub(crate) struct Data<'a, T: PartialEq + Eq + Clone + std::hash::Hash> {
+pub(crate) struct Data<'a, T: PartialEq + Eq + Clone + std::hash::Hash + Sync> {
     left: &'a Seq<T>,
     right: &'a Seq<T>,
     left_item_indices: HashMap<T, Vec<usize>>,
 }
 
-impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Data<'a, T> {
+impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash + Sync> Data<'a, T> {
     pub(crate) fn new(left: &'a Seq<T>, right: &'a Seq<T>) -> Self {
         let mut left_item_indices: HashMap<T, Vec<usize>> = HashMap::new();
         for (index, item) in left.iter().enumerate() {
-            if let Some(vec) = left_item_indices.get_mut(item) {
-                vec.push(index)
-            } else {
-                left_item_indices.insert(item.clone(), vec![index]);
-            }
+            left_item_indices
+                .entry(item.clone())
+                .or_default()
+                .push(index);
         }
         Data {
             left,
@@ -29,7 +28,9 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Data<'a, T> {
             left_item_indices,
         }
     }
+}
 
+impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash + Sync> Data<'a, T> {
     pub(crate) fn longest_common_subsequence(
         &self,
         left_range: Range,
@@ -37,10 +38,14 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Data<'a, T> {
     ) -> Option<CommonSubsequence> {
         let mut best_lcs = CommonSubsequence::default();
 
-        let mut j_to_len = HashMap::<isize, usize>::new();
+        let mut j_to_len = HashMap::<isize, usize>::with_capacity(32);
+        let mut new_j_to_len = HashMap::<isize, usize>::with_capacity(32);
+
         for (i, item) in self.right.subsequence(right_range).enumerate() {
             let index = i + right_range.start();
-            let mut new_j_to_len = HashMap::<isize, usize>::new();
+
+            new_j_to_len.clear();
+
             if let Some(indices) = self.left_item_indices.get(item) {
                 for j in indices {
                     if j < &left_range.start() {
@@ -54,13 +59,16 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Data<'a, T> {
                         Some(k) => *k + 1,
                         None => 1,
                     };
+
                     new_j_to_len.insert(*j as isize, k);
+
                     if k > best_lcs.len() {
                         best_lcs = CommonSubsequence(j + 1 - k, index + 1 - k, k);
                     }
                 }
             }
-            j_to_len = new_j_to_len;
+
+            std::mem::swap(&mut j_to_len, &mut new_j_to_len);
         }
 
         if best_lcs.is_empty() {
@@ -101,47 +109,81 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash> Data<'a, T> {
     }
 
     pub(crate) fn longest_common_subsequences(&self) -> Vec<CommonSubsequence> {
-        let mut lifo = vec![(self.left.range_from(0), self.right.range_from(0))];
-        let mut raw_lcses = vec![];
-        while let Some((left_range, right_range)) = lifo.pop() {
-            if let Some(lcs) = self.longest_common_subsequence(left_range, right_range) {
-                if left_range.start() < lcs.left_start() && right_range.start() < lcs.right_start()
-                {
-                    lifo.push((
-                        Range(left_range.start(), lcs.left_start()),
-                        Range(right_range.start(), lcs.right_start()),
-                    ))
-                };
-                if lcs.left_end() < left_range.end() && lcs.right_end() < right_range.end() {
-                    lifo.push((
-                        Range(lcs.left_end(), left_range.end()),
-                        Range(lcs.right_end(), right_range.end()),
-                    ))
-                }
-                raw_lcses.push(lcs);
-            }
-        }
+        let mut raw_lcses =
+            self.find_lcs_parallel(self.left.range_from(0), self.right.range_from(0));
+
         raw_lcses.par_sort();
 
-        let mut lcses = vec![];
-        let mut i = 0usize;
-        while let Some(lcs) = raw_lcses.get(i) {
-            let mut new_lcs = *lcs;
-            i += 1;
-            while let Some(lcs) = raw_lcses.get(i) {
-                if new_lcs.left_end() == lcs.left_start()
-                    && new_lcs.right_end() == lcs.right_start()
+        let mut lcses = Vec::with_capacity(raw_lcses.len());
+        let mut iter = raw_lcses.into_iter();
+
+        if let Some(mut current) = iter.next() {
+            for next in iter {
+                if current.left_end() == next.left_start()
+                    && current.right_end() == next.right_start()
                 {
-                    new_lcs.incr_size_moving_ends(lcs.len());
-                    i += 1
+                    current.incr_size_moving_ends(next.len());
                 } else {
-                    break;
+                    lcses.push(current);
+                    current = next;
                 }
             }
-            lcses.push(new_lcs);
+            lcses.push(current);
         }
 
         lcses
+    }
+
+    fn find_lcs_parallel(&self, left_range: Range, right_range: Range) -> Vec<CommonSubsequence> {
+        if let Some(lcs) = self.longest_common_subsequence(left_range, right_range) {
+            let mut results = vec![lcs];
+
+            let has_left =
+                left_range.start() < lcs.left_start() && right_range.start() < lcs.right_start();
+            let has_right =
+                lcs.left_end() < left_range.end() && lcs.right_end() < right_range.end();
+
+            match (has_left, has_right) {
+                (true, true) => {
+                    let (mut left_lcses, mut right_lcses) = rayon::join(
+                        || {
+                            self.find_lcs_parallel(
+                                Range(left_range.start(), lcs.left_start()),
+                                Range(right_range.start(), lcs.right_start()),
+                            )
+                        },
+                        || {
+                            self.find_lcs_parallel(
+                                Range(lcs.left_end(), left_range.end()),
+                                Range(lcs.right_end(), right_range.end()),
+                            )
+                        },
+                    );
+
+                    results.append(&mut left_lcses);
+                    results.append(&mut right_lcses);
+                }
+                (true, false) => {
+                    let mut left_lcses = self.find_lcs_parallel(
+                        Range(left_range.start(), lcs.left_start()),
+                        Range(right_range.start(), lcs.right_start()),
+                    );
+                    results.append(&mut left_lcses);
+                }
+                (false, true) => {
+                    let mut right_lcses = self.find_lcs_parallel(
+                        Range(lcs.left_end(), left_range.end()),
+                        Range(lcs.right_end(), right_range.end()),
+                    );
+                    results.append(&mut right_lcses);
+                }
+                (false, false) => {}
+            }
+
+            results
+        } else {
+            vec![]
+        }
     }
 }
 

@@ -9,5 +9,9 @@ serde_json = "1.0.151"
 
 path_utilities = { git = "https://github.com/pwil3058/rust_utilities" }
 
+
+pw_diff_lib = { path = "../pw_diff_lib" }
+longest_common_subsequence = { path = "../longest_common_subsequence" }
 json_binary_diff_lib = { path = "../json_binary_diff_lib" }
 json_text_diff_lib = { path = "../json_text_diff_lib" }
+tempfile = "3.27.0"

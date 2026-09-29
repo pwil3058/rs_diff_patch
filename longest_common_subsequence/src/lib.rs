@@ -1,11 +1,8 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 pub mod changes;
-mod changes2;
 pub mod common_subsequence;
 mod lcs;
-mod lcs2;
-mod lcs3;
 pub mod range;
 pub mod sequence;
 
@@ -25,11 +22,11 @@ use sequence::Seq;
 ///     .split_inclusive('\n').map(|s| s.to_string()));
 /// assert_eq!(Some(CommonSubsequence(2,3,3)), longest_common_subsequence(&left, &right));
 /// ```
-pub fn longest_common_subsequence<T: PartialEq + Eq + Clone + std::hash::Hash>(
+pub fn longest_common_subsequence<T: PartialEq + Eq + Clone + std::hash::Hash + Sync>(
     left: &Seq<T>,
     right: &Seq<T>,
 ) -> Option<CommonSubsequence> {
-    let data = lcs2::Data::<T>::new(left, right);
+    let data = lcs::Data::<T>::new(left, right);
     data.longest_common_subsequence(left.range_from(0), right.range_from(0))
 }
 
@@ -53,6 +50,6 @@ pub fn longest_common_subsequences<T: PartialEq + Eq + Clone + std::hash::Hash +
     left: &Seq<T>,
     right: &Seq<T>,
 ) -> Seq<CommonSubsequence> {
-    let data = lcs3::Data::<T>::new(left, right);
+    let data = lcs::Data::<T>::new(left, right);
     Seq(data.longest_common_subsequences().into_boxed_slice())
 }

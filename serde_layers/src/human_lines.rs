@@ -47,7 +47,7 @@ where
     let mut runtime_lines = Vec::with_capacity(len);
 
     for (idx, mut line) in json_items.into_iter().enumerate() {
-        if idx < len - 1 || !has_no_newline_eof {
+        if (idx < len - 1 || !has_no_newline_eof) && !line.ends_with('\n') {
             line.push('\n');
         }
         runtime_lines.push(line);

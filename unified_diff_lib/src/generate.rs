@@ -228,6 +228,17 @@ mod generated_unified_diff_tests {
     }
 
     #[test]
+    fn generate_6_lines() {
+        let before_lines = line_seq("A\nB\nC\nD\nE\nF\nG\n");
+        let after_lines = line_seq("A\nBb\nC\nD\nE\nF\nG\n");
+        let clumps = UnifiedClumps::new(&before_lines, &after_lines, 2);
+        assert_eq!(
+            format!("{clumps}"),
+            "@@ -0,4 +0,4 @@\n A\n-B\n+Bb\n C\n D\n"
+        );
+    }
+
+    #[test]
     fn generate_from_files() {
         let before_path_buf = Path::new("../test_files/file_1_original");
         let after_path_buf = Path::new("../test_files/file_1_modified");

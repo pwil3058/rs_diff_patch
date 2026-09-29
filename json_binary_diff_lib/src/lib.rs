@@ -147,7 +147,7 @@ impl ApplyClumpClean for BinaryChangeClump {
 pub struct BinaryChangeDiff {
     pub before_path: PathBuf,
     pub after_path: PathBuf,
-    pub clumps: Vec<BinaryChangeClump>,
+    clumps: Vec<BinaryChangeClump>,
 }
 
 impl BinaryChangeDiff {
@@ -176,6 +176,14 @@ impl BinaryChangeDiff {
 
     pub fn is_empty(&self) -> bool {
         self.clumps.is_empty()
+    }
+
+    pub fn before_path(&self) -> &std::path::Path {
+        &self.before_path
+    }
+
+    pub fn after_path(&self) -> &std::path::Path {
+        &self.after_path
     }
 
     pub fn to_writer<W: io::Write>(
@@ -225,6 +233,10 @@ impl PathAndBytes {
             compressed: false,
             bytes: bytes.into_boxed_slice(),
         })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
     }
 
     pub fn path(&self) -> &Path {

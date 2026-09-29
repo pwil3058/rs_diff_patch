@@ -92,8 +92,8 @@ impl ApplyClumpFuzzy for TextChangeClump {}
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TextChangeDiff {
-    before_path: PathBuf,
-    after_path: PathBuf,
+    pub before_path: PathBuf,
+    pub after_path: PathBuf,
     clumps: Vec<TextChangeClump>,
 }
 
@@ -170,6 +170,10 @@ impl PathAndLines {
             path: path.to_path_buf(),
             lines: lines.into_boxed_slice(),
         })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.lines.is_empty()
     }
 
     pub fn path(&self) -> &Path {
