@@ -22,7 +22,7 @@ pub struct Encoding {
 }
 
 pub fn encode(data: &[u8]) -> Encoding {
-    let estimated_chunks = (data.len() + 3) / 4;
+    let estimated_chunks = data.len().div_ceil(4);
     let mut string: Vec<u8> = Vec::with_capacity(estimated_chunks * 5);
     let mut index = 0;
 

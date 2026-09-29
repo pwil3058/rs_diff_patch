@@ -97,7 +97,6 @@ pub trait SequenceIO: Sized {
 }
 
 /// Sequence of text lines
-
 impl SequenceIO for Seq<String> {
     fn read_from<R: Read>(read: R) -> io::Result<Self> {
         let mut reader = BufReader::new(read);
@@ -130,7 +129,6 @@ impl SequenceIO for Seq<String> {
 }
 
 /// A sequence of bytes
-
 impl SequenceIO for Seq<u8> {
     fn read_from<R: Read>(read: R) -> io::Result<Self> {
         let mut reader = BufReader::new(read);

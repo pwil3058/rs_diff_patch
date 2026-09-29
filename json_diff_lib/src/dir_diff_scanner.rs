@@ -20,10 +20,10 @@ impl DirDiffScanner {
             for entry in current_dir.usable_dir_entries()? {
                 if entry.is_dir() {
                     dirs_to_visit.push(entry.path());
-                } else if entry.is_file() {
-                    if let Ok(relative_path) = entry.path().strip_prefix(root) {
-                        file_set.insert(relative_path.to_path_buf());
-                    }
+                } else if entry.is_file()
+                    && let Ok(relative_path) = entry.path().strip_prefix(root)
+                {
+                    file_set.insert(relative_path.to_path_buf());
                 }
             }
         }

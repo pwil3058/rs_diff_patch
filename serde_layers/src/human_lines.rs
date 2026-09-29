@@ -13,7 +13,7 @@ where
     for (idx, item) in lines.iter().enumerate() {
         let line = item.as_ref();
         if line.ends_with('\n') {
-            let clean = line.trim_end_matches(|c| c == '\n' || c == '\r');
+            let clean = line.trim_end_matches(['\n', '\r']);
             json_items.push(clean.to_string());
         } else {
             json_items.push(line.to_string());
@@ -38,7 +38,7 @@ where
 
     let has_no_newline_eof = json_items
         .last()
-        .map_or(false, |s| s == r"\ No newline at end of file");
+        .is_some_and(|s| s == r"\ No newline at end of file");
     if has_no_newline_eof {
         json_items.pop();
     }

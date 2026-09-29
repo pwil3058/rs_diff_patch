@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 use crate::git_delta::DeltaError;
-use inflate;
 use longest_common_subsequence::sequence::Seq;
 use regex::Regex;
 use std::fmt;

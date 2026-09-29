@@ -135,8 +135,7 @@ impl<'a> DeltaIndex<'a> {
         for offset in (0..loop_limit).rev() {
             let mut val: u32 = 0;
             for datum in &data[offset + 1..=offset + RABIN_WINDOW] {
-                val = (((val << 8) & 0xFFFF_FFFF) | *datum as u32)
-                    ^ TANGO[(val >> RABIN_SHIFT) as usize];
+                val = ((val << 8) | *datum as u32) ^ TANGO[(val >> RABIN_SHIFT) as usize];
 
                 let hash_index = (val as usize) & hash_mask;
                 let head = hash_heads[hash_index];
