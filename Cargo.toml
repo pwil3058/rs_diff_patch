@@ -10,5 +10,5 @@ members = [
     "unified_diff_lib",
     "git_binary_diff_lib",
     "json_text_diff_lib",
-    "serde_layers",
+    "serde_layers", "json_binary_diff_lib", "json_diff_lib",
 ]

@@ -113,6 +113,10 @@ impl TextChangeDiff {
         })
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.clumps.is_empty()
+    }
+
     #[inline]
     pub fn from_reader<R: io::Read>(reader: &mut R) -> Result<Self, serde_json::Error> {
         let buffered = BufReader::new(reader);
