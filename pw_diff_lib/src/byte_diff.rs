@@ -12,7 +12,7 @@ use longest_common_subsequence::{
 };
 
 use crate::apply_bytes::{ApplyClumpClean, ApplyClumpsClean};
-use crate::snippet::{ExtractSnippet, Snippet, SnippetWrite};
+use crate::snippet::{BinarySnippet, ExtractSnippet, SnippetWrite};
 use longest_common_subsequence::changes::{ChangeClump, Changes};
 
 use crate::sequence::{ConsumableSeq, ConsumableSeqIfce};
@@ -20,8 +20,8 @@ use crate::sequence::{ConsumableSeq, ConsumableSeqIfce};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ByteChangeClump {
     context_lengths: (u8, u8),
-    before: Snippet<u8>,
-    after: Snippet<u8>,
+    before: BinarySnippet,
+    after: BinarySnippet,
 }
 
 impl From<ChangeClump<'_, u8>> for ByteChangeClump {
@@ -37,11 +37,11 @@ impl From<ChangeClump<'_, u8>> for ByteChangeClump {
 }
 
 impl ByteChangeClump {
-    pub fn before(&self, reverse: bool) -> &Snippet<u8> {
+    pub fn before(&self, reverse: bool) -> &BinarySnippet {
         if reverse { &self.after } else { &self.before }
     }
 
-    pub fn after(&self, reverse: bool) -> &Snippet<u8> {
+    pub fn after(&self, reverse: bool) -> &BinarySnippet {
         if reverse { &self.before } else { &self.after }
     }
 }

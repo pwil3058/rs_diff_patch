@@ -11,3 +11,4 @@ log = "0.4"
 serde_json = "1.0.116"
 
 longest_common_subsequence = { path = "../longest_common_subsequence" }
+serde_layers = { path = "../serde_layers" }

@@ -2,9 +2,12 @@
 
 use std::fs::File;
 use std::io;
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+use path_utilities::*;
 
 use longest_common_subsequence::{
     changes::*,
@@ -12,16 +15,17 @@ use longest_common_subsequence::{
     sequence::{Seq, SequenceIO},
 };
 use pw_diff_lib::apply_text::{ApplyClumpFuzzy, ApplyClumpsFuzzy};
+use pw_diff_lib::snippet::SnippetIfce;
 use pw_diff_lib::{
     apply_text::TextClumpBasics,
-    snippet::{ExtractSnippet, Snippet},
+    snippet::{ExtractSnippet, TextSnippet},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextChangeClump {
     context_lengths: (u8, u8),
-    before: Snippet<String>,
-    after: Snippet<String>,
+    before: TextSnippet,
+    after: TextSnippet,
 }
 
 impl From<ChangeClump<'_, String>> for TextChangeClump {
@@ -37,6 +41,7 @@ impl From<ChangeClump<'_, String>> for TextChangeClump {
 }
 
 impl ChangeBasics for TextChangeClump {
+    #[inline]
     fn before_start(&self, reverse: bool) -> usize {
         if reverse {
             self.after.start
@@ -45,6 +50,7 @@ impl ChangeBasics for TextChangeClump {
         }
     }
 
+    #[inline]
     fn before_end(&self, reverse: bool) -> usize {
         if reverse {
             self.after.start + self.after.items.len()
@@ -55,10 +61,12 @@ impl ChangeBasics for TextChangeClump {
 }
 
 impl TextClumpBasics for TextChangeClump {
+    #[inline]
     fn context_lengths(&self) -> (u8, u8) {
         self.context_lengths
     }
 
+    #[inline]
     fn before_lines(&self, range: Option<Range>, reverse: bool) -> impl Iterator<Item = &String> {
         if reverse {
             self.after.items(range)
@@ -69,11 +77,13 @@ impl TextClumpBasics for TextChangeClump {
 }
 
 impl TextChangeClump {
-    pub fn before(&self, reverse: bool) -> &Snippet<String> {
+    #[inline]
+    pub fn before(&self, reverse: bool) -> &TextSnippet {
         if reverse { &self.after } else { &self.before }
     }
 
-    pub fn after(&self, reverse: bool) -> &Snippet<String> {
+    #[inline]
+    pub fn after(&self, reverse: bool) -> &TextSnippet {
         if reverse { &self.before } else { &self.after }
     }
 }
@@ -89,13 +99,13 @@ pub struct TextChangeDiff {
 
 impl TextChangeDiff {
     pub fn new(before_file_path: &Path, after_file_path: &Path, context: u8) -> io::Result<Self> {
-        let before_lines = Seq::<String>::read_from(File::open(before_file_path)?)?;
-        let after_lines = Seq::<String>::read_from(File::open(after_file_path)?)?;
+        let before_lines = Seq::<String>::read_from(BufReader::new(File::open(before_file_path)?))?;
+        let after_lines = Seq::<String>::read_from(BufReader::new(File::open(after_file_path)?))?;
         let changes = Changes::<String>::new(&before_lines, &after_lines);
 
         Ok(Self {
-            before_path: before_file_path.to_path_buf(),
-            after_path: after_file_path.to_path_buf(),
+            before_path: before_file_path.relative_path_buf().unwrap(),
+            after_path: after_file_path.relative_path_buf().unwrap(),
             clumps: changes
                 .change_clumps(context)
                 .map(TextChangeClump::from)
@@ -103,14 +113,18 @@ impl TextChangeDiff {
         })
     }
 
+    #[inline]
     pub fn from_reader<R: io::Read>(reader: &mut R) -> Result<Self, serde_json::Error> {
-        serde_json::from_reader(reader)
+        let buffered = BufReader::new(reader);
+        serde_json::from_reader(buffered)
     }
 
+    #[inline]
     pub fn before_path(&self) -> &Path {
         &self.before_path
     }
 
+    #[inline]
     pub fn after_path(&self) -> &Path {
         &self.after_path
     }
@@ -121,6 +135,7 @@ impl TextChangeDiff {
 }
 
 impl ApplyClumpsFuzzy<TextChangeClump> for TextChangeDiff {
+    #[inline]
     fn clumps<'s>(&'s self) -> impl Iterator<Item = &'s TextChangeClump>
     where
         TextChangeClump: 's,
@@ -140,13 +155,11 @@ impl PathAndLines {
         use std::io::BufRead;
         let mut lines = vec![];
         let mut reader = io::BufReader::new(File::open(path)?);
-        loop {
-            let mut line = String::new();
-            if reader.read_line(&mut line)? == 0 {
-                break;
-            } else {
-                lines.push(line)
-            }
+
+        let mut line_buf = String::new();
+        while reader.read_line(&mut line_buf)? > 0 {
+            lines.push(line_buf.clone());
+            line_buf.clear();
         }
 
         Ok(Self {

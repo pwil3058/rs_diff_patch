@@ -11,14 +11,14 @@ use longest_common_subsequence::{
 };
 
 use crate::apply_text::*;
-use crate::snippet::{ExtractSnippet, Snippet};
+use crate::snippet::{ExtractSnippet, SnippetIfce, TextSnippet};
 use longest_common_subsequence::changes::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextChangeClump {
     context_lengths: (u8, u8),
-    before: Snippet<String>,
-    after: Snippet<String>,
+    before: TextSnippet,
+    after: TextSnippet,
 }
 
 impl From<ChangeClump<'_, String>> for TextChangeClump {
@@ -66,11 +66,11 @@ impl TextClumpBasics for TextChangeClump {
 }
 
 impl TextChangeClump {
-    pub fn before(&self, reverse: bool) -> &Snippet<String> {
+    pub fn before(&self, reverse: bool) -> &TextSnippet {
         if reverse { &self.after } else { &self.before }
     }
 
-    pub fn after(&self, reverse: bool) -> &Snippet<String> {
+    pub fn after(&self, reverse: bool) -> &TextSnippet {
         if reverse { &self.before } else { &self.after }
     }
 }
