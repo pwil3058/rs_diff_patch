@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
-use std::collections::BTreeSet;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::{Diff, PatchSet};
 use path_utilities::UsefulPathMethods;
@@ -10,37 +9,18 @@ use path_utilities::UsefulPathMethods;
 pub struct DirDiffScanner;
 
 impl DirDiffScanner {
-    /// Recursively gathers all paths within a target workspace directory,
-    /// sorting and isolating them as strictly relative paths.
-    pub fn collect_relative_files(root: &Path) -> io::Result<BTreeSet<PathBuf>> {
-        let mut file_set = BTreeSet::new();
-        let mut dirs_to_visit = vec![root.to_path_buf()];
-
-        while let Some(current_dir) = dirs_to_visit.pop() {
-            for entry in current_dir.usable_dir_entries()? {
-                if entry.is_dir() {
-                    dirs_to_visit.push(entry.path());
-                } else if entry.is_file()
-                    && let Ok(relative_path) = entry.path().strip_prefix(root)
-                {
-                    file_set.insert(relative_path.to_path_buf());
-                }
-            }
-        }
-
-        Ok(file_set)
-    }
-
     /// Evaluates two directory branches side-by-side using an O(N) linear sweep.
     pub fn compare_directories(
-        before_dir: &Path,
-        after_dir: &Path,
+        before_dir: impl AsRef<Path>,
+        after_dir: impl AsRef<Path>,
         context: u8,
     ) -> io::Result<PatchSet> {
+        let before_dir = before_dir.as_ref();
+        let after_dir = after_dir.as_ref();
         let mut patch_set = PatchSet::default();
 
-        let before_files = Self::collect_relative_files(before_dir)?;
-        let after_files = Self::collect_relative_files(after_dir)?;
+        let before_files = before_dir.collect_relative_files()?;
+        let after_files = after_dir.collect_relative_files()?;
 
         let mut before_iter = before_files.iter().peekable();
         let mut after_iter = after_files.iter().peekable();
