@@ -1,0 +1,138 @@
+// Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
+
+use git2::Repository;
+use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::{self, BufReader, Read};
+use std::path::Path;
+
+use longest_common_subsequence::sequence::{Seq, SequenceIO};
+
+/// Beautiful, type-safe file tracking indicators that render cleanly in JSON.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub enum FileMarker {
+    /// Rendered as: "Commit": "a1c3e5f"
+    Commit(String),
+    /// Rendered as: "Modified": "2026-09-30 13:02:15"
+    Modified(String),
+    /// Rendered as: "Untracked": true
+    Untracked,
+}
+
+/// Dynamic container holding extracted sequence blocks alongside their clear type-safe markers
+pub enum GitComparePair {
+    Text {
+        before: Seq<String>,
+        before_marker: FileMarker,
+        after: Seq<String>,
+        after_marker: FileMarker,
+    },
+    Binary {
+        before: Seq<u8>,
+        before_marker: FileMarker,
+        after: Seq<u8>,
+        after_marker: FileMarker,
+    },
+}
+
+pub fn extract_git_compare_sequences<P: AsRef<Path>>(file_path: P) -> io::Result<GitComparePair> {
+    let absolute_path = std::fs::canonicalize(file_path.as_ref())?;
+
+    let repo = Repository::discover(&absolute_path).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Git repository not found: {}", e),
+        )
+    })?;
+
+    let workdir = repo.workdir().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "Bare repositories do not have checked-out work paths",
+        )
+    })?;
+    let relative_git_path = absolute_path.strip_prefix(workdir).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Path sits outside work tree: {}", e),
+        )
+    })?;
+
+    let index = repo.index().map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to read git index: {}", e),
+        )
+    })?;
+
+    // 1. Resolve Before Marker: Staged index blob maps to a clean short commit OID slice
+    let mut before_marker = FileMarker::Untracked;
+    let before_bytes = match index.get_path(relative_git_path, 0) {
+        Some(entry) => {
+            let blob = repo.find_blob(entry.id).map_err(|e| {
+                io::Error::new(io::ErrorKind::Other, format!("Git blob corruption: {}", e))
+            })?;
+            let full_id = blob.id().to_string();
+            // Isolate short 7-character commit-oid string slice format safely
+            let short_id = if full_id.len() >= 7 {
+                &full_id[..7]
+            } else {
+                &full_id
+            };
+            before_marker = FileMarker::Commit(short_id.to_string());
+            blob.content().to_vec()
+        }
+        None => vec![],
+    };
+
+    // 2. Resolve After Marker: Local checked-out file converts to a human-readable local date string
+    let mut after_marker = FileMarker::Untracked;
+    let mut after_bytes = Vec::new();
+    if absolute_path.exists() {
+        let metadata = std::fs::metadata(&absolute_path)?;
+        if let Ok(modified_time) = metadata.modified() {
+            // Translate file system time into a clear readable calendar string representation
+            // e.g., using standard datetime library formatting or fallback string translations
+            let datetime: chrono::DateTime<chrono::Local> = modified_time.into();
+            after_marker = FileMarker::Modified(datetime.format("%Y-%m-%d %H:%M:%S").to_string());
+        } else {
+            after_marker = FileMarker::Modified(String::from("Unknown Modification Time"));
+        }
+
+        let mut file = BufReader::new(File::open(&absolute_path)?);
+        file.read_to_end(&mut after_bytes)?;
+    }
+
+    if is_text_buffer(&before_bytes) && is_text_buffer(&after_bytes) {
+        let before_seq = Seq::<String>::read_from(&before_bytes[..])?;
+        let after_seq = Seq::<String>::read_from(&after_bytes[..])?;
+        Ok(GitComparePair::Text {
+            before: before_seq,
+            before_marker,
+            after: after_seq,
+            after_marker,
+        })
+    } else {
+        Ok(GitComparePair::Binary {
+            before: Seq::from(before_bytes),
+            before_marker,
+            after: Seq::from(after_bytes),
+            after_marker,
+        })
+    }
+}
+
+/// Lightweight, allocations-free helper checking buffer content signatures for control codes.
+fn is_text_buffer(bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return true;
+    }
+    if bytes.contains(&0) {
+        return false;
+    } // Null terminator denotes true binary data
+    let invalid_count = bytes
+        .iter()
+        .filter(|&&b| b < 7 || (b > 13 && b < 32 && b != 27))
+        .count();
+    (invalid_count * 100) / bytes.len() < 1
+}

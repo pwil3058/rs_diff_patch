@@ -3,6 +3,7 @@
 pub mod apply;
 pub mod binary_diff;
 pub mod dir_diff_scanner;
+pub mod git_helper;
 pub mod text_diff;
 
 use std::collections::HashMap;
@@ -12,6 +13,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::git_helper::{GitComparePair, extract_git_compare_sequences};
 use binary_diff::{BinaryChangeDiff, PathAndBytes};
 use text_diff::{PathAndLines, TextChangeDiff};
 
@@ -110,6 +112,60 @@ impl JsonDiff {
             JsonDiff::ByteAdd(pab) | JsonDiff::ByteRemove(pab) => pab.path(),
         }
     }
+    pub fn generate_from_git<P: AsRef<Path>>(file_path: P, context: u8) -> io::Result<JsonDiff> {
+        let path_ref = file_path.as_ref();
+
+        match extract_git_compare_sequences(path_ref)? {
+            GitComparePair::Text {
+                before,
+                before_marker,
+                after,
+                after_marker,
+            } => {
+                let changes =
+                    longest_common_subsequence::changes::Changes::<String>::new(&before, &after);
+                let mut tc = TextChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
+
+                tc.before_marker = Some(before_marker);
+                tc.after_marker = Some(after_marker);
+
+                Ok(JsonDiff::TextChange(tc))
+            }
+            GitComparePair::Binary {
+                before,
+                before_marker,
+                after,
+                after_marker,
+            } => {
+                let changes =
+                    longest_common_subsequence::changes::Changes::<u8>::new(&before, &after);
+                let mut bc = BinaryChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
+
+                bc.before_marker = Some(before_marker);
+                bc.after_marker = Some(after_marker);
+
+                Ok(JsonDiff::ByteChange(bc))
+            }
+        }
+    }
+    // pub fn generate_from_git<P: AsRef<Path>>(file_path: P, context: u8) -> io::Result<JsonDiff> {
+    //     let path_ref = file_path.as_ref();
+    //
+    //     match extract_git_compare_sequences(path_ref)? {
+    //         GitComparePair::Text { before, after } => {
+    //             let changes =
+    //                 longest_common_subsequence::changes::Changes::<String>::new(&before, &after);
+    //             let tc = TextChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
+    //             Ok(JsonDiff::TextChange(tc))
+    //         }
+    //         GitComparePair::Binary { before, after } => {
+    //             let changes =
+    //                 longest_common_subsequence::changes::Changes::<u8>::new(&before, &after);
+    //             let bc = BinaryChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
+    //             Ok(JsonDiff::ByteChange(bc))
+    //         }
+    //     }
+    // }
 }
 
 /// Helper function that safely sniffs the first 1024 bytes of a file to classify it.

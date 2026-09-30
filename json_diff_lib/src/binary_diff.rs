@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
+use crate::git_helper::FileMarker;
 use longest_common_subsequence::changes::Changes;
 use longest_common_subsequence::sequence::SequenceIO;
 use longest_common_subsequence::{range::*, sequence::Seq};
@@ -147,7 +148,11 @@ impl ApplyClumpClean for BinaryChangeClump {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct BinaryChangeDiff {
     pub before_path: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before_marker: Option<FileMarker>,
     pub after_path: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_marker: Option<FileMarker>,
     clumps: Vec<BinaryChangeClump>,
 }
 
@@ -157,6 +162,44 @@ impl BinaryChangeDiff {
         after_file_path: &std::path::Path,
         context: u8,
     ) -> io::Result<Self> {
+        let before_marker = if before_file_path.exists() {
+            if let Ok(metadata) = std::fs::metadata(before_file_path) {
+                if let Ok(modified_time) = metadata.modified() {
+                    let datetime: chrono::DateTime<chrono::Local> = modified_time.into();
+                    Some(FileMarker::Modified(
+                        datetime.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    ))
+                } else {
+                    Some(FileMarker::Modified(String::from(
+                        "Unknown Modification Time",
+                    )))
+                }
+            } else {
+                Some(FileMarker::Untracked)
+            }
+        } else {
+            Some(FileMarker::Untracked)
+        };
+
+        let after_marker = if after_file_path.exists() {
+            if let Ok(metadata) = std::fs::metadata(after_file_path) {
+                if let Ok(modified_time) = metadata.modified() {
+                    let datetime: chrono::DateTime<chrono::Local> = modified_time.into();
+                    Some(FileMarker::Modified(
+                        datetime.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    ))
+                } else {
+                    Some(FileMarker::Modified(String::from(
+                        "Unknown Modification Time",
+                    )))
+                }
+            } else {
+                Some(FileMarker::Untracked)
+            }
+        } else {
+            Some(FileMarker::Untracked)
+        };
+
         // High-speed file reader ingest into Seq<u8> buffers using BufReader
         let before_bytes =
             Seq::<u8>::read_from(io::BufReader::new(std::fs::File::open(before_file_path)?))?;
@@ -167,7 +210,9 @@ impl BinaryChangeDiff {
 
         Ok(Self {
             before_path: before_file_path.to_path_buf(),
+            before_marker,
             after_path: after_file_path.to_path_buf(),
+            after_marker,
             clumps: changes
                 .change_clumps(context)
                 .map(BinaryChangeClump::from)
@@ -203,6 +248,66 @@ impl BinaryChangeDiff {
     pub fn from_reader<R: io::Read>(reader: R) -> Result<Self, serde_json::Error> {
         let buffered = io::BufReader::new(reader);
         serde_json::from_reader(buffered)
+    }
+
+    pub fn from_changes(
+        before_path_ref: impl AsRef<Path>,
+        after_path_ref: impl AsRef<Path>,
+        changes: Changes<u8>,
+        context: u8,
+    ) -> io::Result<Self> {
+        let before_path = before_path_ref.as_ref().to_path_buf();
+        let after_path = after_path_ref.as_ref().to_path_buf();
+
+        let before_marker = if before_path.exists() {
+            if let Ok(metadata) = std::fs::metadata(&before_path) {
+                if let Ok(modified_time) = metadata.modified() {
+                    let datetime: chrono::DateTime<chrono::Local> = modified_time.into();
+                    Some(FileMarker::Modified(
+                        datetime.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    ))
+                } else {
+                    Some(FileMarker::Modified(String::from(
+                        "Unknown Modification Time",
+                    )))
+                }
+            } else {
+                Some(FileMarker::Untracked)
+            }
+        } else {
+            Some(FileMarker::Untracked)
+        };
+
+        let after_marker = if after_path.exists() {
+            if let Ok(metadata) = std::fs::metadata(&after_path) {
+                if let Ok(modified_time) = metadata.modified() {
+                    let datetime: chrono::DateTime<chrono::Local> = modified_time.into();
+                    Some(FileMarker::Modified(
+                        datetime.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    ))
+                } else {
+                    Some(FileMarker::Modified(String::from(
+                        "Unknown Modification Time",
+                    )))
+                }
+            } else {
+                Some(FileMarker::Untracked)
+            }
+        } else {
+            Some(FileMarker::Untracked)
+        };
+        let clumps = changes
+            .change_clumps(context)
+            .map(BinaryChangeClump::from)
+            .collect();
+
+        Ok(Self {
+            before_path,
+            before_marker,
+            after_path,
+            after_marker,
+            clumps,
+        })
     }
 }
 
