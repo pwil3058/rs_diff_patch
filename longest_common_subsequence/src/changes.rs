@@ -296,3 +296,33 @@ impl<'a, T: PartialEq + Eq + Clone + std::hash::Hash + Sync> Changes<'a, T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use Change::*;
+
+    #[test]
+    fn test_empty_sequences() {
+        let left = Seq::<u8>::default();
+        let right = Seq::<u8>::default();
+        let changes = Changes::new(&left, &right);
+        assert!(changes.changes.is_empty());
+        assert_eq!(changes.change_clumps(0).count(), 0);
+        let non_empty = Seq::<u8>::from(vec![1]);
+        let changes = Changes::new(&left, &non_empty);
+        assert_eq!(&changes.changes[..], &[Insert(0, Range(0, 1))]);
+        assert_eq!(changes.change_clumps(0).count(), 1);
+        assert_eq!(
+            &changes.change_clumps(1).next().unwrap().changes[..],
+            [Insert(0, Range(0, 1))]
+        );
+        let changes = Changes::new(&non_empty, &right);
+        assert_eq!(&changes.changes[..], &[Delete(Range(0, 1), 0)]);
+        assert_eq!(changes.change_clumps(0).count(), 1);
+        assert_eq!(
+            &changes.change_clumps(1).next().unwrap().changes[..],
+            [Delete(Range(0, 1), 0)]
+        );
+    }
+}
