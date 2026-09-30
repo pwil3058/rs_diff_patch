@@ -1,26 +1,42 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use json_diff_lib::dir_diff_scanner::DirDiffScanner;
+use json_diff_lib::JsonDiff;
+use json_diff_lib::PatchSet;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
-#[command(
-    name = "jdiff",
-    version = "0.1.0",
-    author = "Peter Williams",
-    about = "Generates human-reviewable JSON patch sets for directories and Git repositories."
-)]
-struct DiffCli {
+#[command(name = "jdiff", version = "1.0", author = "Peter Williams", about = "Smart JSON differential engine inferring actions from file parameters.")]
+struct Cli {
+    /// Zero, one, or two target file system paths to evaluate
+    #[arg(value_name = "PATHS")]
+    paths: Vec<PathBuf>,
+
+    /// Git revision specifier handles (e.g., short hash, branch, or HEAD~1). Pass up to two times.
+    #[arg(short, long = "revision", value_name = "REV")]
+    revisions: Vec<String>,
+
     /// Number of context lines to anchor modifications
     #[arg(short, long, default_value_t = 3)]
     context: u8,
 
     /// Paths or folder names to exclude from directory scans (can be passed multiple times)
     #[arg(short, long)]
-    exclude: Vec<String>, // 👈 New vector array flag
+    exclude: Vec<String>,
+
+    /// Custom title metadata attribute for the patch envelope header
+    #[arg(long)]
+    title: Option<String>,
+
+    /// Custom description summary text for the patch envelope header
+    #[arg(long)]
+    description: Option<String>,
+
+    /// Override the author profile metadata (defaults to local git config identity)
+    #[arg(long)]
+    author: Option<String>,
 
     /// Output path for the generated patch file (defaults to stdout if omitted)
     #[arg(short, long)]
@@ -29,65 +45,136 @@ struct DiffCli {
     /// Prevent JSON pretty-printing to compress the output file footprint size
     #[arg(long)]
     no_pretty: bool,
-
-    #[command(subcommand)]
-    command: DiffCommand,
-}
-
-#[derive(Subcommand, Debug)]
-enum DiffCommand {
-    /// Compares two standard filesystem directories
-    Dir { before: PathBuf, after: PathBuf },
-    /// Compares a live Git repository workspace against its current HEAD baseline
-    GitWorkspace {
-        #[arg(default_value = ".")]
-        repo_path: PathBuf,
-    },
-    /// Compares two specific historical Git commit states inside a repository
-    GitCommits {
-        before_commit: String,
-        after_commit: String,
-        #[arg(default_value = ".")]
-        repo_path: PathBuf,
-    },
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    let cli = DiffCli::parse();
+    let cli = Cli::parse();
 
-    let raw_target_path = match &cli.command {
-        DiffCommand::Dir { before, .. } => before.clone(),
-        DiffCommand::GitWorkspace { repo_path } => repo_path.clone(),
-        DiffCommand::GitCommits { repo_path, .. } => repo_path.clone(),
-    };
+    // Enforce parameter guard assertions before starting execution
+    if cli.paths.len() > 2 {
+        eprintln!("Error: Too many file paths supplied. Expected 0, 1, or 2 paths.");
+        std::process::exit(1);
+    }
+    if cli.revisions.len() > 2 {
+        eprintln!("Error: Too many revision flags supplied. Expected maximum of 2.");
+        std::process::exit(1);
+    }
+    if cli.paths.len() == 2 && !cli.revisions.is_empty() {
+        eprintln!("Error: Cannot combine two distinct filesystem paths with git revision parameters.");
+        std::process::exit(1);
+    }
 
-    let target_path = std::fs::canonicalize(&raw_target_path).unwrap_or_else(|_| raw_target_path);
+    let mut patch_set = PatchSet::default();
+    let context = cli.context;
 
-    let mut unified_excludes = load_ignore_patterns(&target_path);
-    unified_excludes.extend(cli.exclude.clone());
-
-    // 1. Generate the patch set via the targeted scanning library branch
-    let patch_set = match cli.command {
-        DiffCommand::Dir { before, after } => {
-            DirDiffScanner::compare_directories(&before, &after, cli.context, &unified_excludes)?
+    // Core inference engine loop
+    match (cli.paths.len(), cli.revisions.len()) {
+        // =========================================================================
+        // CASE 1: 0 Paths, 0 Revisions -> Complete Git Workspace Scan
+        // =========================================================================
+        (0, 0) => {
+            let pwd = std::env::current_dir()?;
+            verify_in_git_workspace(&pwd)?;
+            patch_set = DirDiffScanner::compare_git_workspace(&pwd, context, &cli.exclude)?;
         }
-        DiffCommand::GitWorkspace { repo_path } => {
-            DirDiffScanner::compare_git_workspace(&repo_path, cli.context, &unified_excludes)?
-        }
-        DiffCommand::GitCommits {
-            before_commit,
-            after_commit,
-            repo_path,
-        } => DirDiffScanner::compare_git_commits(
-            &repo_path,
-            &before_commit,
-            &after_commit,
-            cli.context,
-        )?,
-    };
 
-    // 2. Stream the serialized patch document to the appropriate destination handle
+        // =========================================================================
+        // CASE 2: 1 Path, 0 Revisions -> Specific Git Target Scan (File or Folder vs HEAD)
+        // =========================================================================
+        (1, 0) => {
+            let target = &cli.paths[0];
+            verify_in_git_workspace(target)?;
+
+            if target.is_dir() {
+                patch_set = DirDiffScanner::compare_git_workspace(target, context, &cli.exclude)?;
+            } else {
+                let diff = JsonDiff::generate_from_git(target, context)?;
+                if !diff.is_empty() {
+                    patch_set.diffs.push(diff);
+                }
+            }
+        }
+
+        // =========================================================================
+        // CASE 3: 1 Path, 1 Revision -> Target vs Specific Historical Commit Snapshot
+        // =========================================================================
+        (1, 1) => {
+            let target = &cli.paths[0];
+            verify_in_git_workspace(target)?;
+            let rev = &cli.revisions[0];
+
+            if target.is_dir() {
+                patch_set = DirDiffScanner::compare_git_commits(target, rev, "HEAD", context)?;
+            } else {
+                let diff = JsonDiff::generate_from_git_commits(target, rev, "HEAD", context)?;
+                if !diff.is_empty() {
+                    patch_set.diffs.push(diff);
+                }
+            }
+        }
+
+        // =========================================================================
+        // CASE 4: 1 Path, 2 Revisions -> Diff a file between two distinct histories
+        // =========================================================================
+        (1, 2) => {
+            let target = &cli.paths[0];
+            verify_in_git_workspace(target)?;
+            if target.is_dir() {
+                patch_set = DirDiffScanner::compare_git_commits(target, &cli.revisions[0], &cli.revisions[1], context)?;
+            } else {
+                let diff = JsonDiff::generate_from_git_commits(target, &cli.revisions[0], &cli.revisions[1], context)?;
+                if !diff.is_empty() {
+                    patch_set.diffs.push(diff);
+                }
+            }
+        }
+
+        // =========================================================================
+        // CASE 5: 2 Paths, 0 Revisions -> Standard Plain Filesystem Diff (Files or Folders)
+        // =========================================================================
+        (2, 0) => {
+            let before = &cli.paths[0];
+            let after = &cli.paths[1];
+
+            if before.is_dir() && after.is_dir() {
+                patch_set = DirDiffScanner::compare_directories(before, after, context, &cli.exclude)?;
+            } else if before.is_file() && after.is_file() {
+                let diff = JsonDiff::new(before.parent().unwrap(), after.parent().unwrap(), Path::new(before.file_name().unwrap()), context)?;
+                if !diff.is_empty() {
+                    patch_set.diffs.push(diff);
+                }
+            } else {
+                eprintln!("Error: Path type mismatch. Both parameters must be files or both must be directories.");
+                std::process::exit(1);
+            }
+        }
+
+        _ => {
+            eprintln!("Error: Unrecognized parameter argument permutation combination.");
+            std::process::exit(1);
+        }
+    }
+
+    // 4. Enrich metadata headers and fallback to global git profile configurations
+    patch_set.title = cli.title.or(Some(String::from("Smart Environment Delta Patch")));
+    patch_set.description = cli.description;
+
+    let author_identity = match cli.author {
+        Some(explicit) => explicit,
+        None => {
+            if let Ok(git_config) = git2::Config::open_default() {
+                let name = git_config.get_string("user.name").unwrap_or_default();
+                let email = git_config.get_string("user.email").unwrap_or_default();
+                if !name.is_empty() && !email.is_empty() { format!("{} <{}>", name, email) }
+                else { String::from("System Automated jdiff User") }
+            } else { String::from("System Automated jdiff User") }
+        }
+    };
+    patch_set.metadata.insert(String::from("author"), author_identity);
+    patch_set.metadata.insert(String::from("generated_at"), chrono::Local::now().to_rfc3339());
+
+    // 5. Output file serialization pipeline
     let pretty = !cli.no_pretty;
     match cli.output {
         Some(path) => {
@@ -103,52 +190,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Collects all exclusion rules from a local `.jdiffignore` file, or falls
-/// back to a global home configuration profile if found.
-fn load_ignore_patterns(repo_path: &Path) -> Vec<String> {
-    let mut patterns = Vec::new();
-
-    // 1. Check for a local project-level ignore file first
-    let local_ignore = repo_path.join(".jdiffignore");
-    if local_ignore.exists() {
-        if let Ok(local_patterns) = parse_ignore_file(&local_ignore) {
-            patterns.extend(local_patterns);
-            return patterns; // Local overrides global configs completely
-        }
+/// Verification helper to crash fast if a git execution is attempted in an ordinary directory
+fn verify_in_git_workspace(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    if git2::Repository::discover(path).is_err() {
+        eprintln!("Error: Target path '{:?}' is not inside a tracking Git repository workspace.", path);
+        std::process::exit(1);
     }
-
-    // 2. Fall back to a global user profile configuration (~/.config/jdiff/ignore)
-    if let Some(mut global_config) = dirs::home_dir() {
-        global_config.push(".config");
-        global_config.push("jdiff");
-        global_config.push("ignore");
-
-        if global_config.exists() {
-            if let Ok(global_patterns) = parse_ignore_file(&global_config) {
-                patterns.extend(global_patterns);
-            }
-        }
-    }
-
-    patterns
-}
-
-/// Helper to parse an ignore file line-by-line, stripping out comments and spaces
-fn parse_ignore_file(path: &Path) -> std::io::Result<Vec<String>> {
-    let file = std::fs::File::open(path)?;
-    let reader = BufReader::new(file);
-    let mut patterns = Vec::new();
-
-    for line_result in reader.lines() {
-        let line = line_result?;
-        let trimmed = line.trim();
-
-        // Skip completely empty lines or comment tracking blocks safely
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        patterns.push(trimmed.to_string());
-    }
-
-    Ok(patterns)
+    Ok(())
 }
