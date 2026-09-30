@@ -4,7 +4,7 @@ use std::fs::{self, File};
 use std::io::{self, BufWriter};
 use std::path::Path;
 
-use crate::Diff;
+use crate::JsonDiff;
 use crate::PatchSet;
 use longest_common_subsequence::sequence::Seq;
 use longest_common_subsequence::sequence::SequenceIO;
@@ -24,7 +24,7 @@ impl DirPatchApplier {
                 // =========================================================================
                 // 1. Text Additions & Removals (Symmetric Layout)
                 // =========================================================================
-                Diff::TextAdd(path_and_lines) => {
+                JsonDiff::TextAdd(path_and_lines) => {
                     let target_path = target_dir.join(path_and_lines.path());
                     if !reverse {
                         // Forward: Create the file
@@ -40,7 +40,7 @@ impl DirPatchApplier {
                         }
                     }
                 }
-                Diff::TextRemove(path_and_lines) => {
+                JsonDiff::TextRemove(path_and_lines) => {
                     let target_path = target_dir.join(path_and_lines.path());
                     if !reverse {
                         // Forward: Delete the file
@@ -60,7 +60,7 @@ impl DirPatchApplier {
                 // =========================================================================
                 // 2. Binary Additions & Removals (Symmetric Layout)
                 // =========================================================================
-                Diff::ByteAdd(path_and_bytes) => {
+                JsonDiff::ByteAdd(path_and_bytes) => {
                     let target_path = target_dir.join(path_and_bytes.path());
                     if !reverse {
                         if let Some(parent) = target_path.parent() {
@@ -74,7 +74,7 @@ impl DirPatchApplier {
                         }
                     }
                 }
-                Diff::ByteRemove(path_and_bytes) => {
+                JsonDiff::ByteRemove(path_and_bytes) => {
                     let target_path = target_dir.join(path_and_bytes.path());
                     if !reverse {
                         if target_path.exists() {
@@ -92,7 +92,7 @@ impl DirPatchApplier {
                 // =========================================================================
                 // 3. In-Place Modifications (Remain Unchanged)
                 // =========================================================================
-                Diff::TextChange(text_change_diff) => {
+                JsonDiff::TextChange(text_change_diff) => {
                     let relative_path = diff.path(reverse);
                     let target_path = target_dir.join(relative_path);
 
@@ -104,7 +104,7 @@ impl DirPatchApplier {
                     }
                     fs::rename(tmp_path, target_path)?;
                 }
-                Diff::ByteChange(byte_change_diff) => {
+                JsonDiff::ByteChange(byte_change_diff) => {
                     let relative_path = diff.path(reverse);
                     let target_path = target_dir.join(relative_path);
 

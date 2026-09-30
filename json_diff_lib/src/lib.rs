@@ -1,7 +1,9 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
 pub mod apply;
+pub mod binary_diff;
 pub mod dir_diff_scanner;
+pub mod text_diff;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -10,11 +12,11 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use json_binary_diff_lib::{BinaryChangeDiff, PathAndBytes};
-use json_text_diff_lib::{PathAndLines, TextChangeDiff};
+use binary_diff::{BinaryChangeDiff, PathAndBytes};
+use text_diff::{PathAndLines, TextChangeDiff};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum Diff {
+pub enum JsonDiff {
     TextChange(TextChangeDiff),
     TextAdd(PathAndLines),
     TextRemove(PathAndLines),
@@ -23,7 +25,7 @@ pub enum Diff {
     ByteRemove(PathAndBytes),
 }
 
-impl Diff {
+impl JsonDiff {
     pub fn new(
         before_root: &Path,
         after_root: &Path,
@@ -82,30 +84,30 @@ impl Diff {
 
     pub fn is_empty(&self) -> bool {
         match self {
-            Diff::TextChange(tc) => tc.is_empty(),
-            Diff::ByteChange(bc) => bc.is_empty(),
+            JsonDiff::TextChange(tc) => tc.is_empty(),
+            JsonDiff::ByteChange(bc) => bc.is_empty(),
             _ => false, // Additions and removals are always non-empty changes
         }
     }
 
     pub fn path(&self, reverse: bool) -> &Path {
         match self {
-            Diff::TextChange(tc) => {
+            JsonDiff::TextChange(tc) => {
                 if reverse {
                     tc.before_path()
                 } else {
                     tc.after_path()
                 }
             }
-            Diff::ByteChange(bc) => {
+            JsonDiff::ByteChange(bc) => {
                 if reverse {
                     &bc.before_path
                 } else {
                     &bc.after_path
                 }
             }
-            Diff::TextAdd(pal) | Diff::TextRemove(pal) => pal.path(),
-            Diff::ByteAdd(pab) | Diff::ByteRemove(pab) => pab.path(),
+            JsonDiff::TextAdd(pal) | JsonDiff::TextRemove(pal) => pal.path(),
+            JsonDiff::ByteAdd(pab) | JsonDiff::ByteRemove(pab) => pab.path(),
         }
     }
 }
@@ -141,7 +143,7 @@ pub struct PatchSet {
     pub description: Option<String>,
     #[serde(flatten)]
     pub metadata: HashMap<String, String>,
-    pub diffs: Vec<Diff>,
+    pub diffs: Vec<JsonDiff>,
 }
 
 impl PatchSet {

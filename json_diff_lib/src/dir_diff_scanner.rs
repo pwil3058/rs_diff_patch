@@ -3,7 +3,7 @@
 use std::io;
 use std::path::Path;
 
-use crate::{Diff, PatchSet};
+use crate::{JsonDiff, PatchSet};
 use path_utilities::UsefulPathMethods;
 
 pub struct DirDiffScanner;
@@ -29,29 +29,29 @@ impl DirDiffScanner {
             match (before_iter.peek(), after_iter.peek()) {
                 (Some(&b_path), Some(&a_path)) => {
                     if b_path == a_path {
-                        let diff = Diff::new(before_dir, after_dir, b_path, context)?;
+                        let diff = JsonDiff::new(before_dir, after_dir, b_path, context)?;
                         if !diff.is_empty() {
                             patch_set.diffs.push(diff);
                         }
                         before_iter.next();
                         after_iter.next();
                     } else if b_path < a_path {
-                        let diff = Diff::new(before_dir, after_dir, b_path, context)?;
+                        let diff = JsonDiff::new(before_dir, after_dir, b_path, context)?;
                         patch_set.diffs.push(diff);
                         before_iter.next();
                     } else {
-                        let diff = Diff::new(before_dir, after_dir, a_path, context)?;
+                        let diff = JsonDiff::new(before_dir, after_dir, a_path, context)?;
                         patch_set.diffs.push(diff);
                         after_iter.next();
                     }
                 }
                 (Some(&b_path), None) => {
-                    let diff = Diff::new(before_dir, after_dir, b_path, context)?;
+                    let diff = JsonDiff::new(before_dir, after_dir, b_path, context)?;
                     patch_set.diffs.push(diff);
                     before_iter.next();
                 }
                 (None, Some(&a_path)) => {
-                    let diff = Diff::new(before_dir, after_dir, a_path, context)?;
+                    let diff = JsonDiff::new(before_dir, after_dir, a_path, context)?;
                     patch_set.diffs.push(diff);
                     after_iter.next();
                 }
