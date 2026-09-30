@@ -1,0 +1,14 @@
+# my_project/jpatch/Cargo.toml
+[package]
+name = "jpatch"
+version = "0.1.0"
+edition = "2024"
+authors = ["Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>"]
+description = "CLI utility to apply human-reviewable JSON patch files to a target directory workspace."
+
+[dependencies]
+json_diff_lib = { path = "../json_diff_lib" }
+
+clap = { version = "4.5", features = ["derive"] }
+env_logger = "0.11"
+log = "0.4"

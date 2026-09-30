@@ -1,0 +1,5 @@
+# .jdiffignore layout inside a specific project
+Scratches and Consoles
+External Libraries
+logs/*.log
+l

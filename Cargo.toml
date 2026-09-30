@@ -11,4 +11,6 @@ members = [
     "git_binary_diff_lib",
     "serde_layers",
     "json_diff_lib",
+    "jdiff",
+    "jpatch",
 ]

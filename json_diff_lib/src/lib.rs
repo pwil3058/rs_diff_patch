@@ -148,24 +148,55 @@ impl JsonDiff {
             }
         }
     }
-    // pub fn generate_from_git<P: AsRef<Path>>(file_path: P, context: u8) -> io::Result<JsonDiff> {
-    //     let path_ref = file_path.as_ref();
-    //
-    //     match extract_git_compare_sequences(path_ref)? {
-    //         GitComparePair::Text { before, after } => {
-    //             let changes =
-    //                 longest_common_subsequence::changes::Changes::<String>::new(&before, &after);
-    //             let tc = TextChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
-    //             Ok(JsonDiff::TextChange(tc))
-    //         }
-    //         GitComparePair::Binary { before, after } => {
-    //             let changes =
-    //                 longest_common_subsequence::changes::Changes::<u8>::new(&before, &after);
-    //             let bc = BinaryChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
-    //             Ok(JsonDiff::ByteChange(bc))
-    //         }
-    //     }
-    // }
+
+    /// Generates a diff between two specific historical commit states for a target file.
+    pub fn generate_from_git_commits<P: AsRef<Path>>(
+        file_path: P,
+        before_commit_id: &str,
+        after_commit_id: &str,
+        context: u8,
+    ) -> io::Result<Self> {
+        let path_ref = file_path.as_ref();
+
+        // Query the historical blobs from the repository context
+        match crate::git_helper::extract_git_commit_compare_sequences(
+            path_ref,
+            before_commit_id,
+            after_commit_id,
+        )? {
+            GitComparePair::Text {
+                before,
+                before_marker,
+                after,
+                after_marker,
+            } => {
+                let changes =
+                    longest_common_subsequence::changes::Changes::<String>::new(&before, &after);
+                let mut tc = TextChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
+
+                // Inject our paired commit markers cleanly into the tracking slots
+                tc.before_marker = Some(before_marker);
+                tc.after_marker = Some(after_marker);
+
+                Ok(JsonDiff::TextChange(tc))
+            }
+            GitComparePair::Binary {
+                before,
+                before_marker,
+                after,
+                after_marker,
+            } => {
+                let changes =
+                    longest_common_subsequence::changes::Changes::<u8>::new(&before, &after);
+                let mut bc = BinaryChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
+
+                bc.before_marker = Some(before_marker);
+                bc.after_marker = Some(after_marker);
+
+                Ok(JsonDiff::ByteChange(bc))
+            }
+        }
+    }
 }
 
 /// Helper function that safely sniffs the first 1024 bytes of a file to classify it.
