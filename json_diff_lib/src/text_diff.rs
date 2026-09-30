@@ -7,9 +7,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use path_utilities::*;
-
-use crate::git_helper::FileMarker;
+use crate::file_meta::FileMeta;
 use longest_common_subsequence::{
     changes::*,
     range::Range,
@@ -93,71 +91,57 @@ impl ApplyClumpFuzzy for TextChangeClump {}
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TextChangeDiff {
-    pub before_path: PathBuf,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub before_marker: Option<FileMarker>, // 👈 Updated property hook
-
-    pub after_path: PathBuf,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub after_marker: Option<FileMarker>,
-
-    clumps: Vec<TextChangeClump>,
+    pub before: FileMeta,
+    pub after: FileMeta,
+    pub clumps: Vec<TextChangeClump>,
 }
 
 impl TextChangeDiff {
-    pub fn new(before_file_path: &Path, after_file_path: &Path, context: u8) -> io::Result<Self> {
-        let before_lines = Seq::<String>::read_from(BufReader::new(File::open(before_file_path)?))?;
-        let after_lines = Seq::<String>::read_from(BufReader::new(File::open(after_file_path)?))?;
+    /// Factory for plain directory comparisons
+    pub fn new(
+        before_root: &Path,
+        after_root: &Path,
+        file_path: &Path,
+        context: u8,
+    ) -> io::Result<Self> {
+        let before_lines =
+            Seq::<String>::read_from(BufReader::new(File::open(before_root.join(file_path))?))?;
+        let after_lines =
+            Seq::<String>::read_from(BufReader::new(File::open(after_root.join(file_path))?))?;
         let changes = Changes::<String>::new(&before_lines, &after_lines);
 
-        let before_marker = if before_file_path.exists() {
-            if let Ok(metadata) = std::fs::metadata(before_file_path) {
-                if let Ok(modified_time) = metadata.modified() {
-                    let datetime: chrono::DateTime<chrono::Local> = modified_time.into();
-                    Some(FileMarker::Modified(
-                        datetime.format("%Y-%m-%d %H:%M:%S").to_string(),
-                    ))
-                } else {
-                    Some(FileMarker::Modified(String::from(
-                        "Unknown Modification Time",
-                    )))
-                }
-            } else {
-                Some(FileMarker::Untracked)
-            }
-        } else {
-            Some(FileMarker::Untracked)
-        };
-
-        let after_marker = if after_file_path.exists() {
-            if let Ok(metadata) = std::fs::metadata(after_file_path) {
-                if let Ok(modified_time) = metadata.modified() {
-                    let datetime: chrono::DateTime<chrono::Local> = modified_time.into();
-                    Some(FileMarker::Modified(
-                        datetime.format("%Y-%m-%d %H:%M:%S").to_string(),
-                    ))
-                } else {
-                    Some(FileMarker::Modified(String::from(
-                        "Unknown Modification Time",
-                    )))
-                }
-            } else {
-                Some(FileMarker::Untracked)
-            }
-        } else {
-            Some(FileMarker::Untracked)
-        };
-
         Ok(Self {
-            before_path: before_file_path.relative_path_buf().unwrap(),
-            before_marker,
-            after_path: after_file_path.relative_path_buf().unwrap(),
-            after_marker,
+            before: FileMeta::from_plain_file(before_root, file_path),
+            after: FileMeta::from_plain_file(after_root, file_path),
             clumps: changes
                 .change_clumps(context)
                 .map(TextChangeClump::from)
                 .collect(),
         })
+    }
+
+    /// Factory for pre-computed, in-memory sequence changes (like Git database passes)
+    pub fn from_changes(
+        before_meta: FileMeta,
+        after_meta: FileMeta,
+        changes: Changes<String>,
+        context: u8,
+    ) -> Self {
+        Self {
+            before: before_meta,
+            after: after_meta,
+            clumps: changes
+                .change_clumps(context)
+                .map(TextChangeClump::from)
+                .collect(),
+        }
+    }
+
+    pub fn before_path(&self) -> &Path {
+        &self.before.path
+    }
+    pub fn after_path(&self) -> &Path {
+        &self.after.path
     }
 
     pub fn is_empty(&self) -> bool {
@@ -168,81 +152,6 @@ impl TextChangeDiff {
     pub fn from_reader<R: io::Read>(reader: &mut R) -> Result<Self, serde_json::Error> {
         let buffered = BufReader::new(reader);
         serde_json::from_reader(buffered)
-    }
-
-    #[inline]
-    pub fn before_path(&self) -> &Path {
-        &self.before_path
-    }
-
-    #[inline]
-    pub fn after_path(&self) -> &Path {
-        &self.after_path
-    }
-
-    pub fn to_writer<W: io::Write>(&self, writer: &mut W) -> Result<(), serde_json::Error> {
-        serde_json::to_writer_pretty(writer, self)
-    }
-
-    pub fn from_changes(
-        before_path_ref: impl AsRef<Path>,
-        after_path_ref: impl AsRef<Path>,
-        changes: Changes<String>,
-        context: u8,
-    ) -> io::Result<Self> {
-        let before_path = before_path_ref.as_ref().to_path_buf();
-        let after_path = after_path_ref.as_ref().to_path_buf();
-
-        let before_marker = if before_path.exists() {
-            if let Ok(metadata) = std::fs::metadata(&before_path) {
-                if let Ok(modified_time) = metadata.modified() {
-                    let datetime: chrono::DateTime<chrono::Local> = modified_time.into();
-                    Some(FileMarker::Modified(
-                        datetime.format("%Y-%m-%d %H:%M:%S").to_string(),
-                    ))
-                } else {
-                    Some(FileMarker::Modified(String::from(
-                        "Unknown Modification Time",
-                    )))
-                }
-            } else {
-                Some(FileMarker::Untracked)
-            }
-        } else {
-            Some(FileMarker::Untracked)
-        };
-
-        let after_marker = if after_path.exists() {
-            if let Ok(metadata) = std::fs::metadata(&after_path) {
-                if let Ok(modified_time) = metadata.modified() {
-                    let datetime: chrono::DateTime<chrono::Local> = modified_time.into();
-                    Some(FileMarker::Modified(
-                        datetime.format("%Y-%m-%d %H:%M:%S").to_string(),
-                    ))
-                } else {
-                    Some(FileMarker::Modified(String::from(
-                        "Unknown Modification Time",
-                    )))
-                }
-            } else {
-                Some(FileMarker::Untracked)
-            }
-        } else {
-            Some(FileMarker::Untracked)
-        };
-
-        let clumps = changes
-            .change_clumps(context)
-            .map(TextChangeClump::from)
-            .collect();
-
-        Ok(Self {
-            before_path,
-            before_marker,
-            after_path,
-            after_marker,
-            clumps,
-        })
     }
 }
 

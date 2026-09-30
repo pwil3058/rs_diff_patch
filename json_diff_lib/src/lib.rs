@@ -13,7 +13,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::git_helper::{GitComparePair, extract_git_compare_sequences};
+use crate::git_helper::GitComparePair;
 use binary_diff::{BinaryChangeDiff, PathAndBytes};
 use text_diff::{PathAndLines, TextChangeDiff};
 
@@ -43,15 +43,10 @@ impl JsonDiff {
         match (before_exists, after_exists) {
             (true, true) => {
                 if is_text_file(&full_before)? && is_text_file(&full_after)? {
-                    let mut tc = TextChangeDiff::new(&full_before, &full_after, context)?;
-                    // Enforce that the stored metadata paths use the portable relative format
-                    tc.before_path = file_path.to_path_buf();
-                    tc.after_path = file_path.to_path_buf();
+                    let tc = TextChangeDiff::new(before_root, after_root, file_path, context)?;
                     Ok(Self::TextChange(tc))
                 } else {
-                    let mut bc = BinaryChangeDiff::new(&full_before, &full_after, context)?;
-                    bc.before_path = file_path.to_path_buf();
-                    bc.after_path = file_path.to_path_buf();
+                    let bc = BinaryChangeDiff::new(before_root, after_root, file_path, context)?;
                     Ok(Self::ByteChange(bc))
                 }
             }
@@ -103,19 +98,29 @@ impl JsonDiff {
             }
             JsonDiff::ByteChange(bc) => {
                 if reverse {
-                    &bc.before_path
+                    &bc.before.path
                 } else {
-                    &bc.after_path
+                    &bc.after.path
                 }
             }
             JsonDiff::TextAdd(pal) | JsonDiff::TextRemove(pal) => pal.path(),
             JsonDiff::ByteAdd(pab) | JsonDiff::ByteRemove(pab) => pab.path(),
         }
     }
-    pub fn generate_from_git<P: AsRef<Path>>(file_path: P, context: u8) -> io::Result<JsonDiff> {
-        let path_ref = file_path.as_ref();
 
-        match extract_git_compare_sequences(path_ref)? {
+    pub fn generate_from_git<P: AsRef<Path>>(file_path: P, context: u8) -> io::Result<JsonDiff> {
+        let absolute_path = std::fs::canonicalize(file_path.as_ref())?;
+
+        let repo = git2::Repository::discover(&absolute_path)
+            .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+        let workdir = repo.workdir().unwrap();
+
+        let relative_path = absolute_path
+            .strip_prefix(workdir)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?
+            .to_path_buf();
+
+        match crate::git_helper::extract_git_compare_sequences(&absolute_path)? {
             GitComparePair::Text {
                 before,
                 before_marker,
@@ -124,11 +129,17 @@ impl JsonDiff {
             } => {
                 let changes =
                     longest_common_subsequence::changes::Changes::<String>::new(&before, &after);
-                let mut tc = TextChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
 
-                tc.before_marker = Some(before_marker);
-                tc.after_marker = Some(after_marker);
+                let before_meta = crate::file_meta::FileMeta {
+                    path: relative_path.clone(),
+                    marker: Some(before_marker),
+                };
+                let after_meta = crate::file_meta::FileMeta {
+                    path: relative_path,
+                    marker: Some(after_marker),
+                };
 
+                let tc = TextChangeDiff::from_changes(before_meta, after_meta, changes, context);
                 Ok(JsonDiff::TextChange(tc))
             }
             GitComparePair::Binary {
@@ -139,11 +150,17 @@ impl JsonDiff {
             } => {
                 let changes =
                     longest_common_subsequence::changes::Changes::<u8>::new(&before, &after);
-                let mut bc = BinaryChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
 
-                bc.before_marker = Some(before_marker);
-                bc.after_marker = Some(after_marker);
+                let before_meta = crate::file_meta::FileMeta {
+                    path: relative_path.clone(),
+                    marker: Some(before_marker),
+                };
+                let after_meta = crate::file_meta::FileMeta {
+                    path: relative_path,
+                    marker: Some(after_marker),
+                };
 
+                let bc = BinaryChangeDiff::from_changes(before_meta, after_meta, changes, context)?;
                 Ok(JsonDiff::ByteChange(bc))
             }
         }
@@ -172,12 +189,31 @@ impl JsonDiff {
             } => {
                 let changes =
                     longest_common_subsequence::changes::Changes::<String>::new(&before, &after);
-                let mut tc = TextChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
 
-                // Inject our paired commit markers cleanly into the tracking slots
-                tc.before_marker = Some(before_marker);
-                tc.after_marker = Some(after_marker);
+                // Isolate the clean repository-relative path key format
+                let relative_path = if path_ref.is_absolute() {
+                    let repo = git2::Repository::discover(path_ref)
+                        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+                    let workdir = repo.workdir().unwrap();
+                    path_ref
+                        .strip_prefix(workdir)
+                        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?
+                        .to_path_buf()
+                } else {
+                    path_ref.to_path_buf()
+                };
 
+                // Package pre-packaged commit markers into proper FileMeta entries!
+                let before_meta = crate::file_meta::FileMeta {
+                    path: relative_path.clone(),
+                    marker: Some(before_marker),
+                };
+                let after_meta = crate::file_meta::FileMeta {
+                    path: relative_path,
+                    marker: Some(after_marker),
+                };
+
+                let tc = TextChangeDiff::from_changes(before_meta, after_meta, changes, context);
                 Ok(JsonDiff::TextChange(tc))
             }
             GitComparePair::Binary {
@@ -188,11 +224,26 @@ impl JsonDiff {
             } => {
                 let changes =
                     longest_common_subsequence::changes::Changes::<u8>::new(&before, &after);
-                let mut bc = BinaryChangeDiff::from_changes(path_ref, path_ref, changes, context)?;
 
-                bc.before_marker = Some(before_marker);
-                bc.after_marker = Some(after_marker);
+                let relative_path = if path_ref.is_absolute() {
+                    let repo = git2::Repository::discover(path_ref)
+                        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+                    let workdir = repo.workdir().unwrap();
+                    path_ref.strip_prefix(workdir).unwrap().to_path_buf()
+                } else {
+                    path_ref.to_path_buf()
+                };
 
+                let before_meta = crate::file_meta::FileMeta {
+                    path: relative_path.clone(),
+                    marker: Some(before_marker),
+                };
+                let after_meta = crate::file_meta::FileMeta {
+                    path: relative_path,
+                    marker: Some(after_marker),
+                };
+
+                let bc = BinaryChangeDiff::from_changes(before_meta, after_meta, changes, context)?;
                 Ok(JsonDiff::ByteChange(bc))
             }
         }
@@ -253,5 +304,6 @@ impl PatchSet {
     }
 }
 
+mod file_meta;
 #[cfg(test)]
 mod tests;

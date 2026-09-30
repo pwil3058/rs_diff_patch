@@ -210,113 +210,31 @@ impl DirDiffScanner {
                         // FIX: Pass the base workspace directory root and empty path directly!
                         // This allows JsonDiff::new to compute absolute joins accurately.
                         let diff = JsonDiff::new(workdir, Path::new(""), b_path, context)?;
-                        patch_set.diffs.push(diff);
+                        if !diff.is_empty() {
+                            patch_set.diffs.push(diff);
+                        }
                         before_iter.next();
                     } else {
                         // FIX: Pass empty path and base workspace directory root directly!
                         let diff = JsonDiff::new(Path::new(""), workdir, a_path, context)?;
-                        patch_set.diffs.push(diff);
+                        if !diff.is_empty() {
+                            patch_set.diffs.push(diff);
+                        }
                         after_iter.next();
                     }
                 }
                 (Some(&b_path), None) => {
                     let diff = JsonDiff::new(workdir, Path::new(""), b_path, context)?;
-                    patch_set.diffs.push(diff);
+                    if !diff.is_empty() {
+                        patch_set.diffs.push(diff);
+                    }
                     before_iter.next();
                 }
                 (None, Some(&a_path)) => {
                     let diff = JsonDiff::new(Path::new(""), workdir, a_path, context)?;
-                    patch_set.diffs.push(diff);
-                    after_iter.next();
-                }
-                (None, None) => break,
-            }
-        }
-
-        Ok(patch_set)
-    }
-
-    /// Scans a live Git repository working directory, comparing all active local
-    /// checked-out files against their current Git baseline index records.
-    pub fn compare_git_workspace_bad<P: AsRef<Path>>(
-        repo_path: P,
-        context: u8,
-        user_excludes: &[String],
-    ) -> io::Result<PatchSet> {
-        let root = repo_path.as_ref();
-        // Dynamic expansion array injection:
-        // Automatically combines the mandatory downstream ".git" pattern with the user flags
-        let mut excludes = vec![String::from(".git")];
-        excludes.extend(user_excludes.iter().cloned());
-
-        let mut patch_set = PatchSet::default();
-
-        // 1. Bind to the local Git repository context
-        let repo = Repository::discover(root).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("Git repository not found: {e}"),
-            )
-        })?;
-
-        let workdir = repo.workdir().ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "Bare repositories cannot resolve relative target paths",
-            )
-        })?;
-
-        // 2. Gather files from both locations side-by-side:
-        // 'before' comes from Git's tracked index, 'after' comes from your new disk utility
-        let before_files =
-            crate::git_helper::collect_files_from_commit(&repo, "HEAD").unwrap_or_default(); // Fallback to empty if repository has no commits yet
-        let after_files = root.collect_relative_files(user_excludes)?; // Uses your new path_utilities method!
-
-        let mut before_iter = before_files.iter().peekable();
-        let mut after_iter = after_files.iter().peekable();
-
-        // 3. High-speed linear two-pointer loop matching disk files against Git tracking paths
-        loop {
-            match (before_iter.peek(), after_iter.peek()) {
-                (Some(&b_path), Some(&a_path)) => {
-                    if b_path == a_path {
-                        let full_path = workdir.join(b_path);
-
-                        // Leverage your working single-file git extractor to fetch index vs disk data
-                        let diff = JsonDiff::generate_from_git(&full_path, context)?;
-
-                        if !diff.is_empty() {
-                            patch_set.diffs.push(diff);
-                        }
-                        before_iter.next();
-                        after_iter.next();
-                    } else if b_path < a_path {
-                        // File was tracked in Git but is completely missing from disk -> Deleted
-                        let full_before_path = workdir.join(b_path);
-                        let diff =
-                            JsonDiff::new(&full_before_path, Path::new(""), b_path, context)?;
+                    if !diff.is_empty() {
                         patch_set.diffs.push(diff);
-                        before_iter.next();
-                    } else {
-                        // File is sitting on disk but doesn't exist in Git yet -> Untracked Addition
-                        let full_after_path = workdir.join(a_path);
-                        let diff = JsonDiff::new(Path::new(""), &full_after_path, a_path, context)?;
-                        patch_set.diffs.push(diff);
-                        after_iter.next();
                     }
-                }
-                (Some(&b_path), None) => {
-                    // Remaining tracked Git items are deleted from disk
-                    let full_before_path = workdir.join(b_path);
-                    let diff = JsonDiff::new(&full_before_path, Path::new(""), b_path, context)?;
-                    patch_set.diffs.push(diff);
-                    before_iter.next();
-                }
-                (None, Some(&a_path)) => {
-                    // Remaining items on disk are brand-new untracked additions
-                    let full_after_path = workdir.join(a_path);
-                    let diff = JsonDiff::new(Path::new(""), &full_after_path, a_path, context)?;
-                    patch_set.diffs.push(diff);
                     after_iter.next();
                 }
                 (None, None) => break,

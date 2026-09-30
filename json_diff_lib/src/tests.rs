@@ -107,6 +107,7 @@ mod directory_integration_tests {
             before_workspace.path(),
             after_workspace.path(),
             context_lines,
+            &[],
         )
         .unwrap();
 

@@ -1,25 +1,14 @@
 // Copyright (c) 2026 Peter Williams <pwil3058@bigpond.net.au> <pwil3058@gmail.com>.
 
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
 use std::path::{Path, PathBuf};
 
+use crate::file_meta::FileMarker;
 use git2::Repository;
 
 use longest_common_subsequence::sequence::{Seq, SequenceIO};
-
-/// Beautiful, type-safe file tracking indicators that render cleanly in JSON.
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub enum FileMarker {
-    /// Rendered as: "Commit": "a1c3e5f"
-    Commit(String),
-    /// Rendered as: "Modified": "2026-09-30 13:02:15"
-    Modified(String),
-    /// Rendered as: "Untracked": true
-    Untracked,
-}
 
 /// Dynamic container holding extracted sequence blocks alongside their clear type-safe markers
 pub enum GitComparePair {

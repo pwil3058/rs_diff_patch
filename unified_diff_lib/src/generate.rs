@@ -239,6 +239,14 @@ mod generated_unified_diff_tests {
     }
 
     #[test]
+    fn generate_1_lines() {
+        let before_lines = line_seq("A\n");
+        let after_lines = line_seq("Ac\n");
+        let clumps = UnifiedClumps::new(&before_lines, &after_lines, 2);
+        assert_eq!(format!("{clumps}"), "@@ -0 +0 @@\n-A\n+Ac\n");
+    }
+
+    #[test]
     fn generate_from_files() {
         let before_path_buf = Path::new("../test_files/file_1_original");
         let after_path_buf = Path::new("../test_files/file_1_modified");
