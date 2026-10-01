@@ -158,7 +158,7 @@ impl BinaryChangeDiff {
         after_root: &Path,
         file_path: &Path,
         context: u8,
-    ) -> io::Result<Self> {
+    ) -> io::Result<Option<Self>> {
         // Resolve absolute files for high-speed buffer ingestion
         let full_before = before_root.join(file_path);
         let full_after = after_root.join(file_path);
@@ -170,14 +170,12 @@ impl BinaryChangeDiff {
 
         let changes = Changes::<u8>::new(&before_bytes, &after_bytes);
 
-        Ok(Self {
-            before: FileMeta::from_plain_file(before_root, file_path),
-            after: FileMeta::from_plain_file(after_root, file_path),
-            clumps: changes
-                .change_clumps(context)
-                .map(BinaryChangeClump::from)
-                .collect(),
-        })
+        Ok(Self::from_changes(
+            FileMeta::from_plain_file(before_root, file_path),
+            FileMeta::from_plain_file(after_root, file_path),
+            changes,
+            context,
+        ))
     }
 
     pub fn is_empty(&self) -> bool {
@@ -215,17 +213,21 @@ impl BinaryChangeDiff {
         after_meta: FileMeta,
         changes: Changes<u8>,
         context: u8,
-    ) -> io::Result<Self> {
+    ) -> Option<Self> {
         let clumps = changes
             .change_clumps(context)
             .map(BinaryChangeClump::from)
-            .collect();
+            .collect::<Vec<_>>();
 
-        Ok(Self {
-            before: before_meta,
-            after: after_meta,
-            clumps,
-        })
+        if clumps.is_empty() {
+            None
+        } else {
+            Some(Self {
+                before: before_meta,
+                after: after_meta,
+                clumps,
+            })
+        }
     }
 }
 

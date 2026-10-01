@@ -103,21 +103,19 @@ impl TextChangeDiff {
         after_root: &Path,
         file_path: &Path,
         context: u8,
-    ) -> io::Result<Self> {
+    ) -> io::Result<Option<Self>> {
         let before_lines =
             Seq::<String>::read_from(BufReader::new(File::open(before_root.join(file_path))?))?;
         let after_lines =
             Seq::<String>::read_from(BufReader::new(File::open(after_root.join(file_path))?))?;
         let changes = Changes::<String>::new(&before_lines, &after_lines);
 
-        Ok(Self {
-            before: FileMeta::from_plain_file(before_root, file_path),
-            after: FileMeta::from_plain_file(after_root, file_path),
-            clumps: changes
-                .change_clumps(context)
-                .map(TextChangeClump::from)
-                .collect(),
-        })
+        Ok(Self::from_changes(
+            FileMeta::from_plain_file(before_root, file_path),
+            FileMeta::from_plain_file(after_root, file_path),
+            changes,
+            context,
+        ))
     }
 
     /// Factory for pre-computed, in-memory sequence changes (like Git database passes)
@@ -126,14 +124,20 @@ impl TextChangeDiff {
         after_meta: FileMeta,
         changes: Changes<String>,
         context: u8,
-    ) -> Self {
-        Self {
-            before: before_meta,
-            after: after_meta,
-            clumps: changes
-                .change_clumps(context)
-                .map(TextChangeClump::from)
-                .collect(),
+    ) -> Option<Self> {
+        let clumps = changes
+            .change_clumps(context)
+            .map(TextChangeClump::from)
+            .collect::<Vec<_>>();
+
+        if clumps.is_empty() {
+            None
+        } else {
+            Some(Self {
+                before: before_meta,
+                after: after_meta,
+                clumps,
+            })
         }
     }
 

@@ -33,7 +33,7 @@ impl JsonDiff {
         after_root: &Path,
         file_path: &Path,
         context: u8,
-    ) -> io::Result<Self> {
+    ) -> io::Result<Option<Self>> {
         let full_before = before_root.join(file_path);
         let full_after = after_root.join(file_path);
 
@@ -43,33 +43,43 @@ impl JsonDiff {
         match (before_exists, after_exists) {
             (true, true) => {
                 if is_text_file(&full_before)? && is_text_file(&full_after)? {
-                    let tc = TextChangeDiff::new(before_root, after_root, file_path, context)?;
-                    Ok(Self::TextChange(tc))
+                    if let Some(tc) =
+                        TextChangeDiff::new(before_root, after_root, file_path, context)?
+                    {
+                        Ok(Some(Self::TextChange(tc)))
+                    } else {
+                        Ok(None)
+                    }
                 } else {
-                    let bc = BinaryChangeDiff::new(before_root, after_root, file_path, context)?;
-                    Ok(Self::ByteChange(bc))
+                    if let Some(bc) =
+                        BinaryChangeDiff::new(before_root, after_root, file_path, context)?
+                    {
+                        Ok(Some(Self::ByteChange(bc)))
+                    } else {
+                        Ok(None)
+                    }
                 }
             }
             (true, false) => {
                 if is_text_file(&full_before)? {
                     let mut pal = PathAndLines::new(&full_before)?;
                     pal.change_path(file_path);
-                    Ok(Self::TextRemove(pal))
+                    Ok(Some(Self::TextRemove(pal)))
                 } else {
                     let mut pab = PathAndBytes::new(&full_before)?;
                     pab.change_path(file_path);
-                    Ok(Self::ByteRemove(pab))
+                    Ok(Some(Self::ByteRemove(pab)))
                 }
             }
             (false, true) => {
                 if is_text_file(&full_after)? {
                     let mut pal = PathAndLines::new(&full_after)?;
                     pal.change_path(file_path);
-                    Ok(Self::TextAdd(pal))
+                    Ok(Some(Self::TextAdd(pal)))
                 } else {
                     let mut pab = PathAndBytes::new(&full_after)?;
                     pab.change_path(file_path);
-                    Ok(Self::ByteAdd(pab))
+                    Ok(Some(Self::ByteAdd(pab)))
                 }
             }
             (false, false) => Err(io::Error::new(
@@ -108,7 +118,10 @@ impl JsonDiff {
         }
     }
 
-    pub fn generate_from_git<P: AsRef<Path>>(file_path: P, context: u8) -> io::Result<JsonDiff> {
+    pub fn generate_from_git<P: AsRef<Path>>(
+        file_path: P,
+        context: u8,
+    ) -> io::Result<Option<JsonDiff>> {
         let absolute_path = std::fs::canonicalize(file_path.as_ref())?;
 
         let repo = git2::Repository::discover(&absolute_path)
@@ -139,8 +152,13 @@ impl JsonDiff {
                     marker: Some(after_marker),
                 };
 
-                let tc = TextChangeDiff::from_changes(before_meta, after_meta, changes, context);
-                Ok(JsonDiff::TextChange(tc))
+                if let Some(tc) =
+                    TextChangeDiff::from_changes(before_meta, after_meta, changes, context)
+                {
+                    Ok(Some(JsonDiff::TextChange(tc)))
+                } else {
+                    Ok(None)
+                }
             }
             GitComparePair::Binary {
                 before,
@@ -160,8 +178,13 @@ impl JsonDiff {
                     marker: Some(after_marker),
                 };
 
-                let bc = BinaryChangeDiff::from_changes(before_meta, after_meta, changes, context)?;
-                Ok(JsonDiff::ByteChange(bc))
+                if let Some(bc) =
+                    BinaryChangeDiff::from_changes(before_meta, after_meta, changes, context)
+                {
+                    Ok(Some(JsonDiff::ByteChange(bc)))
+                } else {
+                    Ok(None)
+                }
             }
         }
     }
@@ -172,7 +195,7 @@ impl JsonDiff {
         before_commit_id: &str,
         after_commit_id: &str,
         context: u8,
-    ) -> io::Result<Self> {
+    ) -> io::Result<Option<Self>> {
         let path_ref = file_path.as_ref();
 
         // Query the historical blobs from the repository context
@@ -213,8 +236,13 @@ impl JsonDiff {
                     marker: Some(after_marker),
                 };
 
-                let tc = TextChangeDiff::from_changes(before_meta, after_meta, changes, context);
-                Ok(JsonDiff::TextChange(tc))
+                if let Some(tc) =
+                    TextChangeDiff::from_changes(before_meta, after_meta, changes, context)
+                {
+                    Ok(Some(JsonDiff::TextChange(tc)))
+                } else {
+                    Ok(None)
+                }
             }
             GitComparePair::Binary {
                 before,
@@ -243,8 +271,13 @@ impl JsonDiff {
                     marker: Some(after_marker),
                 };
 
-                let bc = BinaryChangeDiff::from_changes(before_meta, after_meta, changes, context)?;
-                Ok(JsonDiff::ByteChange(bc))
+                if let Some(bc) =
+                    BinaryChangeDiff::from_changes(before_meta, after_meta, changes, context)
+                {
+                    Ok(Some(JsonDiff::ByteChange(bc)))
+                } else {
+                    Ok(None)
+                }
             }
         }
     }

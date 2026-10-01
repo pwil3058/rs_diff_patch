@@ -32,30 +32,33 @@ impl DirDiffScanner {
             match (before_iter.peek(), after_iter.peek()) {
                 (Some(&b_path), Some(&a_path)) => {
                     if b_path == a_path {
-                        let diff = JsonDiff::new(before_dir, after_dir, b_path, context)?;
-                        if !diff.is_empty() {
+                        if let Some(diff) = JsonDiff::new(before_dir, after_dir, b_path, context)? {
                             patch_set.diffs.push(diff);
                         }
                         before_iter.next();
                         after_iter.next();
                     } else if b_path < a_path {
-                        let diff = JsonDiff::new(before_dir, after_dir, b_path, context)?;
-                        patch_set.diffs.push(diff);
+                        if let Some(diff) = JsonDiff::new(before_dir, after_dir, b_path, context)? {
+                            patch_set.diffs.push(diff);
+                        }
                         before_iter.next();
                     } else {
-                        let diff = JsonDiff::new(before_dir, after_dir, a_path, context)?;
-                        patch_set.diffs.push(diff);
+                        if let Some(diff) = JsonDiff::new(before_dir, after_dir, a_path, context)? {
+                            patch_set.diffs.push(diff);
+                        }
                         after_iter.next();
                     }
                 }
                 (Some(&b_path), None) => {
-                    let diff = JsonDiff::new(before_dir, after_dir, b_path, context)?;
-                    patch_set.diffs.push(diff);
+                    if let Some(diff) = JsonDiff::new(before_dir, after_dir, b_path, context)? {
+                        patch_set.diffs.push(diff);
+                    }
                     before_iter.next();
                 }
                 (None, Some(&a_path)) => {
-                    let diff = JsonDiff::new(before_dir, after_dir, a_path, context)?;
-                    patch_set.diffs.push(diff);
+                    if let Some(diff) = JsonDiff::new(before_dir, after_dir, a_path, context)? {
+                        patch_set.diffs.push(diff);
+                    }
                     after_iter.next();
                 }
                 (None, None) => break,
@@ -104,14 +107,12 @@ impl DirDiffScanner {
                     if b_path == a_path {
                         // The file exists in both commits. Generate an in-memory dual-commit diff.
                         let full_workdir_path = workdir.join(b_path);
-                        let diff = JsonDiff::generate_from_git_commits(
+                        if let Some(diff) = JsonDiff::generate_from_git_commits(
                             &full_workdir_path,
                             before_commit_id,
                             after_commit_id,
                             context,
-                        )?;
-
-                        if !diff.is_empty() {
+                        )? {
                             patch_set.diffs.push(diff);
                         }
                         before_iter.next();
@@ -119,29 +120,39 @@ impl DirDiffScanner {
                     } else if b_path < a_path {
                         // File was present before but missing after -> Deleted file
                         let full_workdir_path = workdir.join(b_path);
-                        let diff =
-                            JsonDiff::new(&full_workdir_path, Path::new(""), b_path, context)?;
-                        patch_set.diffs.push(diff);
+                        if let Some(diff) =
+                            JsonDiff::new(&full_workdir_path, Path::new(""), b_path, context)?
+                        {
+                            patch_set.diffs.push(diff);
+                        }
                         before_iter.next();
                     } else {
                         // File is missing before but present after -> Added file
                         let full_workdir_path = workdir.join(a_path);
-                        let diff =
-                            JsonDiff::new(Path::new(""), &full_workdir_path, a_path, context)?;
-                        patch_set.diffs.push(diff);
+                        if let Some(diff) =
+                            JsonDiff::new(Path::new(""), &full_workdir_path, a_path, context)?
+                        {
+                            patch_set.diffs.push(diff);
+                        }
                         after_iter.next();
                     }
                 }
                 (Some(&b_path), None) => {
                     let full_workdir_path = workdir.join(b_path);
-                    let diff = JsonDiff::new(&full_workdir_path, Path::new(""), b_path, context)?;
-                    patch_set.diffs.push(diff);
+                    if let Some(diff) =
+                        JsonDiff::new(&full_workdir_path, Path::new(""), b_path, context)?
+                    {
+                        patch_set.diffs.push(diff);
+                    }
                     before_iter.next();
                 }
                 (None, Some(&a_path)) => {
                     let full_workdir_path = workdir.join(a_path);
-                    let diff = JsonDiff::new(Path::new(""), &full_workdir_path, a_path, context)?;
-                    patch_set.diffs.push(diff);
+                    if let Some(diff) =
+                        JsonDiff::new(Path::new(""), &full_workdir_path, a_path, context)?
+                    {
+                        patch_set.diffs.push(diff);
+                    }
                     after_iter.next();
                 }
                 (None, None) => break,
@@ -200,39 +211,33 @@ impl DirDiffScanner {
                 (Some(&b_path), Some(&a_path)) => {
                     if b_path == a_path {
                         let full_path = workdir.join(b_path);
-                        let diff = JsonDiff::generate_from_git(&full_path, context)?;
-                        if !diff.is_empty() {
+                        if let Some(diff) = JsonDiff::generate_from_git(&full_path, context)? {
                             patch_set.diffs.push(diff);
                         }
                         before_iter.next();
                         after_iter.next();
                     } else if b_path < a_path {
-                        // FIX: Pass the base workspace directory root and empty path directly!
-                        // This allows JsonDiff::new to compute absolute joins accurately.
-                        let diff = JsonDiff::new(workdir, Path::new(""), b_path, context)?;
-                        if !diff.is_empty() {
+                        if let Some(diff) = JsonDiff::new(workdir, Path::new(""), b_path, context)?
+                        {
                             patch_set.diffs.push(diff);
                         }
                         before_iter.next();
                     } else {
-                        // FIX: Pass empty path and base workspace directory root directly!
-                        let diff = JsonDiff::new(Path::new(""), workdir, a_path, context)?;
-                        if !diff.is_empty() {
+                        if let Some(diff) = JsonDiff::new(Path::new(""), workdir, a_path, context)?
+                        {
                             patch_set.diffs.push(diff);
                         }
                         after_iter.next();
                     }
                 }
                 (Some(&b_path), None) => {
-                    let diff = JsonDiff::new(workdir, Path::new(""), b_path, context)?;
-                    if !diff.is_empty() {
+                    if let Some(diff) = JsonDiff::new(workdir, Path::new(""), b_path, context)? {
                         patch_set.diffs.push(diff);
                     }
                     before_iter.next();
                 }
                 (None, Some(&a_path)) => {
-                    let diff = JsonDiff::new(Path::new(""), workdir, a_path, context)?;
-                    if !diff.is_empty() {
+                    if let Some(diff) = JsonDiff::new(Path::new(""), workdir, a_path, context)? {
                         patch_set.diffs.push(diff);
                     }
                     after_iter.next();
