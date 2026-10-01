@@ -17,13 +17,20 @@ use crate::git_helper::GitComparePair;
 use binary_diff::{BinaryChangeDiff, PathAndBytes};
 use text_diff::{PathAndLines, TextChangeDiff};
 
+/// The master polymorph container representing every supported file comparison asset transaction.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum JsonDiff {
+    /// In-place context-anchored modifications made to a text file.
     TextChange(TextChangeDiff),
+    /// A new text file added to a workspace tree.
     TextAdd(PathAndLines),
+    /// A text file removed from a workspace tree.
     TextRemove(PathAndLines),
+    /// In-place context-anchored byte modifications made to a binary file.
     ByteChange(BinaryChangeDiff),
+    /// A new binary file added to a workspace tree.
     ByteAdd(PathAndBytes),
+    /// A binary file removed from a workspace tree.
     ByteRemove(PathAndBytes),
 }
 
@@ -306,23 +313,31 @@ fn is_text_file(path: &Path) -> io::Result<bool> {
     Ok((invalid_chars * 100) / bytes_read < 1)
 }
 
+/// A comprehensive envelope container encapsulating a collection of path changes alongside
+/// top-level project metadata descriptors.
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct PatchSet {
+    /// Optional high-level title describing the patch transactional purpose.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// Optional descriptive summary text detailing the modifications.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// A flexible map of custom string keys for extensible auditing (e.g., author, timestamps).
     #[serde(flatten)]
     pub metadata: HashMap<String, String>,
+    /// A vector array holding the calculated file differential operations.
     pub diffs: Vec<JsonDiff>,
 }
 
 impl PatchSet {
+    /// Read a patch set from a reader
     pub fn from_reader<R: io::Read>(reader: R) -> Result<Self, serde_json::Error> {
         let buffered = BufReader::new(reader);
         serde_json::from_reader(buffered)
     }
 
+    /// Write a patch set to a writer
     pub fn to_writer<W: io::Write>(
         &self,
         writer: W,

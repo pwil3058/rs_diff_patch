@@ -8,10 +8,12 @@ use std::collections::BTreeSet;
 use std::io;
 use std::path::{Path, PathBuf};
 
+/// A high-performance directory sweep coordinator driving file tree comparisons via O(N) linear analysis.
 pub struct DirDiffScanner;
 
 impl DirDiffScanner {
-    /// Evaluates two directory branches side-by-side using an O(N) linear sweep.
+    /// Evaluates two standard filesystem directories side-by-side using an O(N) linear sweep,
+    /// safely skipping any relative path names matching the specified exclusion patterns.
     pub fn compare_directories(
         before_dir: impl AsRef<Path>,
         after_dir: impl AsRef<Path>,
@@ -68,8 +70,8 @@ impl DirDiffScanner {
         Ok(patch_set)
     }
 
-    /// Compares an entire repository workspace between two historical commit points,
-    /// generating a unified, human-readable `PatchSet`.
+    /// Scans and logs changes between two distinct historical points in a Git repository's
+    /// object database, fetching files as pure in-memory virtual database snapshots.
     pub fn compare_git_commits<P: AsRef<Path>>(
         repo_path: P,
         before_commit_id: &str,

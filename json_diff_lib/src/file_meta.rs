@@ -4,20 +4,27 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Beautiful, type-safe file tracking indicators that render cleanly in JSON.
+/// Represents type-safe file tracking metadata variants that serialize cleanly into JSON format.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum FileMarker {
+    /// A historical Git commit baseline identifier, holding a shortened 7-character OID hash.
     /// Rendered as: "Commit": "a1c3e5f"
     Commit(String),
+    /// A standard filesystem modification timestamp formatted as an explicit local date-time string.
     /// Rendered as: "Modified": "2026-09-30 13:02:15"
     Modified(String),
+    /// Indicates a file is a brand-new asset present on disk but untracked by the repository index.
     /// Rendered as: "Untracked": true
     Untracked,
 }
 
+/// A unified metadata tracking container linking a file's repository-relative path
+/// with its historical or physical state descriptor marker.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct FileMeta {
+    /// The portable, repository-relative destination path of the target file.
     pub path: PathBuf,
+    /// An optional structural status indicator (Commit hash, Timestamp, or Untracked status).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub marker: Option<FileMarker>,
 }

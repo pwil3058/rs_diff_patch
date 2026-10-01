@@ -11,9 +11,12 @@ use longest_common_subsequence::sequence::SequenceIO;
 use pw_diff_lib::apply_bytes::ApplyClumpsClean;
 use pw_diff_lib::apply_text::ApplyClumpsFuzzy; // Your strict clean binary patch trait // Your strict clean binary patch trait
 
+/// An atomic transactional patch applicator driver that safely executes patch steps onto a disk destination.
 pub struct DirPatchApplier;
 
 impl DirPatchApplier {
+    /// Ingests a portable `PatchSet` and safely maps its change layout onto a destination root.
+    /// Supports a `reverse` mode flag to perform transactional rolback operations.
     pub fn apply_patch_set(
         target_dir: &Path,
         patch_set: &PatchSet,
